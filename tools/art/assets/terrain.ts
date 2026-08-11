@@ -13,7 +13,7 @@
  *   - flat areas always carry at least two ramp steps of mottling, never one
  *   - edges between materials get a 1px darker lip plus a warm 1px top lip
  */
-import { Surface, rng, valueNoise, speckle, ditherFill } from '../lib/pixel.js';
+import { Surface, rng, valueNoise, periodicNoise, rankQuantise, speckle, ditherFill } from '../lib/pixel.js';
 import { ArtBuild, TILE } from '../lib/registry.js';
 import { registerBlobSet, edgePixels, N, S, E, W } from '../lib/autotile.js';
 import * as P from '../lib/palette.js';
@@ -44,34 +44,51 @@ function mottle(s: Surface, ramp: readonly string[], seed: number, opts: {
 // ── GRASS ──────────────────────────────────────────────────────────────────
 
 /**
- * Grass reads as a calm mid-green field, not camouflage. The rule that keeps it
- * calm: ramp[2] dominates, ramp[3] appears in broad soft patches, and the two
- * extremes only ever show up as small deliberate marks (blade tips, divots).
- * High-frequency full-range noise is what makes procedural grass look cheap.
+ * Grass reads as a calm mid-green field, not camouflage.
+ *
+ * Two rules do all the work, and both are about what NOT to do:
+ *
+ *  1. SEAMLESS. The noise lattice wraps at the tile boundary (periodicNoise),
+ *     so a tile's right edge continues into its own left edge. Non-periodic
+ *     noise leaves a visible grid of seams across a field.
+ *  2. TONE-MATCHED. Shades are assigned by rank (rankQuantise), so every
+ *     variant contains *exactly* the same number of light and dark pixels.
+ *     Threshold quantisation lets one variant come out a shade darker than its
+ *     neighbour, and a field of them reads as a checkerboard — which is the
+ *     single loudest "this is procedural" tell in a tileset.
+ *
+ * Variation between variants therefore comes only from where the marks are,
+ * never from how bright the tile is overall.
  */
 function grassTile(ramp: readonly string[], seed: number, variant: number): Surface {
   const s = new Surface(TILE, TILE);
-  const n1 = valueNoise(seed);
-  const n2 = valueNoise(seed + 4211);
-  const ox = variant * 37, oy = variant * 71;
+  // period 4 at scale 4 → the noise repeats exactly every 16px.
+  const n1 = periodicNoise(seed + variant * 977, 4);
+  const n2 = periodicNoise(seed + variant * 977 + 4211, 2);
+
+  const values: number[] = [];
   for (let y = 0; y < TILE; y++) {
     for (let x = 0; x < TILE; x++) {
-      // Large, low-contrast patches only.
-      const v = n1(x + ox, y + oy, 7.5) * 0.75 + n2(x + ox, y + oy, 3.1) * 0.25;
-      let c = ramp[2];
-      if (v > 0.60) c = ramp[3];
-      else if (v < 0.36) c = ramp[1];
-      s.px(x, y, c);
+      values.push(n1(x, y, 4) * 0.55 + n2(x, y, 8) * 0.45);
     }
   }
-  // Blade tips: the only place the light end of the ramp appears. Sparse,
-  // clustered, two pixels tall so they read as individual blades at 4x zoom.
+  // 13% shadow, 74% base, 13% light. Grass is mostly ONE colour; the mottling
+  // exists to break up the flat, not to be a pattern in its own right. At 4x
+  // zoom anything more even reads as static.
+  const bands = rankQuantise(values, [13, 74, 13]);
+  const shades = [ramp[1], ramp[2], ramp[3]];
+  for (let i = 0; i < values.length; i++) {
+    s.px(i % TILE, Math.floor(i / TILE), shades[bands[i]]);
+  }
+
+  // Blade tips: the only place the ramp's extremes appear. Sparse, clustered,
+  // two pixels tall so they read as individual blades at 4x zoom. Kept away
+  // from the tile edge so they never straddle a seam.
   const r = rng(seed + variant * 313);
-  const clusters = 2 + r.int(0, 2);
-  for (let ci = 0; ci < clusters; ci++) {
-    const cx = r.int(1, TILE - 2);
-    const cy = r.int(2, TILE - 2);
-    const n = r.int(2, 4);
+  if (r.chance(0.75)) {
+    const cx = r.int(3, TILE - 4);
+    const cy = r.int(4, TILE - 4);
+    const n = r.int(2, 3);
     for (let i = 0; i < n; i++) {
       const bx = cx + r.int(-2, 2);
       const by = cy + r.int(-1, 1);
@@ -79,8 +96,8 @@ function grassTile(ramp: readonly string[], seed: number, variant: number): Surf
       s.px(bx, by - 1, ramp[3]);
     }
   }
-  // A couple of dark divots for grit; anything more turns into noise.
-  speckle(s, rng(seed + variant * 77 + 5), 0, 0, TILE, TILE, ramp[0], 3, 0.45);
+  // One or two dark divots for grit; anything more turns into noise.
+  speckle(s, rng(seed + variant * 77 + 5), 3, 3, TILE - 6, TILE - 6, ramp[0], 2, 0.35);
   return s;
 }
 
@@ -268,11 +285,21 @@ export function registerTerrain(b: ArtBuild): void {
   for (let i = 0; i < 6; i++) b.addTile(`tile/town/grass_${i}`, grassTile(P.GRASS, 1201, i));
   for (let i = 0; i < 3; i++) b.addTile(`tile/town/grass_dry_${i}`, grassTile(P.GRASS_DRY, 1301, i));
 
-  // Bare earth used under buildings and in the plaza.
-  for (let i = 0; i < 3; i++) {
+  // Bare earth used under buildings and in the plaza — same seamless,
+  // tone-matched treatment as grass.
+  for (let i = 0; i < 4; i++) {
     const s = new Surface(TILE, TILE);
-    mottle(s, P.DIRT, 1401 + i * 51, { scale: 3.6 });
-    speckle(s, rng(1500 + i), 0, 0, TILE, TILE, P.DIRT[0], 8, 0.5);
+    const n1 = periodicNoise(1401 + i * 977, 4);
+    const n2 = periodicNoise(1401 + i * 977 + 51, 8);
+    const values: number[] = [];
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      values.push(n1(x, y, 4) * 0.65 + n2(x, y, 2) * 0.35);
+    }
+    const bands = rankQuantise(values, [20, 58, 22]);
+    const shades = [P.DIRT[1], P.DIRT[2], P.DIRT[3]];
+    for (let k = 0; k < values.length; k++) s.px(k % TILE, Math.floor(k / TILE), shades[bands[k]]);
+    speckle(s, rng(1500 + i), 2, 2, TILE - 4, TILE - 4, P.DIRT[0], 6, 0.45);
+    speckle(s, rng(1560 + i), 2, 2, TILE - 4, TILE - 4, P.DIRT[4], 3, 0.35);
     b.addTile(`tile/town/soil_${i}`, s);
   }
 

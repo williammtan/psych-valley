@@ -9,6 +9,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ArtBuild, packTileset, packAtlas, atlasJSON } from './lib/registry.js';
+import { guaranteeFrames } from './lib/guarantee.js';
 import { Surface, upscale } from './lib/pixel.js';
 import { encodePNG } from './lib/png.js';
 
@@ -60,6 +61,12 @@ for (const [name, fn] of MODULES) {
   );
 }
 
+const stubbed = guaranteeFrames(build);
+if (stubbed.length) {
+  console.log(`\n  ⚠ ${stubbed.length} required frame(s) stubbed with placeholders:`);
+  console.log(`    ${stubbed.join(', ')}`);
+}
+
 // ── Tileset ────────────────────────────────────────────────────────────────
 const tileset = packTileset(build.tiles);
 writePNG(join(OUT, 'tiles.png'), tileset.surface);
@@ -93,6 +100,7 @@ writeFileSync(
     blobFrames: build.blobFrames,
     tileAnims: build.tileAnims,
     anims: build.anims,
+    stubbed,
   }, null, 0),
 );
 

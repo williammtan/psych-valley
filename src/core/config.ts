@@ -24,7 +24,7 @@ export const DEPTH = {
   LIGHT: 400_000,
   VIGNETTE: 450_000,
   HUD: 500_000,
-} as const;
+};
 
 /** Player movement — tuned for immediate, snappy Zelda-style response. */
 export const PLAYER = {
@@ -46,14 +46,14 @@ export const PLAYER = {
   /** Collision box, in pixels, anchored at the sprite's feet. */
   BODY_W: 10,
   BODY_H: 8,
-} as const;
+};
 
 export const CAMERA = {
   LERP: 0.14,
   /** Player can drift this far from centre before the camera reacts. */
   DEADZONE_W: 24,
   DEADZONE_H: 18,
-} as const;
+};
 
 export const COLORS = {
   ink: 0x241d33,
@@ -68,6 +68,6 @@ export const COLORS = {
   amber: 0xffb937,
   danger: 0xc2456a,
   good: 0x6cb069,
-} as const;
+};
 
 export const SAVE_KEY = 'project-psyche-save-v1';

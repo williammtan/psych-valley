@@ -8,6 +8,7 @@
 import Phaser from 'phaser';
 import { TILE, DEPTH } from '@/core/config';
 import { blobTable, blobAnimation, familyTiles, hash01, hasFamily, tileIndex, variantAt } from './art';
+import { hasFrame } from '@/core/textures';
 import type { MapDef, Material, ObjectSpec, ScatterRule } from './types';
 import { validateMap } from './types';
 
@@ -121,9 +122,22 @@ export function buildWorld(scene: Phaser.Scene, def: MapDef): BuiltWorld {
 
   // ── objects / above grids + explicit props ───────────────────────────────
   const props: BuiltProp[] = [];
+  /**
+   * Missing frames must never reach the renderer: Phaser substitutes the
+   * texture's __BASE frame, which draws the whole 2048px atlas into the world.
+   * Anything unresolvable is reported once and skipped.
+   */
+  const missing = new Set<string>();
+  const resolve = (keys: string[], tx: number, ty: number): string | null => {
+    const usable = keys.filter((k) => hasFrame(scene, k));
+    if (!usable.length) { keys.forEach((k) => missing.add(k)); return null; }
+    return usable[Math.floor(hash01(tx, ty, 53) * usable.length) % usable.length];
+  };
+
   const place = (spec: ObjectSpec, tx: number, ty: number, id?: string, forceOver = false) => {
     const keys = Array.isArray(spec.key) ? spec.key : [spec.key];
-    const key = keys[Math.floor(hash01(tx, ty, 53) * keys.length) % keys.length];
+    const key = resolve(keys, tx, ty);
+    if (!key) return null;
     const ox = spec.offset?.[0] ?? 0;
     const oy = spec.offset?.[1] ?? 0;
     const px = tx * TILE + TILE / 2 + ox;
@@ -166,7 +180,8 @@ export function buildWorld(scene: Phaser.Scene, def: MapDef): BuiltWorld {
   for (const p of def.props ?? []) {
     const spec: ObjectSpec = { key: p.key, ...(p.spec ?? {}) };
     const keys = Array.isArray(spec.key) ? spec.key : [spec.key];
-    const key = keys[0];
+    const key = resolve(keys, Math.floor(p.x), Math.floor(p.y));
+    if (!key) continue;
     const px = p.x * TILE + TILE / 2 + (spec.offset?.[0] ?? 0);
     const py = p.y * TILE + TILE + (spec.offset?.[1] ?? 0);
     const sprite = scene.add.sprite(px, py, 'atlas', key).setOrigin(0.5, 1);
@@ -192,6 +207,12 @@ export function buildWorld(scene: Phaser.Scene, def: MapDef): BuiltWorld {
         if (yy >= 0 && yy < h && xx >= 0 && xx < w) solid[yy][xx] = true;
       }
     }
+  }
+
+  if (missing.size) {
+    console.warn(`[psyche] map '${def.id}' references ${missing.size} missing sprite(s):`, [...missing]);
+    const w2 = window as unknown as { __missingProps?: Record<string, string[]> };
+    w2.__missingProps = { ...(w2.__missingProps ?? {}), [def.id]: [...missing] };
   }
 
   return {

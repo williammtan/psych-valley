@@ -23,20 +23,49 @@ export interface ArtManifest {
 }
 
 let manifest: ArtManifest;
-/** family name -> tile indices, e.g. 'grass' -> [0,1,2,3,4,5] */
+/**
+ * Tile families, keyed by their FULL path minus the variant suffix:
+ *   'tile/town/grass_3'  -> family 'tile/town/grass'
+ *   'tile/woods/grass_1' -> family 'tile/woods/grass'
+ *
+ * Keying by leaf name alone silently merges `town/grass` with `woods/grass`,
+ * which paints half a field in the wrong biome's colours. Short aliases
+ * ('town/grass', and bare 'grass' when unambiguous) are registered too, so map
+ * authors can write the shortest form that is unique.
+ */
 const families = new Map<string, number[]>();
+const aliases = new Map<string, string>();
 
 export function initArt(m: ArtManifest): void {
   manifest = m;
   families.clear();
+  aliases.clear();
+
   for (const name of Object.keys(m.tileset.index)) {
-    // 'tile/town/grass_3' -> family 'grass'; 'tile/scatter/flower_gold_1' -> 'flower_gold'
-    const leaf = name.split('/').pop()!;
-    const fam = leaf.replace(/_\d+$/, '');
+    const fam = name.replace(/_\d+$/, '');
     if (!families.has(fam)) families.set(fam, []);
     families.get(fam)!.push(m.tileset.index[name]);
   }
   for (const list of families.values()) list.sort((a, b) => a - b);
+
+  // Build shorter aliases, dropping any that would be ambiguous.
+  const claims = new Map<string, string[]>();
+  for (const fam of families.keys()) {
+    const parts = fam.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      const short = parts.slice(i).join('/');
+      if (!claims.has(short)) claims.set(short, []);
+      claims.get(short)!.push(fam);
+    }
+  }
+  for (const [short, owners] of claims) {
+    if (owners.length === 1 && !families.has(short)) aliases.set(short, owners[0]);
+  }
+}
+
+function resolveFamily(fam: string): string | undefined {
+  if (families.has(fam)) return fam;
+  return aliases.get(fam);
 }
 
 export function art(): ArtManifest {
@@ -54,15 +83,26 @@ export function hasTile(name: string): boolean {
   return manifest.tileset.index[name] !== undefined;
 }
 
-/** All tiles in a family, e.g. familyTiles('grass'). */
+/** All tiles in a family, e.g. familyTiles('tile/town/grass') or 'town/grass'. */
 export function familyTiles(fam: string): number[] {
-  const list = families.get(fam);
-  if (!list) throw new Error(`unknown tile family '${fam}'`);
-  return list;
+  const key = resolveFamily(fam);
+  if (!key) {
+    const candidates = [...families.keys()].filter((k) => k.includes(fam.split('/').pop()!));
+    throw new Error(
+      `unknown tile family '${fam}'` +
+      (candidates.length ? ` — did you mean: ${candidates.slice(0, 6).join(', ')}?` : ''),
+    );
+  }
+  return families.get(key)!;
 }
 
 export function hasFamily(fam: string): boolean {
-  return families.has(fam);
+  return !!resolveFamily(fam);
+}
+
+/** Every registered family name — used by the art-coverage QA report. */
+export function allFamilies(): string[] {
+  return [...families.keys()];
 }
 
 /** Deterministic, spatially-hashed variant pick — stable across reloads. */

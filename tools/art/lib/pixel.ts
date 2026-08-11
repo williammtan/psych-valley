@@ -393,6 +393,61 @@ export function rng(seed: number) {
 }
 export type Rng = ReturnType<typeof rng>;
 
+/**
+ * Seamlessly tiling value noise.
+ *
+ * The lattice wraps every `period` cells, so sampling x in [0, period*scale)
+ * produces a texture whose left edge matches its right edge. Non-periodic noise
+ * is why procedural terrain tiles show visible seams.
+ */
+export function periodicNoise(seed: number, period: number) {
+  const h = (x: number, y: number) => {
+    const px = ((x % period) + period) % period;
+    const py = ((y % period) + period) % period;
+    let n = (px * 374761393 + py * 668265263 + seed * 1442695041) | 0;
+    n = (n ^ (n >>> 13)) * 1274126177;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  };
+  return (x: number, y: number, scale: number) => {
+    const fx = x / scale, fy = y / scale;
+    const x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = fx - x0, ty = fy - y0;
+    const sx = tx * tx * (3 - 2 * tx);
+    const sy = ty * ty * (3 - 2 * ty);
+    const a = h(x0, y0), b = h(x0 + 1, y0), c = h(x0, y0 + 1), d = h(x0 + 1, y0 + 1);
+    const top = a + (b - a) * sx;
+    const bot = c + (d - c) * sx;
+    return top + (bot - top) * sy;
+  };
+}
+
+/**
+ * Quantise a field of values into ramp indices by RANK, not by threshold.
+ *
+ * This guarantees every variant of a tiling texture has exactly the same
+ * proportion of each shade. Threshold-based quantisation lets one variant come
+ * out slightly darker than its neighbour, which reads as a checkerboard across
+ * a grass field — the single most common failure in procedural tilesets.
+ *
+ * `weights` are the target proportions, one per ramp index supplied.
+ */
+export function rankQuantise(
+  values: number[],
+  weights: number[],
+): number[] {
+  const order = values.map((v, i) => [v, i] as const).sort((a, b) => a[0] - b[0]);
+  const total = weights.reduce((a, b) => a + b, 0);
+  const out = new Array<number>(values.length).fill(0);
+  let cursor = 0;
+  weights.forEach((wgt, band) => {
+    const count = Math.round((wgt / total) * values.length);
+    const end = band === weights.length - 1 ? values.length : Math.min(values.length, cursor + count);
+    for (let i = cursor; i < end; i++) out[order[i][1]] = band;
+    cursor = end;
+  });
+  return out;
+}
+
 /** Value noise on an integer lattice — used for terrain mottling. */
 export function valueNoise(seed: number) {
   const h = (x: number, y: number) => {

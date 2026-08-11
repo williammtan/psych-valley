@@ -4,3 +4,6 @@ dist/
 *.log
 shots/raw/
 .DS_Store
+.tmp/
+shots/
+art_preview/

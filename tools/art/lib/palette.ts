@@ -135,6 +135,164 @@ export const CLOTH: Record<string, Ramp> = {
   apron: ['#6d6858', '#8b8672', '#a9a48e', '#c5c1ad', '#dedbcb'],
 };
 
+// ── Town props: foliage, materials, livestock (appended) ──────────────────
+/** Dappled sunlight on a cool-green canopy — one step above TREE_DARK[4]. */
+export const LEAF_SUN_COOL = '#74b66d';
+/** Dappled sunlight on a warm-green canopy — one step above TREE_WARM[4]. */
+export const LEAF_SUN_WARM = '#b3cd6e';
+/** Spring blossom canopy (pairs with FLOWER_ROSE / FLOWER_WHITE petals). */
+export const BLOSSOM: Ramp = ['#7a3550', '#a84c6c', '#d2748f', '#f0a3b6', '#ffd3dd'];
+/** The white-blossom sibling — cream, never pure white. */
+export const BLOSSOM_WHITE: Ramp = ['#7d6f7a', '#a2939c', '#c7b8bf', '#e6dbdf', '#fbf4f3'];
+/** Wrought iron: lampposts, hinges, hoops, bands. */
+export const IRON: Ramp = ['#191722', '#272534', '#3a3848', '#514f60', '#6e6b7e'];
+/** Bronze / brass: the hand bell, fittings. */
+export const BRONZE: Ramp = ['#4a2f12', '#6f4a1c', '#96692a', '#bd9142', '#e0bd72'];
+/** Rope, twine, woven basket cane. */
+export const ROPE: Ramp = ['#5b4526', '#7d6236', '#a2864f', '#c0a670', '#dcc79a'];
+/** Fired clay: planters, pots, roof-tile shards. */
+export const TERRACOTTA: Ramp = ['#5a2a1c', '#7d3f27', '#a05a36', '#c07a4d', '#dda06f'];
+/** Moss and lichen on stone. */
+export const MOSS: Ramp = ['#1d3320', '#2b4a2a', '#3d6634', '#548544', '#75a75c'];
+/** Bleached laundry, bedsheets, aprons on the line. */
+export const LINEN: Ramp = ['#8e8ea6', '#adaec4', '#cfd0e0', '#e8e9f2', '#fbfbf6'];
+/** Kitchen-garden leaves — brighter and yellower than wild foliage. */
+export const VEG_LEAF: Ramp = ['#22401f', '#315a27', '#457a32', '#5e9c43', '#82bd5e'];
+/** Feathers: chickens, ducks, doves. */
+export const FEATHER: Ramp = ['#8a7f78', '#b0a49a', '#d2c7ba', '#e9e0d2', '#f8f2e4'];
+/** The fat ginger cat that is emphatically not Pip. */
+export const CAT_GINGER: Ramp = ['#5a2810', '#803c17', '#a85a24', '#c87f3e', '#e5a862'];
+
+// ── Enemies (appended by the enemy art module) ────────────────────────────
+// Echo creatures are ordinary valley matter pulled out of shape, so their
+// bodies stay natural (bracken, husk-cloth, shadow) and only the *light*
+// inside them is Echo violet/cyan.
+export const BRACKEN: Ramp = ['#1a2317', '#283420', '#3a4a2b', '#4f6135', '#6a7c44'];
+export const THORN: Ramp = ['#3a2413', '#573619', '#7d5122', '#a37231', '#c99a4e'];
+export const WISP_HUSK: Ramp = ['#1e2b36', '#2c3f4e', '#3f5a6b', '#567a8b', '#7099ab'];
+export const MIMIC_SHADE: Ramp = ['#161327', '#211c39', '#2e2851', '#3f376b', '#544a89'];
+export const MIRROR: Ramp = ['#39445a', '#55647e', '#7a8ca4', '#a5b8c9', '#d6e6ef'];
+export const ECHO_DEEP: Ramp = ['#0f0a1c', '#180f2b', '#231640', '#312057', '#432d74'];
+/** Warm fragments the Echo has stolen from the town — memory-coloured amber. */
+export const STOLEN_AMBER: Ramp = ['#5a3a12', '#8a5a1c', '#b8822c', '#dcac52', '#f5d68e'];
+/** The colour of a follower that has broken from the group. */
+export const DISSENT: Ramp = ['#5e2a14', '#8f4a1c', '#c2762a', '#e8a349', '#ffd489'];
+/** Desaturated violet for *stale* information — old attack patterns. */
+export const ECHO_PALE: Ramp = ['#2a2438', '#3b3450', '#4e4668', '#665d84', '#8279a3'];
+export const ECHO_SPARK = '#eae2ff';
+
+// ── Whisper Woods: the cool, quiet zone between town and shrine (appended) ─
+// Related to the town ramps by hue so it reads as the same world — the woods
+// differ by *temperature and contrast*, not by being turned down.
+/** Forest canopy. Darker and a step cooler than TREE_DARK; the woods' signature. */
+export const WOODS_CANOPY: Ramp = ['#0d2320', '#14322b', '#1d4636', '#2a6045', '#3c7f56'];
+/** The little daylight that reaches the canopy top. Cool, never the town's warm dapple. */
+export const WOODS_LEAF_SUN = '#57a069';
+/** Undergrowth: bushes, ferns, low leaves. A step warmer than the canopy above. */
+export const WOODS_UNDER: Ramp = ['#12281c', '#1b3a25', '#264e30', '#35673e', '#4a8450'];
+/** Damp forest bark — greyer, cooler and more violet than town's WOOD. */
+export const WOODS_BARK: Ramp = ['#1e1820', '#2e2530', '#413541', '#584857', '#75636f'];
+/** Dead, bleached, barkless timber. Pale enough to read against the dark floor. */
+export const WOODS_BONEWOOD: Ramp = ['#33303f', '#474455', '#5f5b6c', '#7d7887', '#9d97a2'];
+/** Woods rock: cliff faces, boulders, standing stones. Cooler than STONE_WALL. */
+export const WOODS_ROCK: Ramp = ['#24222f', '#343343', '#484758', '#605e70', '#7d7a8b'];
+/** The stream. Far darker and greener than the town river. */
+export const WOODS_WATER: Ramp = ['#0c1f2a', '#12333f', '#1a4a55', '#276b72', '#438f92'];
+/** Thorn thicket — the impassable boundary. Nearly hueless, nearly black. */
+export const WOODS_BRAMBLE: Ramp = ['#0f0e15', '#191a1e', '#242a26', '#333d33', '#465243'];
+/** Dry thorn tips: the only bright marks on a bramble, and they read as spikes. */
+export const BRAMBLE_THORN = '#a89c7e';
+/** Bramble berries — one saturated warning note per thicket. */
+export const BRAMBLE_BERRY = '#7d2340';
+/** Fungus caps. */
+export const FUNGUS_CAP: Ramp = ['#4a2016', '#6d3520', '#8f4d2c', '#b06b42', '#cd9163'];
+/** Fungus stems and gills — pale, faintly green-grey. */
+export const FUNGUS_PALE: Ramp = ['#5b5c50', '#7a7b6c', '#9a9b8a', '#bcbca8', '#dcdcc6'];
+/** Old bone: skulls, antlers, ribs half-buried in leaf litter. */
+export const BONE: Ramp = ['#5d5a52', '#7c786d', '#9c9789', '#bab5a5', '#d8d2c0'];
+/** Drifting ground mist. Step [3] is exactly MIST. */
+export const MIST_RAMP: Ramp = ['#3f4c62', '#5d6f8c', '#7690ae', '#8fa8c8', '#b6c8de'];
+
+// ── Architecture (appended — buildings module) ────────────────────────────
+/** Weathered copper / verdigris roofing and trim. */
+export const COPPER_PATINA: Ramp = ['#173a34', '#245445', '#367159', '#4f8f70', '#72ad8d'];
+/** Unlit or cold window glass — shopfronts, skylights, gable lights. */
+export const GLASS_COLD: Ramp = ['#28374a', '#3a4d63', '#526981', '#7189a0', '#9cb4c4'];
+/** Awning / tent canvas, cream weave. */
+export const CANVAS: Ramp = ['#7b6851', '#9c896b', '#bfab8a', '#ddcfad', '#f4e9cc'];
+/** Fired brick — chimneys, foundation courses. */
+export const BRICK: Ramp = ['#3f231e', '#5c332a', '#7a4738', '#96604a', '#b17f63'];
+/** Grey slate roofing for civic buildings and the bell tower spire. */
+export const ROOF_SLATE: Ramp = ['#252634', '#343648', '#484b61', '#61647c', '#7f8298'];
+/** Ancient shrine granite — colder and greener than SHRINE_STONE's interior. */
+export const SHRINE_OUTER: Ramp = ['#20222e', '#2e3242', '#3e4457', '#525a70', '#6d768c'];
+
+// ── Festival of Lanterns (appended) ───────────────────────────────────────
+// The three ceremonial trial tones reuse the FX tone ramps so the lantern and
+// the tone it emits are literally the same colour: LANTERN (amber) = tone A,
+// TONE_ROSE = tone B, TONE_TEAL = tone C.
+/** Unlit paper: cold, dusty, obviously "off". */
+export const PAPER_DIM: Ramp = ['#3a3242', '#544a58', '#6f6472', '#8e8390', '#aca2ab'];
+/** Warm paper stock for hanging lanterns that are lit but not ceremonial. */
+export const PAPER_WARM: Ramp = ['#8a5a30', '#b57c42', '#d9a361', '#f0c98c', '#fdefc6'];
+/** The ceremonial runner laid down the plaza's centre. */
+export const CARPET_RED: Ramp = ['#3e0f1c', '#5e1a2a', '#84293c', '#a63f4f', '#c45f68'];
+/** Bunting / banner dye lots that are not roof colours. */
+export const DYE_SAFFRON: Ramp = ['#7a4a0e', '#a86a18', '#d59429', '#f0bb54', '#ffe08e'];
+export const DYE_PLUM: Ramp = ['#3d1c46', '#572c62', '#763f82', '#96599f', '#b57cba'];
+export const DYE_SEA: Ramp = ['#12333f', '#1c4d5c', '#2a6e7c', '#3f939c', '#6dbcbe'];
+/** Grilled food, roast skewers, sausage. */
+export const FOOD_MEAT: Ramp = ['#40190f', '#5e2916', '#7f4020', '#a35e2d', '#c58449'];
+/** Crust and crumb: bread, pastry, pie. */
+export const FOOD_BREAD: Ramp = ['#6a3f18', '#8e5a24', '#b47c37', '#d3a25c', '#eecb92'];
+/** Charcoal in a brazier: dead ash through hot coal. */
+export const COAL: Ramp = ['#191420', '#2c232e', '#463038', '#7a3320', '#b8471f'];
+
+// ── Character kit (humanoid rig, Pip, Mote) ───────────────────────────────
+// Appended for the character generator. Boots/straps/bags share one leather
+// ramp so the whole cast's gear reads as coming from the same tannery, and the
+// six villager cloth ramps are deliberately spread around the hue circle so no
+// two townsfolk read as recolours of each other.
+/** Tanned leather: boots, straps, satchels, bookbindings, armchairs. */
+export const LEATHER: Ramp = ['#361d16', '#523024', '#704634', '#8e6048', '#ab7f63'];
+export const METAL: Ramp = ['#2a2a36', '#41414f', '#5c5c6b', '#7e7e8b', '#a4a4ae'];
+export const CLOTH_MOSS: Ramp = ['#2e3f22', '#425831', '#5b7442', '#789356', '#98b073'];
+export const CLOTH_CLAY: Ramp = ['#5b2f22', '#7b4530', '#9c5f40', '#bb7f57', '#d6a377'];
+export const CLOTH_SLATE: Ramp = ['#25293a', '#373d54', '#4e5570', '#6a728d', '#8b93aa'];
+export const CLOTH_WHEAT: Ramp = ['#6e5722', '#917632', '#b39647', '#d0b569', '#e8d495'];
+export const CLOTH_BERRY: Ramp = ['#4a1c36', '#6b2b4c', '#8f4166', '#b06083', '#cb87a3'];
+export const CLOTH_SAGE: Ramp = ['#2f4740', '#446056', '#5d7c6f', '#7e9c8c', '#a3bcac'];
+
+// Pip the cat: warm tabby over a cream chest.
+export const PIP_FUR: Ramp = ['#4a2a14', '#6b3d1c', '#8f5626', '#b1783f', '#cf9d63'];
+export const PIP_CREAM: Ramp = ['#7a6144', '#9c8160', '#bda182', '#d8c0a4', '#efdcc4'];
+export const PIP_PINK = '#d98a92'; // nose / inner ear
+
+/** Mote's specular centre. Near-white but never #ffffff — it is a light, not paper. */
+export const MOTE_CORE = '#eaffff';
+
+// ── UI (appended by the UI/typography pass) ───────────────────────────────
+/**
+ * Bitmap-font neutrals. Glyphs ship in these so the runtime can multiply-tint
+ * them to ink, gold or violet. FONT_LIGHT is the body face's only colour and
+ * the display face's 1px inner highlight; FONT_MID is the display face's
+ * field. The pair is deliberately a *value* step rather than a hue step, so
+ * the bevel survives being multiplied by a saturated tint.
+ */
+export const FONT_LIGHT = '#f6ecd4';
+export const FONT_MID = '#dbcda9';
+
+/** Vellum used inside panels — a touch cooler than PLASTER so ink pops. */
+export const UI_VELLUM: Ramp = ['#7c6a4e', '#a08a68', '#c9b48c', '#e6d6ae', '#f7edd0'];
+/** Brass hardware: frames, rules, rivets, seals. Warmer than UI_GOLD. */
+export const UI_BRASS: Ramp = ['#5c3d12', '#8a5c1a', '#b8842a', '#dcae46', '#f6d982'];
+/** Health. Reserved for hearts and damage feedback — never decoration. */
+export const UI_HEART: Ramp = ['#5e1730', '#8f2445', '#c23c5e', '#e2708a', '#ffa8b4'];
+/** Affirmative UI: completed quests, correct thread nodes, checkboxes. */
+export const UI_GOOD: Ramp = ['#1d4429', '#2b6338', '#3d8449', '#5aa763', '#8fca8a'];
+/** Keycap plastic — cool grey so prompts read as hardware, not paper. */
+export const UI_KEY: Ramp = ['#3a3646', '#565164', '#7a7488', '#a49dae', '#cec7d4'];
+
 /** Multiply-tint helper shared with the runtime for lighting maths. */
 export function shade(color: string, amount: number): string {
   const [r, g, b, a] = hex(color);
@@ -159,3 +317,113 @@ export function mix(a: string, b: string, t: number): string {
     (alpha === 255 ? '' : alpha.toString(16).padStart(2, '0'))
   );
 }
+
+// ── FX ramps (effects module) ─────────────────────────────────────────────
+// Effects read as *light*, so their ramps run further and hotter than surface
+// ramps: [0] is the faint outer wisp, [4] is the hot core. Only SPECULAR is
+// pure white, and it is only ever allowed as a 1–2 px core.
+export const SPECULAR = '#ffffff';
+
+/** Sword arc: rose wisp → orange → gold → cream core. Never neutral white. */
+export const SLASH: Ramp = ['#a8455c', '#d9713f', '#f9ad4c', '#ffe291', '#fff8e0'];
+/** Hit burst / crit shards — hotter and redder than SLASH so hits read apart. */
+export const IMPACT: Ramp = ['#7a2438', '#b8482c', '#ec8a2e', '#ffcb66', '#fff4cc'];
+/** Kicked-up earth: footfalls, landings, dash scuffs. */
+export const DUST: Ramp = ['#3f342a', '#61513e', '#877257', '#b09b78', '#d8c7a4'];
+/** Chimney smoke and dust puffs — warm grey, never neutral, drifting violet. */
+export const SMOKE_PUFF: Ramp = ['#2e2838', '#443d54', '#615a72', '#837c92', '#aba4b6'];
+/** Cooking steam — cooler and lighter than smoke. */
+export const STEAM: Ramp = ['#3f4a5c', '#5d6a80', '#8592a6', '#aebbcc', '#dae5ef'];
+/** Damage: red-violet, deliberately off the town's warm/foliage hues. */
+export const HURT: Ramp = ['#3d0f2c', '#6d1a44', '#a52a5e', '#d95483', '#f78fae'];
+/** Metallic cold spark — blocks, and the pipe-crash's ugly white. */
+export const COLD_SPARK: Ramp = ['#2b3346', '#465268', '#6f7f96', '#a4b3c6', '#e4eef9'];
+
+/** The town bell made visible. Warm amber, the game's motif. */
+export const BELL_TONE: Ramp = ['#6b3a0e', '#a8641a', '#e09a2c', '#ffc85e', '#ffeeb4'];
+/** Festival lantern tone B (rose). Tone A is BELL_TONE, tone C is TONE_TEAL. */
+export const TONE_ROSE: Ramp = ['#5c1c38', '#8f2f52', '#c25074', '#e8829e', '#ffc6d6'];
+/** Festival lantern tone C (teal) — cool but short of Echo cyan's saturation. */
+export const TONE_TEAL: Ramp = ['#0e3a3c', '#166063', '#22898a', '#4cb9ae', '#98e8d8'];
+
+/** Greyscale falloff for light sprites; tinted + additively blended at runtime. */
+export const LIGHT_RAMP: Ramp = ['#1e1e1e', '#454545', '#7a7a7a', '#b8b8b8', '#ffffff'];
+
+/** A turned autumn leaf — redder than TREE_AUTUMN, so drifting leaves vary. */
+export const LEAF_RED: Ramp = ['#4a1a18', '#6e2a1e', '#95412a', '#b85f38', '#d4854f'];
+
+// ── Interiors: the Lantern Inn, Sera's Workshop, the Courier Office ────────
+// Interiors are lit by fire and lanterns, so their surfaces run warmer and a
+// touch darker than the outdoor equivalents, and their shadows lean violet.
+
+/** Warm oak plank floor — the Lantern Inn's whole ground plane. */
+export const FLOOR_WOOD: Ramp = ['#3d2416', '#5c3a21', '#7e5531', '#a17549', '#c29a6c'];
+/** Workshop flagstone — cool grey-violet, deliberately colder than the inn. */
+export const FLOOR_STONE: Ramp = ['#2e2c3a', '#43414f', '#5b5967', '#787584', '#98959f'];
+/** Kitchen tile, pale square. */
+export const FLOOR_TILE: Ramp = ['#6b5c4a', '#8b7b64', '#ab9a80', '#c9b99b', '#e3d5b8'];
+/** Kitchen tile, clay square — low contrast against FLOOR_TILE by design. */
+export const FLOOR_TILE_CLAY: Ramp = ['#5e4238', '#7b594a', '#96705d', '#b08a73', '#c8a68c'];
+
+/** Interior plaster: PLASTER seen in lamplight rather than daylight. */
+export const WALL_PLASTER: Ramp = ['#544438', '#71604f', '#907c66', '#ae9a80', '#cab89b'];
+/** Timber wall panelling, red-brown so it separates from the oak floor. */
+export const WALL_WOOD: Ramp = ['#2c1c14', '#43291d', '#5c3b28', '#7a5238', '#976d4c'];
+
+/** Woven rugs. Deep, slightly dusty — a rug is never as saturated as a banner. */
+export const RUG_RED: Ramp = ['#3f1220', '#5f1e2c', '#82303c', '#a54a52', '#c47276'];
+export const RUG_BLUE: Ramp = ['#182742', '#243c5c', '#345479', '#4a7096', '#6b90b4'];
+
+/** Hammered copper: pans, kettles, the inn's hanging pot rack. */
+export const COPPER: Ramp = ['#4a2412', '#6d381f', '#93532f', '#ba7748', '#dda06e'];
+/** Glazed ceramic: mugs, basins, plates. Cool, so it pops against all the wood. */
+export const CERAMIC: Ramp = ['#6a6274', '#8c8492', '#aea6ae', '#cdc6c6', '#eae4dc'];
+/** Clear glass: window panes, specimen jars, lantern housings. */
+export const GLASS_CLEAR: Ramp = ['#38485a', '#526879', '#728e9c', '#9ab3bd', '#c8dade'];
+/** Bottle glass. */
+export const GLASS_GREEN: Ramp = ['#17322a', '#204c40', '#2c6b56', '#3f8c6e', '#63b18c'];
+/** Slate chalkboard. */
+export const CHALKBOARD: Ramp = ['#151d1b', '#202d29', '#2c3e38', '#3b5249', '#4d675c'];
+export const CHALK = '#e6e4d4';
+/** Soot and firebox interiors — darker than OUTLINE but still violet, not black. */
+export const SOOT: Ramp = ['#131120', '#1f1c2c', '#2e2b3c', '#403d4f', '#565266'];
+// Tanned leather (armchairs, satchels, bookbindings, boots) already exists as
+// LEATHER in the character-generator block above; reuse it rather than
+// declaring a second, near-identical ramp.
+
+/**
+ * The four parcel wraps. Quest Two asks the player to recognise a specific
+ * package, so `prop/town/parcel_*` and `prop/int/post_parcel_*` MUST both take
+ * their colours from here — this record is the contract between those modules.
+ */
+export const PARCEL_WRAP: Record<'kraft' | 'slate' | 'rose' | 'sage', Ramp> = {
+  kraft: ['#6b4a28', '#8c6437', '#ad824c', '#c9a068', '#e0bd8c'],
+  slate: ['#2f3a4a', '#445264', '#5d6d80', '#7b8b9c', '#9caab8'],
+  rose: ['#5e2434', '#803347', '#a2495c', '#bd6a78', '#d4909a'],
+  sage: ['#334029', '#4a5a3a', '#66784f', '#849668', '#a5b48a'],
+};
+/** String / twine that ties a parcel and pins a route map. */
+export const TWINE = '#c9b184';
+
+// ── Echo Shrine (appended — shrine module) ────────────────────────────────
+// The shrine's value ladder is the whole readability plan, darkest first:
+//   SHRINE_CAP (wall mass / not-room)  <  SHRINE_FLOOR (quiet ground)
+//   <  SHRINE_STONE (carved wall face, the only textured architecture)
+//   <  glowing puzzle objects (ECHO_RUNE / ECHO_FLAME).
+// Nothing in the architecture is allowed above SHRINE_STONE[4]; every bright
+// pixel underground belongs to something the player can act on.
+
+/** Top surface of a wall seen from above — the "not-room" mass. Nearly void. */
+export const SHRINE_CAP: Ramp = ['#0a0a15', '#0f1020', '#16172e', '#1e2040', '#2a2c56'];
+/** Old observatory brass: armatures, bands, brackets, lamp bowls. */
+export const SHRINE_BRASS: Ramp = ['#33260f', '#54401a', '#7d6229', '#a68a46', '#d4bd7c'];
+/** Echo growth creeping over the floor — moss that is lit from inside. */
+export const SHRINE_MOSS: Ramp = ['#1a1630', '#28204a', '#3b2f6c', '#54468f', '#7264b0'];
+/** Still shrine water: black-blue, mirror-flat, faintly luminous. */
+export const SHRINE_WATER: Ramp = ['#0b1526', '#12233c', '#1b3757', '#2a5b7d', '#4f9aa8'];
+/** Violet flame — braziers. Runs hotter than ECHO_VIOLET so fire reads as fire. */
+export const ECHO_FLAME: Ramp = ['#2b0f4e', '#4b1d84', '#7a3ec0', '#a778e4', '#e0cbff'];
+/** A rune with no power in it: engraved, cold, still legible as the same glyph. */
+export const ECHO_RUNE_DIM = '#3d6b80';
+/** The 1–2 px core of a *lit* rune. The brightest thing in the shrine. */
+export const ECHO_RUNE_CORE = '#e8fdff';
