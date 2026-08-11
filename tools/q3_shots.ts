@@ -34,13 +34,13 @@ interface Frame {
 }
 
 const FRAMES: Frame[] = [
-  { name: 'fest_entry', note: 'Arriving through the arch from town', at: [23, 32], settle: 1600 },
-  { name: 'fest_stage', note: 'The trial stage, the centre of attention', at: [23, 22], settle: 1600 },
-  { name: 'fest_stage_nohud', note: 'Same, HUD hidden — the composition test', at: [23, 22], hideHud: true, settle: 1600 },
+  { name: 'fest_entry', note: 'Arriving through the arch from town', at: [23, 31], settle: 3400 },
+  { name: 'fest_stage', note: 'The trial stage, the centre of attention', at: [23, 19], settle: 3400 },
+  { name: 'fest_stage_nohud', note: 'Same, HUD hidden — the composition test', at: [23, 19], hideHud: true, settle: 3400 },
   { name: 'fest_food_row', note: 'West food row', at: [10, 20], settle: 1400 },
   { name: 'fest_bandstand', note: 'East bandstand and games', at: [37, 20], settle: 1400 },
   { name: 'fest_river', note: 'Floating lanterns on the river', at: [23, 13], settle: 1400 },
-  { name: 'fest_wide_nohud', note: 'Crowd + stage together, HUD hidden', at: [23, 24], hideHud: true, settle: 1600 },
+  { name: 'fest_wide_nohud', note: 'Crowd + stage together, HUD hidden', at: [23, 22], hideHud: true, settle: 3400 },
   { name: 'r2_consensus', note: 'Round 2 — the group visibly moving to Tavi', toRound: 2, settle: 700 },
   { name: 'r3_unanimity', note: 'Round 3 — unanimous, and the player answers last', toRound: 3, settle: 700 },
   { name: 'r4_broken', note: 'Round 4 — Nia has broken it and others followed', toRound: 4, settle: 700 },
@@ -60,6 +60,13 @@ async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevSe
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
   });
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  // tsx compiles with --keep-names, which wraps arrow functions in a `__name`
+  // helper. Playwright serialises the wrapped source into the page, where the
+  // helper does not exist, so every evaluate() with a closure throws. Defining
+  // it as identity in the page fixes them all. (Same fix as tools/mapsmoke.ts.)
+  await page.addInitScript(() => {
+    (window as unknown as { __name: <T>(f: T) => T }).__name = (f) => f;
+  });
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });

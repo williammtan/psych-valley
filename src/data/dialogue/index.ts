@@ -33,6 +33,7 @@ import {
 } from './types';
 
 export * from './types';
+export * from './runner';
 export { FLAGS, STAGES, stageOf } from './flags';
 export type { Stage } from './flags';
 export type { AmbientProfile } from './ambient';
@@ -60,37 +61,61 @@ export const TALK: Record<string, ExchangeMap> = {
   ...CHARACTER_TALK,
 };
 
-/** Everything readable that is not a person: signs, props, labels, stones. */
-export const ENV: ExchangeMap = {
-  ...SIGNS,
-  ...PROPS,
-  ...BOOK_SPINES,
-  ...LABELS,
-  ...GRAVES,
-  ...INSCRIPTIONS,
-  ...PIP_SIGHTINGS,
-  ...SHELF,
-  ...BARKER,
-  notice_board: NOTICE_BOARD,
-  courier_roster: ROSTER,
-  storeroom: STOREROOM,
-};
+/**
+ * Everything readable that is not a person: signs, props, labels, spines,
+ * gravestones, shrine carvings, Pip sightings, the shelf, the barker.
+ *
+ * Keyed by dotted exchange id (`prop.jetty`), never by the source object's key,
+ * because two different files both quite reasonably want to call something
+ * "jetty".
+ */
+const ENV_LIST: Exchange[] = [
+  ...Object.values(SIGNS),
+  ...Object.values(PROPS),
+  ...Object.values(BOOK_SPINES),
+  ...Object.values(LABELS),
+  ...Object.values(GRAVES),
+  ...Object.values(INSCRIPTIONS),
+  ...Object.values(PIP_SIGHTINGS),
+  ...Object.values(SHELF),
+  ...Object.values(BARKER),
+  NOTICE_BOARD,
+  ROSTER,
+  STOREROOM,
+];
+
+export const ENV: ExchangeMap = Object.fromEntries(ENV_LIST.map((ex) => [ex.id, ex]));
 
 // ── lookup ──────────────────────────────────────────────────────────────────
 
-const BY_ID: Record<string, Exchange> = (() => {
-  const out: Record<string, Exchange> = {};
-  for (const map of Object.values(TALK)) for (const ex of Object.values(map)) out[ex.id] = ex;
-  for (const ex of Object.values(ENV)) out[ex.id] = ex;
+/** Every exchange in the game, in declaration order, duplicates included. */
+export const ALL_EXCHANGES: Exchange[] = [
+  ...Object.values(TALK).flatMap((map) => Object.values(map)),
+  ...ENV_LIST,
+];
+
+const BY_ID: Record<string, Exchange> = Object.fromEntries(ALL_EXCHANGES.map((ex) => [ex.id, ex]));
+
+/**
+ * Last dotted segment, where it is unambiguous — so a map can mark a prop
+ * `interact: 'fountain'` without knowing which file it lives in.
+ */
+const BY_SHORT: Record<string, Exchange | null> = (() => {
+  const out: Record<string, Exchange | null> = {};
+  for (const ex of ALL_EXCHANGES) {
+    const short = ex.id.includes('.') ? ex.id.slice(ex.id.lastIndexOf('.') + 1) : ex.id;
+    if (short in out) out[short] = null; // ambiguous: force the full id
+    else out[short] = ex;
+  }
   return out;
 })();
 
-/** Look an exchange up by its dotted id, e.g. 'q1.naming'. */
+/** Look an exchange up by dotted id ('q1.naming'), or unambiguous short name. */
 export function exchangeById(id: string): Exchange | undefined {
-  return BY_ID[id];
+  return BY_ID[id] ?? BY_SHORT[id] ?? undefined;
 }
 
-/** Every exchange in the game, for tooling. */
+/** Every exchange in the game, deduplicated by id. For tooling. */
 export function allExchanges(): Exchange[] {
   return Object.values(BY_ID);
 }
@@ -108,7 +133,7 @@ export function play(source: Exchange | Beat[], s: StateView = State): ResolvedB
 
 /** Same, by id. Returns an empty run rather than throwing on a bad id. */
 export function playById(id: string, s: StateView = State): ResolvedBeat[] {
-  const ex = BY_ID[id];
+  const ex = exchangeById(id);
   if (!ex) {
     console.warn(`[dialogue] no exchange with id "${id}"`);
     return [];
@@ -118,7 +143,7 @@ export function playById(id: string, s: StateView = State): ResolvedBeat[] {
 
 /** The description for a prop / sign / object id, or null if it has none. */
 export function describe(id: string, s: StateView = State): ResolvedBeat[] | null {
-  const ex = ENV[id] ?? BY_ID[id];
+  const ex = exchangeById(id);
   return ex ? play(ex, s) : null;
 }
 

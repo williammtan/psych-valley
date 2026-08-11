@@ -217,8 +217,18 @@ export function matches(cond: Condition, s: StateView, stage: Stage): boolean {
   return true;
 }
 
+/** A choice whose replies have themselves been resolved. */
+export interface ResolvedChoiceOption extends Omit<ChoiceOption, 'reply'> {
+  reply: ResolvedBeat[];
+}
+
+export interface ResolvedChoiceBeat extends Omit<ChoiceBeat, 'options'> {
+  options: ResolvedChoiceOption[];
+}
+
 /** A beat that is definitely going to play: groups flattened, variants picked. */
-export type ResolvedBeat = Line | ChoiceBeat | PauseBeat | InsightBeat | BannerBeat | CueBeat;
+export type ResolvedBeat =
+  | Line | ResolvedChoiceBeat | PauseBeat | InsightBeat | BannerBeat | CueBeat;
 
 /**
  * Flatten `beats` for the current state: drop anything whose condition fails,

@@ -84,7 +84,7 @@ function build(): MapDef {
 
   // The trial ground — a laid carpet, which is what tells the player where the
   // evening's event actually is before anyone says a word.
-  g.blob(23, 22.5, 9.5, 6.5, 'f', 21, 0.16);
+  g.blob(23, 20.8, 8, 4.6, 'f', 21, 0.16);
 
   // Entry road from town, and the two service lanes to the stall rows.
   g.vLine(28, H - 1, 23, 'p', 5);
@@ -249,8 +249,8 @@ function build(): MapDef {
 
   // ── the ring of ground lanterns that draws the trial floor ───────────────
   const ring: Array<[number, number]> = [
-    [34.0, 22.6], [32.6, 26.6], [29.0, 29.4], [26.4, 30.2], [20.6, 30.2],
-    [17.6, 29.4], [14.0, 26.6], [12.6, 22.6], [14.0, 18.6], [33.2, 18.6],
+    [32.0, 20.8], [30.3, 24.1], [25.8, 26.1], [20.2, 26.1], [15.7, 24.1],
+    [14.0, 20.8], [15.7, 17.5], [30.3, 17.5],
   ];
   ring.forEach(([x, y], i) => {
     put(`prop/fest/ground_lantern_${i % 3}`, x, y, {}, { radius: 30, color: AMBER, intensity: 0.4, flicker: 0.35, dy: -0.9 });
@@ -353,17 +353,19 @@ function build(): MapDef {
     props: P.props,
     npcs: [
       // The seven who take part in the trial, arranged as an arc that opens
-      // toward the stage. The player's answering spot is the gap at its mouth.
-      { id: 'tavi', x: 19.4, y: 24.6, facing: 'n' },
-      { id: 'nia', x: 30.4, y: 24.4, facing: 'n' },
-      { id: 'villager_a', x: 16.6, y: 26.6, facing: 'n' },
-      { id: 'villager_b', x: 18.4, y: 28.6, facing: 'n' },
-      { id: 'villager_c', x: 21.6, y: 29.4, facing: 'n' },
-      { id: 'villager_d', x: 25.6, y: 29.4, facing: 'n' },
-      { id: 'villager_e', x: 29.0, y: 27.8, facing: 'n' },
+      // toward the stage. The player's answering spot is the gap at its mouth —
+      // standing IN the group, not in front of it, is what makes round three
+      // work, so this arrangement is gameplay, not decoration.
+      { id: 'tavi', x: 19.6, y: 22.8, facing: 'n' },
+      { id: 'nia', x: 30.2, y: 22.6, facing: 'n' },
+      { id: 'villager_a', x: 17.0, y: 24.8, facing: 'n' },
+      { id: 'villager_b', x: 18.8, y: 26.8, facing: 'n' },
+      { id: 'villager_c', x: 21.6, y: 27.8, facing: 'n' },
+      { id: 'villager_d', x: 25.6, y: 27.8, facing: 'n' },
+      { id: 'villager_e', x: 28.8, y: 26.0, facing: 'n' },
       // Host, observer, and the two who are here for the food.
-      { id: 'elia', x: 27.6, y: 20.6, facing: 'w' },
-      { id: 'sera', x: 15.4, y: 21.6, facing: 'e' },
+      { id: 'elia', x: 27.6, y: 20.4, facing: 'w' },
+      { id: 'sera', x: 15.6, y: 21.0, facing: 'e' },
       { id: 'mira', x: 6.2, y: 15.4, facing: 's' },
       { id: 'oren', x: 12.0, y: 19.4, facing: 'n', path: [[12, 19], [9, 21], [12, 22]], dwell: 3.2 },
       { id: 'villager_f', x: 36.0, y: 15.6, facing: 's' },
@@ -371,15 +373,18 @@ function build(): MapDef {
     zones: [
       { kind: 'camera', id: 'bounds', x: 0, y: 0, w: W, h: H },
       { kind: 'door', id: 'to_town', x: 21, y: H - 1, w: 5, h: 1, to: 'lumen_vale', spawn: 'north', facing: 's' },
-      { kind: 'trigger', id: 'festival_arrival', x: 20, y: 30, w: 7, h: 2 },
-      { kind: 'trigger', id: 'trial_ready', x: 19, y: 25, w: 10, h: 2 },
+      // Fires as the player comes under the arch, before they reach the crowd.
+      { kind: 'trigger', id: 'festival_arrival', x: 20, y: 30, w: 7, h: 2, forbids: 'q3_intro_done' },
+      // Stepping into the back of the arc is what starts the ceremony.
+      { kind: 'trigger', id: 'trial_ready', x: 19, y: 24, w: 10, h: 2, forbids: 'q3_trial_done' },
     ],
     lights: P.lights,
     spawns: {
-      default: { x: 23, y: 31, facing: 'n' },
+      // South of the arrival trigger, so a harness jump does not fire a cutscene.
+      default: { x: 23, y: 34, facing: 'n' },
       south: { x: 23, y: 34, facing: 'n' },
-      trial: { x: 23, y: 25, facing: 'n' },
-      stage: { x: 23, y: 21, facing: 'n' },
+      trial: { x: 23, y: 23, facing: 'n' },
+      stage: { x: 23, y: 19, facing: 'n' },
     },
   };
 }

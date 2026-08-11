@@ -182,11 +182,11 @@ function props(): PropPlacement[] {
     { key: 'prop/int/inn_sconce_0', x: 7, y: 2, spec: { anim: 'sconce_flicker' } },
     { key: 'prop/int/inn_curtain_l', x: 8, y: 2, spec: {} },
     { key: 'prop/int/inn_curtain_r', x: 9, y: 2, spec: {} },
-    { key: 'prop/int/inn_picture_a', x: 10, y: 2, spec: {} },
+    { key: 'prop/int/inn_picture_a', x: 10, y: 2, spec: { interact: 'prop.innPicture' } },
     { key: 'prop/int/inn_shelf_bottles', x: 12, y: 2, spec: {} },
     { key: 'prop/int/inn_shelf_mugs', x: 14, y: 2, spec: {} },
     { key: 'prop/int/inn_sconce_0', x: 15, y: 2, spec: { anim: 'sconce_flicker' } },
-    { key: 'prop/int/post_roster', x: 18, y: 2, spec: {}, id: 'roster' },
+    { key: 'prop/int/post_roster', x: 18, y: 2, spec: { interact: 'prop.innStairs' }, id: 'roster' },
     { key: 'prop/int/inn_newel', x: 15.4, y: 3, spec: {} },
     { key: 'prop/int/inn_barrel', x: 18, y: 4.4, spec: { solid: [12, 8] } },
 
@@ -195,10 +195,11 @@ function props(): PropPlacement[] {
     { key: 'prop/int/inn_bar_mid', x: 12, y: 6, spec: { solid: [16, 26] } },
     { key: 'prop/int/inn_bar_mid', x: 13, y: 6, spec: { solid: [16, 26] } },
     { key: 'prop/int/inn_bar_mid', x: 14, y: 6, spec: { solid: [16, 26] } },
-    { key: 'prop/int/inn_bar_r', x: 15, y: 6, spec: { solid: [16, 26] } },
-    { key: 'prop/int/inn_lectern', x: 10, y: 5.4, spec: { solid: [12, 8] }, id: 'ledger' },
+    { key: 'prop/int/inn_bar_r', x: 15, y: 6, spec: { solid: [16, 26], interact: 'prop.innBar' } },
+    { key: 'prop/int/inn_lectern', x: 10, y: 5.4, spec: { solid: [12, 8], interact: 'prop.innGuestBook' }, id: 'ledger' },
     { key: 'prop/int/inn_mug', x: 11.7, y: 4.9, spec: { depthBias: 26 } },
-    { key: 'prop/town/bell_small', x: 12.8, y: 4.9, spec: { depthBias: 26 }, id: 'handbell' },
+    // The supper bell, on the shelf behind the bar where Mira's mother left it.
+    { key: 'prop/town/bell_small', x: 13, y: 2.5, spec: { depthBias: 40 }, id: 'handbell' },
     { key: 'prop/int/inn_plate', x: 13.9, y: 4.9, spec: { depthBias: 26 } },
     { key: 'prop/int/inn_mug_half', x: 14.8, y: 4.9, spec: { depthBias: 26 } },
     { key: 'prop/int/inn_stool', x: 11.6, y: 7.6, spec: {} },
@@ -231,29 +232,31 @@ function props(): PropPlacement[] {
     { key: 'prop/int/rug_runner', x: 11, y: 17.2, spec: { depthBias: -70 } },
     { key: 'prop/int/inn_coatrack', x: 4, y: 17, spec: { solid: [12, 6] } },
     { key: 'prop/int/boots', x: 5.5, y: 17.3, spec: {} },
-    { key: 'prop/int/inn_clock', x: 3.4, y: 9, spec: { solid: [12, 6] } },
+    { key: 'prop/int/inn_clock', x: 3.4, y: 9, spec: { solid: [12, 6], interact: 'prop.innClock' } },
     { key: 'prop/int/inn_plant_b', x: 3.5, y: 12.4, spec: {} },
     { key: 'prop/int/inn_plant_a', x: 17.8, y: 16.8, spec: {} },
     { key: 'prop/int/inn_broom', x: 18.4, y: 13, spec: {} },
     { key: 'prop/int/inn_bucket', x: 17.6, y: 14.2, spec: {} },
 
     // ── kitchen wing ───────────────────────────────────────────────────────
-    // The crates take their collision from the area script instead of the map,
-    // because at the end of the quest they get shoved aside and the tiles they
-    // were standing on have to become walkable again.
-    { key: 'prop/int/inn_crates_blocked', x: 21.5, y: 7, spec: {}, id: 'crates' },
-    { key: 'prop/int/inn_herbs', x: 23.4, y: 6, spec: {} },
-    { key: 'prop/int/washbasin', x: 24.6, y: 6, spec: { solid: [18, 6] }, id: 'basin' },
+    // The quest geometry, in one corner: crates against the storeroom door, a
+    // settle wedged in front of the crates, and a dark gap under the settle.
+    // Both take their collision from the area script rather than the map,
+    // because at the end of the quest Mira shifts them and the tiles they were
+    // standing on have to become walkable again.
+    { key: 'prop/int/inn_crates_blocked', x: 21.5, y: 7, spec: { interact: 'prop.innCrates' }, id: 'crates' },
+    { key: 'prop/int/inn_bench', x: 21.5, y: 9.4, spec: {}, id: 'settle' },
+    { key: 'prop/int/inn_herbs', x: 23.4, y: 6, spec: { interact: 'prop.innHerbs' } },
+    { key: 'prop/int/washbasin', x: 24.6, y: 6, spec: { solid: [18, 6], interact: 'clue.pipes' }, id: 'basin' },
     { key: 'prop/int/inn_range_0', x: 26.6, y: 7, spec: { anim: 'range_steam', solid: [28, 26] } },
-    { key: 'prop/int/inn_pots_hanging', x: 29, y: 6, spec: {}, id: 'pots' },
-    { key: 'prop/int/inn_broom', x: 30.4, y: 6.6, spec: {} },
+    { key: 'prop/int/inn_pots_hanging', x: 29, y: 6, spec: { interact: 'inn.pots' }, id: 'pots' },
+    { key: 'prop/int/inn_broom', x: 30.4, y: 6.6, spec: { interact: 'prop.innBroom' } },
     { key: 'prop/int/inn_bread_rack', x: 29.6, y: 9, spec: { solid: [20, 8] } },
 
-    { key: 'prop/int/inn_table_long', x: 22, y: 10, spec: { solid: [44, 12] }, id: 'piptable' },
-    { key: 'prop/int/inn_soup', x: 22.4, y: 9.6, spec: { depthBias: 26 } },
     { key: 'prop/int/table_small', x: 25.4, y: 11, spec: { solid: [16, 8] } },
     { key: 'prop/int/lantern_0', x: 25.4, y: 10.5, spec: { anim: 'int_lantern_glow', depthBias: 26 } },
-    { key: 'prop/int/inn_keg', x: 21.4, y: 12.8, spec: { solid: [18, 8] } },
+    { key: 'prop/int/inn_soup', x: 27, y: 11.4, spec: { depthBias: 26, interact: 'prop.innSoup' } },
+    { key: 'prop/int/inn_keg', x: 21.4, y: 12.8, spec: { solid: [18, 8], interact: 'prop.innKeg' } },
     { key: 'prop/int/inn_barrel_stack', x: 22.9, y: 13.4, spec: { solid: [20, 8] } },
     { key: 'prop/int/inn_bucket', x: 24.6, y: 12.8, spec: {} },
     { key: 'prop/int/inn_barrel', x: 30, y: 12.6, spec: { solid: [12, 8] } },

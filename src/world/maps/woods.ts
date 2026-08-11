@@ -180,8 +180,19 @@ function h01(x: number, y: number, salt: number): number {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 }
 
+/**
+ * Lantern posts. One list drives the prop, its light and the hole punched in
+ * the canopy above it — a lantern the canopy has swallowed lights nothing and
+ * marks nothing, which is the opposite of the job.
+ */
+const LANTERNS: Array<[number, number]> = [
+  [18, 9], [13, 16], [29, 16], [18, 33],
+  [24, 63], [19, 68], [25, 81], [17, 91],
+];
+
 /** Where the canopy must NOT close: clearings, lanterns, the shrine mouth. */
 const LIGHT_HOLES: Array<[number, number, number]> = [
+  ...LANTERNS.map(([x, y]) => [x, y, 4] as [number, number, number]),
   [21, 20, 8],   // first clearing
   [35, 31, 5],   // toadstool ring
   [23, 42, 8],   // the hollow
@@ -422,22 +433,25 @@ export function buildWoods(): MapDef {
   }
 
   // ── 9. the canopy, over the player's head ─────────────────────────────────
+  // The single best trick for depth, and the single easiest thing to overdo.
+  // These sprites are up to four tiles wide, so the lattice is coarse and the
+  // probabilities are low: the goal is a broken fringe the path runs *under*,
+  // not a mat that turns the whole screen into one green texture. Anything that
+  // hides the thicket also hides the difference between "wall" and "floor".
   const a = new GridPainter(W, H, ' ');
-  for (let y = 4; y < H - 2; y += 2) {
+  for (let y = 4; y < H - 2; y += 3) {
     for (let x = 2; x < W - 2; x += 2) {
       const c = g.get(x, y);
       if (c === ' ') continue;
       const d = dist[y][x];
-      // The canopy hangs over the thicket and reaches three tiles into the
-      // open — the path runs *under* its edge, which is what sells depth.
-      if (d > 4) continue;
+      if (d > 3) continue;
       if (inLightHole(x, y)) continue;
       const r = h01(x, y, 307);
       if (d === 0) {
-        if (r < 0.5) a.set(x, y, r < 0.22 ? '4' : '3');
+        if (r < 0.28) a.set(x, y, r < 0.1 ? '4' : '3');
       } else if (d <= 2) {
-        if (r < 0.4) a.set(x, y, r < 0.16 ? '3' : '2');
-      } else if (r < 0.2) {
+        if (r < 0.18) a.set(x, y, r < 0.07 ? '3' : '2');
+      } else if (r < 0.09) {
         a.set(x, y, '1');
       }
     }
@@ -451,13 +465,10 @@ export function buildWoods(): MapDef {
   const props: PropPlacement[] = [
     // — the gate: the last of the town's carpentry
     { key: 'prop/woods/signpost_woods', x: 24, y: 8, spec: { solid: [14, 8], interact: 'woods_signpost' }, id: 'signpost' },
-    { key: 'prop/woods/lantern_post', x: 18, y: 9, spec: { anim: 'lantern_post' } },
     // the first Echo-touched thing in the zone: Mote notices it, and so should you
     { key: 'prop/woods/standing_stone_0', x: 26, y: 10, spec: { solid: [14, 10], interact: 'woods_first_stone' }, id: 'first_stone' },
 
     // — First Clearing: an arena you can read on entry
-    { key: 'prop/woods/lantern_post', x: 13, y: 16, spec: { anim: 'lantern_post' } },
-    { key: 'prop/woods/lantern_post', x: 29, y: 16, spec: { anim: 'lantern_post' } },
     { key: 'prop/woods/log_fallen_0', x: 15, y: 24, spec: { solid: [34, 8] } },
     { key: 'prop/woods/log_fallen_1', x: 28, y: 23, spec: { solid: [26, 8] } },
     { key: 'prop/woods/stump_0', x: 25, y: 17, spec: { solid: [14, 8] } },
@@ -465,7 +476,6 @@ export function buildWoods(): MapDef {
     { key: 'prop/woods/mushroom_2', x: 12, y: 23, spec: {} },
 
     // — The Narrows
-    { key: 'prop/woods/lantern_post', x: 18, y: 33, spec: { anim: 'lantern_post' } },
     { key: 'prop/woods/mist', x: 20, y: 29, spec: { anim: 'woods_mist', over: true } },
     { key: 'prop/woods/mist', x: 24, y: 35, spec: { anim: 'woods_mist', over: true } },
 
@@ -492,7 +502,6 @@ export function buildWoods(): MapDef {
     { key: 'prop/woods/bones_0', x: 11, y: 54, spec: {} },
 
     // — The Dell: read the cliff, find the gully
-    { key: 'prop/woods/lantern_post', x: 24, y: 63, spec: { anim: 'lantern_post' } },
     { key: 'prop/woods/mushroom_3', x: 6, y: 62, spec: {} },
     { key: 'prop/woods/mushroom_3', x: 7, y: 63, spec: {} },
     { key: 'prop/woods/rock_0', x: 8, y: 62, spec: {} },
@@ -505,7 +514,6 @@ export function buildWoods(): MapDef {
     { key: 'prop/woods/broken_column_1', x: 27, y: 71, spec: { solid: [14, 10] } },
     { key: 'prop/woods/broken_column_2', x: 18, y: 79, spec: { solid: [20, 8] } },
     { key: 'prop/woods/broken_column_0', x: 26, y: 79, spec: { solid: [14, 10] } },
-    { key: 'prop/woods/lantern_post', x: 19, y: 68, spec: { anim: 'lantern_post' } },
     { key: 'prop/woods/vine_0', x: 17, y: 74, spec: { over: true } },
 
     // — ◆ the carved stone
@@ -519,7 +527,6 @@ export function buildWoods(): MapDef {
     { key: 'prop/woods/mossy_stone_1', x: 19, y: 83, spec: {} },
     { key: 'prop/woods/mossy_stone_2', x: 24, y: 87, spec: {} },
     { key: 'prop/woods/log_fallen_2', x: 26, y: 83, spec: { solid: [40, 8] } },
-    { key: 'prop/woods/lantern_post', x: 25, y: 81, spec: { anim: 'lantern_post' } },
     { key: 'prop/woods/mist', x: 14, y: 85, spec: { anim: 'woods_mist', over: true } },
     { key: 'prop/woods/mist', x: 30, y: 85, spec: { anim: 'woods_mist', over: true } },
 
@@ -532,7 +539,6 @@ export function buildWoods(): MapDef {
     { key: 'prop/woods/spider_web_0', x: 5, y: 92, spec: { over: true } },
 
     // — South Bank
-    { key: 'prop/woods/lantern_post', x: 17, y: 91, spec: { anim: 'lantern_post' } },
     { key: 'prop/woods/log_fallen_0', x: 29, y: 96, spec: { solid: [34, 8] } },
     { key: 'prop/woods/tree_hollow', x: 15, y: 96, spec: { solid: [16, 8] } },
 
@@ -561,6 +567,9 @@ export function buildWoods(): MapDef {
   for (const x of [3, 4, 5]) {
     props.push({ key: `prop/woods/cuttable_bush_${x - 3}`, x, y: 61, spec: {}, id: `gully_bush_${x}` });
   }
+  for (const [x, y] of LANTERNS) {
+    props.push({ key: 'prop/woods/lantern_post', x, y, spec: { anim: 'lantern_post' } });
+  }
 
   // ── 11. lights ────────────────────────────────────────────────────────────
   const lantern = (x: number, y: number): LightDef =>
@@ -569,8 +578,7 @@ export function buildWoods(): MapDef {
     ({ x, y, radius: r, color: 0x8ce6e6, intensity: 0.4, flicker: 0.18 });
 
   const lights: LightDef[] = [
-    lantern(18, 9), lantern(13, 16), lantern(29, 16), lantern(18, 33),
-    lantern(24, 63), lantern(19, 68), lantern(25, 81), lantern(17, 91),
+    ...LANTERNS.map(([x, y]) => lantern(x, y)),
     // the secrets announce themselves with colour, not with a marker
     spore(35, 31, 46),
     spore(6, 62, 34), spore(7, 63, 26),
@@ -663,6 +671,8 @@ export function buildWoods(): MapDef {
       town_gate: { x: 21, y: 6, facing: 's' },
       shrine: { x: 21, y: 108, facing: 'n' },
       dell: { x: 20, y: 65, facing: 's' },
+      // Backstop for GameFlow when no encounter checkpoint has been marked yet.
+      respawn: { x: 21, y: 12, facing: 's' },
     },
   };
 }

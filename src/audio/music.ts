@@ -447,7 +447,7 @@ const TOWN: TrackDef = {
   bpm: 96,
   loop: 64,
   introBeats: 8,
-  gain: 0.95,
+  gain: 0.76,
   intro: [
     { voice: 'guitar', gain: 0.85, notes: fingerpick(['D', 'A'], PICK, 1.1) },
     { voice: 'pad', gain: 0.7, notes: chordPart(['D', 'A'], TRIAD, 3.8, 0.7) },
@@ -506,7 +506,7 @@ const INN: TrackDef = {
   bpm: 74,
   loop: 32,
   introBeats: 4,
-  gain: 0.5,
+  gain: 0.36,
   intro: [
     { voice: 'harp', gain: 0.7, reverb: 0.4, notes: [N(0, 2, 40, 0.7), N(2, 2, 59, 0.5)] },
   ],
@@ -606,7 +606,7 @@ const FESTIVAL: TrackDef = {
   bpm: 132,
   loop: 32,
   introBeats: 4,
-  gain: 0.92,
+  gain: 0.86,
   // A four-beat pickup: drum, a tambourine roll that never stops, and the
   // fiddle scooping up into the downbeat.
   intro: [
@@ -648,7 +648,7 @@ const WOODS: TrackDef = {
   bpm: 68,
   loop: 32,
   introBeats: 8,
-  gain: 0.72,
+  gain: 0.52,
   intro: [
     { voice: 'drone', gain: 0.8, notes: [N(0, 8, 38, 0.7)] },
     { voice: 'harp', gain: 0.5, reverb: 0.5, notes: [N(4, 3, 62, 0.5)] },
@@ -706,7 +706,7 @@ const SHRINE: TrackDef = {
   loop: 32,
   introBeats: 2,
   intensity: 0,
-  gain: 0.62,
+  gain: 0.44,
   intro: [
     { voice: 'drone', gain: 0.6, notes: [N(0, 2, 36, 0.5)] },
   ],

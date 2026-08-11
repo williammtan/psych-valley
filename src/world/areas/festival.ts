@@ -167,7 +167,9 @@ class LanternRig {
       const p = w.prop(propId);
       if (!p) return;
       this.sprite[key] = p.sprite;
-      const img = w.add.image(p.sprite.x, p.sprite.y - (key === 'ref' ? 34 : 26), 'atlas', 'fx/light_soft_128')
+      // Anchored on the lit head, not the sprite's base: the mounted lanterns
+      // carry their globe 29px up, the reference its diamond 39px up.
+      const img = w.add.image(p.sprite.x, p.sprite.y - (key === 'ref' ? 38 : 28), 'atlas', 'fx/light_soft_128')
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(DEPTH.LIGHT + 2)
         .setScale(key === 'ref' ? 0.95 : 0.8)
@@ -302,10 +304,10 @@ function startTrial(w: WorldScene, fast = false): void {
     // Take the stand. The player's spot is the mouth of the arc, which is what
     // makes them part of the group rather than an audience for it.
     cam.stopFollow();
-    await c.movePlayer(23, 25, 92);
+    await c.movePlayer(23, 23, 92);
     c.face('player', 'n');
     for (const id of PARTICIPANTS) w.npc(id)?.face('n');
-    await c.panTo(23.5, 23, S.fast ? 1 : 620);
+    await c.panTo(23.5, 20.5, S.fast ? 1 : 620);
 
     await say('elia', 'Everyone! Four rounds. Ears open.');
     await say('tavi', "Four? I'll take all four.");
@@ -383,7 +385,7 @@ async function runRound(
       // the group turns, the frame tightens, and then the game waits. No timer.
       for (const id of PARTICIPANTS) w.npc(id)?.faceTowards(w.player.x, w.player.y);
       cam.zoomTo(1.12, S.fast ? 1 : 900, 'Sine.easeInOut', true);
-      await c.panTo(23.5, 24.4, S.fast ? 1 : 900);
+      await c.panTo(23.5, 22.6, S.fast ? 1 : 900);
       await beat(500);
       await say('elia', 'And you?');
       await beat(400);
@@ -402,7 +404,7 @@ async function runRound(
       else await say('tavi', 'Huh.');
       for (const id of PARTICIPANTS) w.npc(id)?.face('n');
       cam.zoomTo(1, S.fast ? 1 : 600, 'Sine.easeInOut', true);
-      await c.panTo(23.5, 23, S.fast ? 1 : 600);
+      await c.panTo(23.5, 20.5, S.fast ? 1 : 600);
     }
   };
 
@@ -543,13 +545,18 @@ registerArea('festival', {
     // Before the ceremony, the lanterns are yours to play with. Learning the
     // task while nobody is watching is the point of round one, and this is
     // where it actually starts.
+    // The lanterns are mounted up on the stage posts, so the thing the player
+    // walks up to is the deck edge below each one. Three anchors, 24px apart,
+    // means standing in front of a post and pressing the button rings that
+    // post's lantern — which is how the task gets learned before it matters.
     const strike = (id: L) => () => { if (!S.started) S.rig?.strike(w, id); };
     for (const id of ['a', 'b', 'c'] as L[]) {
       const p = w.prop(`lantern_${id}`);
       if (!p) continue;
       w.addInteractable({
         id: `trial_lantern_${id}`,
-        x: p.sprite.x, y: p.sprite.y - 20,
+        x: p.sprite.x, y: 284,
+        radius: 10,
         label: 'Strike', observable: true,
         forbids: 'q3_trial_done',
         onInteract: strike(id),
@@ -559,7 +566,8 @@ registerArea('festival', {
     if (ref) {
       w.addInteractable({
         id: 'trial_reference',
-        x: ref.sprite.x, y: ref.sprite.y - 24,
+        x: ref.sprite.x, y: ref.sprite.y - 12,
+        radius: 6,
         label: 'Strike', observable: true,
         forbids: 'q3_trial_done',
         onInteract: () => { if (!S.started) S.rig?.strikeReference(w, S.correct); },
@@ -567,9 +575,8 @@ registerArea('festival', {
     }
 
     // The prompt doubles as the instrument: the cursor sounds the lantern.
-    const offPreview = on2('trial:preview', (p: { answer: L }) => S.rig?.strike(w, p.answer));
-    const offReplay = on2('trial:replay', () => S.rig?.strikeReference(w, S.correct));
-    cleanup.push(offPreview, offReplay);
+    on2('trial:preview', (p: { answer: L }) => S.rig?.strike(w, p.answer));
+    on2('trial:replay', () => S.rig?.strikeReference(w, S.correct));
 
     installHarness(w);
   },

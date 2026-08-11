@@ -173,9 +173,44 @@ async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevSe
   });
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
   page.on('pageerror', (e) => console.log(`  page error: ${String(e).slice(0, 200)}`));
+  // `?mute=1` so the harness itself is silent; the probe renders offline and
+  // never touches the live context.
   await page.goto(`http://127.0.0.1:${port}/?mute=1`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!(window as unknown as { __audio?: unknown }).__audio, undefined, { timeout: 30000 });
+  // Vite reloads the page once after it pre-bundles Phaser, which destroys any
+  // execution context we were holding. Settle, then confirm the module is up.
+  await page.waitForTimeout(2500);
+  await waitForAudio(page);
   return { browser, page, server };
+}
+
+async function waitForAudio(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => !!(window as unknown as { __audio?: unknown }).__audio,
+    undefined,
+    { timeout: 30000 },
+  );
+}
+
+let sinceReload = 0;
+/** Chrome holds every OfflineAudioContext we build; recycle before it gives up. */
+async function recycle(page: Page, every = 20): Promise<void> {
+  if (++sinceReload < every) return;
+  sinceReload = 0;
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(600);
+  await waitForAudio(page);
+}
+
+/** page.evaluate, retried once if a reload pulled the context out from under us. */
+async function ev<T>(page: Page, fn: (arg: string) => T | Promise<T>, arg = ''): Promise<T> {
+  try {
+    return await page.evaluate<T, string>(fn, arg);
+  } catch (e) {
+    if (!/context was destroyed|Target closed/i.test(String(e))) throw e;
+    await page.waitForTimeout(1000);
+    await waitForAudio(page);
+    return page.evaluate<T, string>(fn, arg);
+  }
 }
 
 const num = (v: number, d = 3): string => (Number.isFinite(v) ? v.toFixed(d) : '—');
@@ -198,16 +233,15 @@ async function main(): Promise<void> {
   const checks: Check[] = [];
 
   try {
-    const sfxNames: string[] = await page.evaluate(() => (window as any).__audio.listSfx());
-    const musicNames: string[] = await page.evaluate(() => (window as any).__audio.listMusic());
+    const sfxNames: string[] = await ev<string[]>(page, () => (window as any).__audio.listSfx());
+    const musicNames: string[] = await ev<string[]>(page, () => (window as any).__audio.listMusic());
     const wanted = only ? sfxNames.filter((n) => n.includes(only)) : sfxNames;
 
     // ── effects ────────────────────────────────────────────────────────────
     const rows: Row[] = [];
     for (const name of wanted) {
-      const a: SoundAnalysis = await page.evaluate(
-        (n) => (window as any).__audio.renderSfx(n), name,
-      );
+      await recycle(page);
+      const a: SoundAnalysis = await ev<SoundAnalysis>(page, (n) => (window as any).__audio.renderSfx(n), name);
       const samples = decode(a.head);
       rows.push({
         ...a,
@@ -308,9 +342,8 @@ async function main(): Promise<void> {
     // ── music ──────────────────────────────────────────────────────────────
     const mrows: Array<{ name: string; a: SoundAnalysis; gapMs: number; startMs: number }> = [];
     for (const name of musicNames) {
-      const a: SoundAnalysis = await page.evaluate(
-        (n) => (window as any).__audio.renderMusic(n, 12), name,
-      );
+      await recycle(page, 4);
+      const a: SoundAnalysis = await ev<SoundAnalysis>(page, (n) => (window as any).__audio.renderMusic(n, 12), name);
       // Longest run of near-silent 100ms windows inside the first 10 seconds,
       // measured from the first window that sounds — a track is allowed to fade
       // in, it is not allowed to drop out once it has started.
@@ -360,7 +393,8 @@ async function main(): Promise<void> {
 
     // Boss escalation must be audibly bigger than the ambient shrine.
     const calm = mrows.find((m) => m.name === 'shrine');
-    const boss: SoundAnalysis = await page.evaluate(() => (window as any).__audio.renderMusic('boss', 12));
+    await recycle(page, 4);
+    const boss: SoundAnalysis = await ev<SoundAnalysis>(page, () => (window as any).__audio.renderMusic('boss', 12));
     if (calm) {
       checks.push({
         name: 'shrine at intensity 1.0 is louder than at 0',

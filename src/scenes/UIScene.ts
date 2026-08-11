@@ -8,6 +8,8 @@ import { DialogueBox } from '@/ui/DialogueBox';
 import { Hud } from '@/ui/Hud';
 import { Journal } from '@/ui/Journal';
 import { InsightCard } from '@/ui/InsightCard';
+import { LanternTrial } from '@/ui/LanternTrial';
+import { MemoryThreads } from '@/ui/MemoryThreads';
 import { Audio } from '@/audio/Audio';
 import { hasFrame } from '@/core/textures';
 
@@ -20,6 +22,8 @@ export class UIScene extends Phaser.Scene {
   dialogue!: DialogueBox;
   journal!: Journal;
   insight!: InsightCard;
+  lanternTrial!: LanternTrial;
+  threads!: MemoryThreads;
   private banner?: Phaser.GameObjects.Container;
   private toasts: Phaser.GameObjects.Container[] = [];
   private hidden = false;
@@ -33,6 +37,8 @@ export class UIScene extends Phaser.Scene {
     this.dialogue = new DialogueBox(this);
     this.journal = new Journal(this);
     this.insight = new InsightCard(this);
+    this.lanternTrial = new LanternTrial(this);
+    this.threads = new MemoryThreads(this);
 
     on('ui:banner', (p: { title: string; subtitle?: string }) => this.showBanner(p.title, p.subtitle));
     on('ui:toast', (p: { text: string; icon?: string }) => this.showToast(p.text, p.icon));
@@ -69,6 +75,8 @@ export class UIScene extends Phaser.Scene {
     this.dialogue.update(dt);
     this.hud.update(dt);
     this.journal.update(dt);
+    this.lanternTrial.update(dt);
+    this.threads.update(dt);
   }
 
   // ── location banner ──────────────────────────────────────────────────────

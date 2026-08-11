@@ -205,7 +205,13 @@ type Row = Record<string, string | number>;
 async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevServer; base: string }> {
   const server = await createServer({
     root: ROOT,
-    server: { port: 20000 + Math.floor(Math.random() * 20000), strictPort: false, host: '127.0.0.1' },
+    server: {
+      port: 20000 + Math.floor(Math.random() * 20000), strictPort: false, host: '127.0.0.1',
+      // Other agents edit src/ while this runs; an HMR full-reload mid-probe
+      // destroys the page context and every measurement with it.
+      hmr: false,
+      watch: { ignored: ['**'] },
+    },
     logLevel: 'error',
   });
   await server.listen();
@@ -914,7 +920,34 @@ async function fxCadence(ctx: Ctx): Promise<Row[]> {
 
 /* ─────────────────────────────── main ────────────────────────────────── */
 
+/** Ad-hoc trajectory dump, for when a number looks wrong and you need frames. */
+async function debugDump(ctx: Ctx): Promise<Row[]> {
+  const r = await ctx.page.evaluate(async () => {
+    const F = (window as any).__F;
+    F.reset(); F.clean();
+    const o = F.arena();
+    const wy = o.y + 6, gapX = o.x + 6;
+    const cells: Array<[number, number]> = [];
+    for (let x = o.x; x < o.x + 13; x++) if (x !== gapX) cells.push([x, wy]);
+    F.setWall(cells);
+    const gapCx = gapX * 16 + 8;
+    F.reset();
+    F.place(gapCx + 5, (wy + 4) * 16 + 16, 'n');
+    F.at(1, 'F.move(0,-1)');
+    const s = await F.run(80);
+    F.move(0, 0); F.clearWalls();
+    return {
+      map: F.scene.mapId, arena: o, wy, gapX, gapCx,
+      rows: s.filter((_: any, i: number) => i % 4 === 0).map((x: any) => `${x.f} x=${x.x} y=${x.y} vx=${x.vx} vy=${x.vy} m=${x.mode}`),
+    };
+  }) as any;
+  console.log(JSON.stringify({ map: r.map, arena: r.arena, wy: r.wy, gapX: r.gapX, gapCx: r.gapCx }));
+  r.rows.forEach((l: string) => console.log('   ' + l));
+  return [{ metric: 'dump', value: 'see above', target: '' }];
+}
+
 const TESTS: Record<string, (c: Ctx) => Promise<Row[]>> = {
+  debug: debugDump,
   latency, ramp, diagonal, corners, wallslide: wallSlide, attack, hitstop,
   knockback, dash, telegraph: telegraphs, load: load20, snag, stuck, fx: fxCadence,
 };

@@ -13,9 +13,11 @@
  *   - characters with too few lines to feel present
  *   - verbatim duplicates
  *   - unknown speakers, and characters missing from the cast
- *   - non-ASCII characters the bitmap font cannot draw
+ *   - characters the body bitmap font cannot draw
+ *   - Echo lines that are not verbatim quotes of something a person said
+ *   - two exchanges claiming the same id (one of them would be unreachable)
  */
-import { AMBIENT, STAGES, allExchanges, allLines, type IndexedLine } from '../src/data/dialogue/index.ts';
+import { ALL_EXCHANGES, AMBIENT, STAGES, allExchanges, allLines } from '../src/data/dialogue/index.ts';
 import { PEOPLE } from '../src/data/people.ts';
 
 const MAX_LEN = 110;
@@ -132,6 +134,11 @@ for (const l of lines) {
   }
 }
 
+// Two exchanges sharing an id means one of them is unreachable.
+const idSeen = new Map<string, number>();
+for (const ex of ALL_EXCHANGES) idSeen.set(ex.id, (idSeen.get(ex.id) ?? 0) + 1);
+for (const [id, n] of idSeen) if (n > 1) add('duplicate-id', id, `${n} exchanges share this id`);
+
 // Everyone in the cast who talks should have enough lines to feel present.
 for (const [id, person] of Object.entries(PEOPLE)) {
   if (id === 'narrator' || id === 'player' || id === 'pip' || id === 'mote') continue;
@@ -176,7 +183,7 @@ console.log('');
 
 const ORDER = [
   'too-long', 'didactic', 'terminology', 'duplicate', 'thin-character',
-  'unknown-speaker', 'bad-glyph', 'echo-not-quoted', 'thin-stage', 'missing-hint',
+  'unknown-speaker', 'bad-glyph', 'echo-not-quoted', 'duplicate-id', 'thin-stage', 'missing-hint',
 ];
 
 console.log('CHECKS');

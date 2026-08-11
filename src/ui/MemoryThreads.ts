@@ -96,14 +96,14 @@ const L = {
   slotH: 32,
   strip: [52, 110],
   cardY: [62, 120],
-  trayLabelY: 158,
+  trayLabelY: 152,
   trayX: 12,
   trayW: 86,
   trayGap: 6,
-  trayH: 24,
-  trayY: [172, 200],
+  trayH: 30,
+  trayY: [164, 197],
   detailY: 232,
-  statusY: 256,
+  statusY: 252,
 } as const;
 
 const INK = 0x241d33;
@@ -530,7 +530,7 @@ export class MemoryThreads {
         this.drawNode(r.x + r.w / 2, stripY, key, card);
         if (col < 2) this.drawConnector(r.x + r.w + L.slotGap / 2, stripY);
         if (!card) this.drawEmptySlot(g, r);
-        else this.drawCard(card, r.x, r.y, r.w, r.h, 'slot', key);
+        else this.drawCard(card, r.x, r.y, r.w, r.h, key);
       }
     });
 
@@ -544,7 +544,7 @@ export class MemoryThreads {
         g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
         return;
       }
-      this.drawCard(card, r.x, r.y, r.w, r.h, 'tray');
+      this.drawCard(card, r.x, r.y, r.w, r.h);
     });
 
     // ── the card in hand, riding the cursor ────────────────────────────────
@@ -555,7 +555,7 @@ export class MemoryThreads {
       if (held) {
         g.fillStyle(0x000000, 0.4);
         g.fillRect(r.x + 2, r.y + 2, r.w, r.h);
-        this.drawCard(held, r.x - 2, r.y - 4, r.w, r.h, cell.kind === 'slot' ? 'slot' : 'tray');
+        this.drawCard(held, r.x - 2, r.y - 4, r.w, r.h);
       }
     }
 
@@ -627,10 +627,7 @@ export class MemoryThreads {
    * is never enough: contextual cards carry a pin and sit still; memory cards
    * have no pin, are drawn pale, and waver.
    */
-  private drawCard(
-    card: ThreadCard, x: number, y: number, w: number, h: number,
-    size: 'slot' | 'tray', slotKey?: string,
-  ): void {
+  private drawCard(card: ThreadCard, x: number, y: number, w: number, h: number, slotKey?: string): void {
     const c = this.scene.add.container(0, 0);
     this.content?.add(c);
     const ghost = card.kind === 'memory';
@@ -656,21 +653,15 @@ export class MemoryThreads {
       c.add(g);
     }
 
-    const sw = this.scene.add.rectangle(x + 8, y + (size === 'slot' ? 11 : h / 2), 7, 7, card.tint)
-      .setOrigin(0.5).setStrokeStyle(1, INK, 0.65);
-    c.add(sw);
+    // A colour bar rather than a swatch: the wrap has to be findable at a
+    // glance in a tray of ten, and a bar survives being 4px wide.
+    const bar = this.scene.add.rectangle(x + 6, y + 6, 4, h - 12, card.tint).setOrigin(0, 0);
+    c.add(bar);
 
-    if (size === 'slot') {
-      const p = makeText(this.scene, x + 17, y + 7, card.parcel.toUpperCase(), 'body', { tint: INK });
-      const a = makeText(this.scene, x + 8, y + 18, card.address, 'body', { tint: INK_SOFT });
-      c.add(p.obj); c.add(a.obj);
-      this.texts.push(p, a);
-    } else {
-      const a = makeText(this.scene, x + 17, y + h / 2, card.address, 'body', { tint: INK });
-      a.setOrigin(0, 0.5);
-      c.add(a.obj);
-      this.texts.push(a);
-    }
+    const p = makeText(this.scene, x + 14, y + 7, card.parcel.toUpperCase(), 'body', { tint: INK });
+    const a = makeText(this.scene, x + 8, y + 18, card.address, 'body', { tint: INK_SOFT });
+    c.add(p.obj); c.add(a.obj);
+    this.texts.push(p, a);
 
     // The pin is the whole tell: only evidence that stays put gets one.
     if (card.kind === 'context') {
