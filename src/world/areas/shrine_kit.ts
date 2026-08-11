@@ -250,6 +250,9 @@ export function stepToward(
   const step = Math.min(d, (speed * dt) / 1000);
   const nx = e.x + (dx / d) * step;
   const ny = e.y + (dy / d) * step;
+  e.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'e' : 'w') : (dy > 0 ? 's' : 'n');
+  // An empty grid means "this thing does not collide" — a moth, for instance.
+  if (!grid.length) { e.x = nx; e.y = ny; return false; }
   const gx = Math.floor(nx / TILE);
   const gy = Math.floor((ny - 1) / TILE);
   if (gy >= 0 && gy < grid.length && gx >= 0 && gx < grid[0].length && !grid[gy][gx]) {
@@ -262,7 +265,6 @@ export function stepToward(
     const ux = Math.floor(e.x / TILE), uy = Math.floor((ny - 1) / TILE);
     if (uy >= 0 && uy < grid.length && ux >= 0 && ux < grid[0].length && !grid[uy][ux]) e.y = ny;
   }
-  e.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'e' : 'w') : (dy > 0 ? 's' : 'n');
   return false;
 }
 

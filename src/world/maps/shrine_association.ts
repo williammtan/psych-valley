@@ -142,6 +142,9 @@ function build(): MapDef {
 
   props.push({ key: 'prop/shrine/broken_instrument_1', x: 25.6, y: 6.4, spec: { solid: [22, 10] } });
   props.push({ key: 'prop/shrine/broken_instrument_2', x: 20.4, y: 4.4, spec: { solid: [22, 10] } });
+  props.push({ key: 'prop/shrine/brazier_0', x: 24.6, y: 9.4, spec: { anim: 'shrine_brazier', solid: [14, 8] } });
+  lights.push(brazierLight(24.6, 8.4, 62));
+  props.push({ key: 'prop/shrine/rubble_2', x: 21.4, y: 7.6 });
   // A collapsed column across the south-centre, so the walk from the jar to the
   // plate is a route through something rather than a stroll across a car park.
   props.push({ key: 'prop/shrine_ext/column_broken_0', x: 8.4, y: 12.6, spec: { solid: [20, 10] } });

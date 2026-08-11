@@ -221,9 +221,40 @@ async function walkTo(page: Page, tx: number, ty: number): Promise<{ ok: boolean
   return { ok: true, tiles, ms: Date.now() - t0 };
 }
 
+/**
+ * Push the player in one direction and sample where they actually end up.
+ * When a walk stalls, this is the difference between "the map blocked me" and
+ * "something is putting me back".
+ */
+async function probe(page: Page, from: [number, number], dir: [number, number], ms: number): Promise<void> {
+  await page.evaluate(
+    (xy: number[]) => (window as unknown as { __psyche: { teleport(x: number, y: number): void } }).__psyche.teleport(xy[0], xy[1]),
+    from,
+  );
+  await page.waitForTimeout(300);
+  const trace = await page.evaluate(async (args: number[]) => {
+    const p = (window as unknown as {
+      __psyche: { move(x: number, y: number): void; scene: { player: { x: number; y: number; mode: string } } };
+    }).__psyche;
+    const out: string[] = [];
+    const t0 = performance.now();
+    while (performance.now() - t0 < args[2]) {
+      p.move(args[0], args[1]);
+      await new Promise((r) => setTimeout(r, 300));
+      const pl = p.scene.player;
+      out.push(`${Math.round(performance.now() - t0)}ms x=${Math.round(pl.x)} y=${Math.round(pl.y)} mode=${pl.mode}`);
+    }
+    p.move(0, 0);
+    return out;
+  }, [dir[0], dir[1], ms]);
+  console.log(`  probe from ${from} pushing ${dir}:`);
+  trace.forEach((t) => console.log(`    ${t}`));
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const headed = argv.includes('--headed');
+  const probing = argv.includes('--probe');
 
   const server = await createServer({
     // HMR off: an edit landing mid-run reloads the page and destroys the
@@ -255,6 +286,12 @@ async function main(): Promise<void> {
     await page.addScriptTag({ content: HARNESS });
     // Give the player enough health that combat cannot end the run.
     await page.evaluate(() => (window as unknown as { __psyche: { hp(n: number): void } }).__psyche.hp(99));
+
+    if (probing) {
+      await probe(page, [21, 24], [0, 1], 4000);
+      await probe(page, [21, 28], [0, 1], 4000);
+      return;
+    }
 
     console.log('\nWHISPER WOODS — traversal\n');
     const startedAt = Date.now();

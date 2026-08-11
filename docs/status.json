@@ -1,7 +1,7 @@
 {
-  "updated": "2026-08-11T23:30:00Z",
-  "phase": "Wave 2 \u2014 critics reporting, findings routed",
-  "headline": "A fresh-context critic audited the whole game against its two hard rules \u2014 is it fun without the lesson, and does it require understanding rather than answering. Two of three quests passed both; the boss passed all three phases. The Memory Threads board failed for grading the player per card, and 236 authored lines of the conformity act turned out to be unwired. Every finding is back with its builder.",
+  "updated": "2026-08-12T01:00:00Z",
+  "phase": "Wave 3 \u2014 gauntlet rounds on the built game",
+  "headline": "Round two of the blind A/B moved the town from losing 10-0 to 'clearly behind, but the gap is one ground-plane pass wide \u2014 the assets are already competitive and were being wasted on the surface they sat on'. Buildings-integrated now scores for us. The conformity act is fully wired with its authored dialogue, the Memory Threads board no longer grades the player, and audio ships with the hand bell provably quoting the tower.",
   "areas": [
     {
       "name": "Art pipeline",
@@ -66,7 +66,7 @@
     {
       "name": "Lumen Vale map",
       "state": "critiqued",
-      "note": "Lost the blind A/B 10-0; findings sent back to the builder"
+      "note": "Round 2: gap is one ground-plane pass wide; polish pass running"
     },
     {
       "name": "Quest 1 \u2014 Pip",
@@ -75,13 +75,13 @@
     },
     {
       "name": "Quest 2 \u2014 Oren",
-      "state": "critiqued",
-      "note": "Failed the quiz test \u2014 the board grades instead of arguing"
+      "state": "good",
+      "note": "Board reworked to the critic spec, 30/30 playtest"
     },
     {
       "name": "Quest 3 \u2014 Lantern Trial",
-      "state": "critiqued",
-      "note": "Authored dialogue unwired; shipped version is didactic"
+      "state": "good",
+      "note": "All four rounds, 61/61 playtest, authored dialogue wired"
     },
     {
       "name": "Whisper Woods map",
@@ -94,11 +94,12 @@
     {
       "name": "The Echo boss",
       "state": "critiqued",
-      "note": "All three phases passed the audit; phase one called the best in the build"
+      "note": "Phases passed the audit; the map currently hangs"
     },
     {
       "name": "Audio",
-      "state": "building"
+      "state": "good",
+      "note": "18/18 probe checks; bell partials match to 0.6%"
     },
     {
       "name": "Dialogue",
@@ -112,34 +113,58 @@
   ],
   "findings": [
     {
+      "area": "Lumen Vale",
+      "severity": "major",
+      "status": "fixed",
+      "text": "Dry grass and bare soil were declared as base families, painting hard tile-aligned rectangles across the whole map \u2014 a blind A/B read them as a rendering bug. Now blob overlays with organic boundaries."
+    },
+    {
+      "area": "Props",
+      "severity": "major",
+      "status": "fixed",
+      "text": "No prop cast a shadow \u2014 the critic called adding them 'the cheapest single improvement in the whole list'. The world builder now drops one under every prop that stands up, sized from the sprite."
+    },
+    {
+      "area": "Characters",
+      "severity": "major",
+      "status": "fixed",
+      "text": "Two villagers wore clothing within a few luminance points of the grass at nearly the same hue, so they camouflaged. Moss now separates by value, sage by hue, Oren's olive by value."
+    },
+    {
+      "area": "Quest 3",
+      "severity": "blocker",
+      "status": "fixed",
+      "text": "All 236 authored lines are wired and the didactic inline version is gone; the naming moment is now the recognition version. The trial's answers match what the villagers say about it afterwards."
+    },
+    {
+      "area": "Quest 3",
+      "severity": "major",
+      "status": "fixed",
+      "text": "The reference lantern always played tone A, so in rounds where the answer was B or C the perceptual task was unsolvable by ear."
+    },
+    {
       "area": "Quest 2",
       "severity": "blocker",
-      "status": "open",
-      "text": "THESIS RISK: the Memory Threads board grades each card the moment it lands, prints a running score, and volunteers the answer when wrong \u2014 the only screen in the game that looks like a worksheet. Fix: delay anchoring until the player commits a complete board; replace verdicts with statements of physical fact."
+      "status": "fixed",
+      "text": "The Memory Threads board graded every placement, printed a score, and volunteered the answer. Now a placement is a claim; ENTER commits the whole board, and a refusal returns a physical fact rather than a verdict."
     },
     {
-      "area": "Quest 3",
+      "area": "Boss",
       "severity": "blocker",
       "status": "open",
-      "text": "All 236 authored lines of quest3_lantern.ts are unwired, including the third naming moment. The shipped inline version reads a textbook definition aloud before the Insight Card repeats it \u2014 structurally the same as plan.md's own example of bad dialogue."
+      "text": "shrine_boss hangs the renderer on load \u2014 never produces a frame, 30s timeout. Blocks the whole-game playthrough harness."
     },
     {
-      "area": "Quest 3",
+      "area": "Lumen Vale",
       "severity": "major",
       "status": "open",
-      "text": "The shipped trial answers contradict the ambient dialogue: half the valley says 'I heard third, I said second', but the trial's round three is a different pair. After the emotional peak the villagers describe a trial the player did not play."
+      "text": "A dead zone in the upper-middle grass band measures the lowest structural energy in the frame; that is where the square wants to be. Plus uniform-width paths, a path that dissolves into grass, a store with no door, and ~12 identical trees at the same orientation."
     },
     {
-      "area": "Ending",
-      "severity": "major",
+      "area": "Buildings",
+      "severity": "minor",
       "status": "open",
-      "text": "TALK.ending and TALK.boss are authored and unwired \u2014 the game's final scene does not play."
-    },
-    {
-      "area": "Shrine",
-      "severity": "major",
-      "status": "open",
-      "text": "Room Three as specified is brute-forceable in two attempts (two sequences shown, free retries). The sequence must be constructed from context, not chosen between two demonstrations."
+      "text": "Doors are narrower than the characters who must walk through them."
     },
     {
       "area": "Journal",
@@ -154,12 +179,6 @@
       "text": "Cut a naming-moment line that told the player they had learned, a Sera idle line that gave away the whole first puzzle before the player had tried it, and an insight-card eyebrow that asserted the player's inner state."
     },
     {
-      "area": "Quest 1",
-      "severity": "minor",
-      "status": "open",
-      "text": "Passes, but both restraint hazards are opt-in \u2014 a player who never swings the sword faces only the tower timing. Needs an environmental startle to anticipate, not merely one to abstain from causing."
-    },
-    {
       "area": "Build",
       "severity": "blocker",
       "status": "fixed",
@@ -170,32 +189,14 @@
       "severity": "blocker",
       "status": "fixed",
       "text": "Phaser getFrame() returns the __BASE frame for unknown names, so every missing-art guard was drawing the entire 2048px atlas across the scene."
-    },
-    {
-      "area": "Terrain",
-      "severity": "major",
-      "status": "fixed",
-      "text": "Tile families were keyed by leaf name, so tile/woods/grass_* merged with tile/town/grass_* and the town field rendered as a two-tone checkerboard."
-    },
-    {
-      "area": "Terrain",
-      "severity": "major",
-      "status": "fixed",
-      "text": "edgePixels treated a tile's own border as a material edge, putting a lit line on the top row of every interior tile \u2014 a horizontal band across every path and every water surface in the game."
-    },
-    {
-      "area": "Terrain",
-      "severity": "major",
-      "status": "fixed",
-      "text": "Grass variants were tone-mismatched and non-periodic, producing per-tile seams and brightness checkerboarding. Now seamless and rank-quantised."
     }
   ],
   "comparisons": [
     {
       "title": "Town Square vs Stardew Valley world density",
-      "ours": "town_square",
+      "ours": "town_square_nohud",
       "reference": "stardew/stardew_farm_world_density.png",
-      "verdict": "Blind A/B: the reference wins all ten criteria. Building facades and the dynamic light layer are ours to keep; the ground layer, prop shadows and the absence of trees are what lose it."
+      "verdict": "Round 2: clearly behind, but the critic's own summary is that the gap is one ground-plane-and-lighting pass wide, not an art-quality pass. Buildings-integrated-vs-dropped-on now scores for us, and it named our lit windows, roof variety and prop sophistication as ahead of the reference."
     },
     {
       "title": "Festival Plaza vs Stardew Night Market",
