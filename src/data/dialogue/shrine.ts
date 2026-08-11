@@ -154,7 +154,7 @@ export const BOSS: ExchangeMap = namespaced('boss', {
 
   taunt: exchange('boss.taunt', [
     say('echo', 'Do not thank me yet. You have not met the stairs.', { dup: true }),
-    say('echo', 'Nine years. Not one wrong door.', { dup: true }),
+    say('echo', 'Nine days now. Bell goes, cat goes.', { dup: true }),
     say('echo', 'It is the size of a plum. So is a wasp.', { dup: true }),
   ], 'optional interstitial barks; it only ever repeats what it has heard'),
 

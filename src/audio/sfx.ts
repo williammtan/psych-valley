@@ -1163,7 +1163,13 @@ export function playSfx(r: Rack, name: string, t: number, vol = 1, rate = 1, pan
   }
   const fn = SFX[key];
   if (!fn) return false;
-  fn({ r, t, vol: Math.max(0, vol), rate: clamp(rate || 1, 0.25, 4), pan: clamp(pan, -1, 1) });
+  fn({
+    r,
+    t,
+    vol: Math.max(0, vol) * (LEVEL[key] ?? 1),
+    rate: clamp(rate || 1, 0.25, 4),
+    pan: clamp(pan, -1, 1),
+  });
   return true;
 }
 

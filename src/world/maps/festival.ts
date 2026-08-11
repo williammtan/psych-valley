@@ -84,7 +84,7 @@ function build(): MapDef {
 
   // The trial ground — a laid carpet, which is what tells the player where the
   // evening's event actually is before anyone says a word.
-  g.blob(23, 22, 10.5, 7, 'f', 21, 0.16);
+  g.blob(23, 22.5, 9.5, 6.5, 'f', 21, 0.16);
 
   // Entry road from town, and the two service lanes to the stall rows.
   g.vLine(28, H - 1, 23, 'p', 5);
@@ -186,12 +186,26 @@ function build(): MapDef {
   put('prop/fest/banner_1', 21.6, 13.6, { depthBias: -6 }, { radius: 30, color: AMBER, intensity: 0.2, dy: -1.6 });
   put('prop/fest/banner_1', 25.4, 13.6, { depthBias: -6 }, { radius: 30, color: AMBER, intensity: 0.2, dy: -1.6 });
 
-  put('prop/fest/reference_lantern', 23.5, 19.6, { solid: [14, 8], anim: 'reference_lantern_struck' },
-    { radius: 52, color: MOONWHITE, intensity: 0.5, flicker: 0.15, dy: -1.9 }, 'ref_lantern');
-  put('prop/fest/trial_lantern_a', 19.9, 22.4, { solid: [14, 8] }, { radius: 36, color: TRIAL_COLORS.a, intensity: 0.42, dy: -1.5 }, 'lantern_a');
-  put('prop/fest/trial_lantern_b', 23.5, 22.4, { solid: [14, 8] }, { radius: 36, color: TRIAL_COLORS.b, intensity: 0.42, dy: -1.5 }, 'lantern_b');
-  put('prop/fest/trial_lantern_c', 27.1, 22.4, { solid: [14, 8] }, { radius: 36, color: TRIAL_COLORS.c, intensity: 0.42, dy: -1.5 }, 'lantern_c');
-  put('prop/fest/striker', 25.4, 23.6, {}, undefined, 'striker');
+  /**
+   * The three trial lanterns are MOUNTED, not standing loose on the grass: the
+   * stage art carries three posts with iron cups and a painted glyph for each
+   * lantern, at sprite-local x 24 / 48 / 72 and cup floor y 9. Dropping the
+   * lanterns into those cups is what makes them read on sight as instruments
+   * belonging to this stage rather than three ornaments someone left out.
+   *
+   *   stage centre 23.5 → sprite left edge px 336 → posts at px 360/384/408
+   *   stage base   17.4 → sprite top      py 230.4 → cup floor py 239.4
+   */
+  const POST_Y = (230.4 + 9 - 16) / 16;
+  put('prop/fest/trial_lantern_a', 22.0, POST_Y, {}, { radius: 40, color: TRIAL_COLORS.a, intensity: 0.46, dy: -1.2 }, 'lantern_a');
+  put('prop/fest/trial_lantern_b', 23.5, POST_Y, {}, { radius: 40, color: TRIAL_COLORS.b, intensity: 0.46, dy: -1.2 }, 'lantern_b');
+  put('prop/fest/trial_lantern_c', 25.0, POST_Y, {}, { radius: 40, color: TRIAL_COLORS.c, intensity: 0.46, dy: -1.2 }, 'lantern_c');
+
+  // The reference stands alone on the carpet, forward of the stage and lower
+  // than the three — its own stone pedestal, its own pool of white light.
+  put('prop/fest/reference_lantern', 23.5, 19.8, { solid: [14, 8], anim: 'reference_lantern_struck' },
+    { radius: 56, color: MOONWHITE, intensity: 0.54, flicker: 0.15, dy: -2.0 }, 'ref_lantern');
+  put('prop/fest/striker', 21.4, 19.6, {}, undefined, 'striker');
 
   put('prop/fest/judging_table', 29.2, 19.8, { solid: [44, 12] }, { radius: 30, color: CANDLE, intensity: 0.24, dy: -1.2 });
   put('prop/fest/prize_ribbon', 30.4, 19.2, {});
@@ -200,8 +214,8 @@ function build(): MapDef {
   put('prop/fest/stall_food_0', 6.2, 17.2, { solid: [58, 22] }, { radius: 46, color: AMBER, intensity: 0.38, dy: -2.2 });
   put('prop/fest/stall_food_1', 11.0, 17.2, { solid: [58, 22] }, { radius: 46, color: AMBER, intensity: 0.38, dy: -2.2 });
   put('prop/fest/stall_food_2', 15.2, 17.6, { solid: [56, 20] }, { radius: 42, color: CANDLE, intensity: 0.34, dy: -2.0 });
-  put('prop/fest/brazier_fest', 4.4, 21.4, { solid: [14, 8], anim: 'brazier_fest' }, { radius: 54, color: 0xff8a3c, intensity: 0.5, flicker: 0.9, dy: -1.8 });
-  put('prop/fest/brazier_fest', 16.4, 14.4, { solid: [14, 8], anim: 'brazier_fest' }, { radius: 54, color: 0xff8a3c, intensity: 0.5, flicker: 0.9, dy: -1.8 });
+  put('prop/fest/brazier_fest_0', 4.4, 21.4, { solid: [14, 8], anim: 'brazier_fest' }, { radius: 54, color: 0xff8a3c, intensity: 0.5, flicker: 0.9, dy: -1.8 });
+  put('prop/fest/brazier_fest_0', 16.4, 14.4, { solid: [14, 8], anim: 'brazier_fest' }, { radius: 54, color: 0xff8a3c, intensity: 0.5, flicker: 0.9, dy: -1.8 });
   put('prop/fest/crate_stack_fest', 3.8, 18.6, { solid: [28, 12] });
   put('prop/fest/drink_barrel', 12.9, 20.6, { solid: [24, 10] });
   put('prop/fest/barrel_fest', 13.9, 21.5, { solid: [18, 8] });
@@ -222,8 +236,8 @@ function build(): MapDef {
   put('prop/fest/stall_game_0', 41.8, 17.2, { solid: [58, 22] }, { radius: 46, color: ROSE, intensity: 0.36, dy: -2.2 });
   put('prop/fest/stall_game_1', 41.8, 23.4, { solid: [52, 22] }, { radius: 44, color: TEAL, intensity: 0.36, dy: -2.2 });
   put('prop/fest/stall_craft', 35.6, 23.6, { solid: [58, 22] }, { radius: 44, color: CANDLE, intensity: 0.34, dy: -2.2 });
-  put('prop/fest/brazier_fest', 32.6, 20.6, { solid: [14, 8], anim: 'brazier_fest' }, { radius: 54, color: 0xff8a3c, intensity: 0.5, flicker: 0.9, dy: -1.8 });
-  put('prop/fest/brazier_fest', 43.6, 27.4, { solid: [14, 8], anim: 'brazier_fest' }, { radius: 54, color: 0xff8a3c, intensity: 0.5, flicker: 0.9, dy: -1.8 });
+  put('prop/fest/brazier_fest_0', 32.6, 20.6, { solid: [14, 8], anim: 'brazier_fest' }, { radius: 54, color: 0xff8a3c, intensity: 0.5, flicker: 0.9, dy: -1.8 });
+  put('prop/fest/brazier_fest_0', 43.6, 27.4, { solid: [14, 8], anim: 'brazier_fest' }, { radius: 54, color: 0xff8a3c, intensity: 0.5, flicker: 0.9, dy: -1.8 });
   put('prop/fest/bench_fest_1', 37.2, 20.4, { solid: [34, 8] });
   put('prop/fest/bench_fest_0', 39.4, 27.0, { solid: [34, 8] });
   put('prop/fest/toy_windmill', 39.0, 20.8, {});

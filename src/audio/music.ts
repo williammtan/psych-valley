@@ -240,11 +240,11 @@ const VOICES: Record<string, Voice> = {
   tom: ({ r, dest, t, vel, pan, freq }) => {
     tone(r, t, {
       freq: freq || 62, type: 'sine', slideFrom: 1.9, slideTime: 0.09,
-      attack: 0.001, decay: 0.42, gain: 0.26 * vel, pan, dest, reverb: 0.2,
+      attack: 0.001, decay: 0.42, gain: 0.4 * vel, pan, dest, reverb: 0.2,
     });
     noise(r, t, {
       duration: 0.09, filterType: 'lowpass', filterFreq: 700, q: 1.2,
-      gain: 0.07 * vel, attack: 0.001, pan, dest,
+      gain: 0.11 * vel, attack: 0.001, pan, dest,
     });
   },
 
@@ -289,7 +289,8 @@ const VOICES: Record<string, Voice> = {
       tone(r, t, {
         freq, type: i === 2 ? 'sine' : 'sawtooth', detune: (i - 1) * 11,
         filter: { type: 'lowpass', freq: 420 + i * 90, q: 1.6 },
-        attack: Math.min(3.5, secs * 0.3), decay: 0.5, sustain: 0.85,
+        // Slow, but never so slow that the track takes two seconds to exist.
+        attack: Math.min(1.4, secs * 0.3), decay: 0.5, sustain: 0.85,
         hold: Math.max(0.1, secs * 0.5), release: Math.max(1.2, secs * 0.35),
         gain: 0.036 * vel, pan: pan + (i - 1) * 0.3, dest, reverb: reverb || 0.4,
       });
@@ -315,7 +316,13 @@ const VOICES: Record<string, Voice> = {
       filter: { type: 'lowpass', freq: 260, q: 5, sweepTo: 120, sweepTime: Math.max(0.1, secs) },
       attack: 0.004, decay: 0.09, sustain: 0.55,
       hold: Math.max(0.03, secs * 0.55), release: 0.1,
-      gain: 0.14 * vel, pan, dest,
+      gain: 0.3 * vel, pan, dest,
+    });
+    // A click of definition on top, so the pulse reads on small speakers.
+    tone(r, t, {
+      freq: freq * 4, type: 'triangle',
+      filter: { type: 'lowpass', freq: 900, q: 1 },
+      attack: 0.002, decay: 0.07, gain: 0.06 * vel, pan, dest,
     });
   },
 };
@@ -440,6 +447,7 @@ const TOWN: TrackDef = {
   bpm: 96,
   loop: 64,
   introBeats: 8,
+  gain: 0.95,
   intro: [
     { voice: 'guitar', gain: 0.85, notes: fingerpick(['D', 'A'], PICK, 1.1) },
     { voice: 'pad', gain: 0.7, notes: chordPart(['D', 'A'], TRIAD, 3.8, 0.7) },
@@ -498,6 +506,7 @@ const INN: TrackDef = {
   bpm: 74,
   loop: 32,
   introBeats: 4,
+  gain: 0.5,
   intro: [
     { voice: 'harp', gain: 0.7, reverb: 0.4, notes: [N(0, 2, 40, 0.7), N(2, 2, 59, 0.5)] },
   ],
@@ -597,9 +606,13 @@ const FESTIVAL: TrackDef = {
   bpm: 132,
   loop: 32,
   introBeats: 4,
+  gain: 0.92,
+  // A four-beat pickup: drum, a tambourine roll that never stops, and the
+  // fiddle scooping up into the downbeat.
   intro: [
     { voice: 'drum', gain: 0.9, notes: [N(0, 0.4, 36, 0.8), N(1, 0.4, 36, 0.5), N(2, 0.4, 36, 0.9), N(3, 0.4, 41, 0.6), N(3.5, 0.4, 41, 0.7)] },
-    { voice: 'tamb', gain: 0.7, notes: [N(2, 0.2, 60, 0.5), N(2.5, 0.2, 60, 0.6), N(3, 0.2, 60, 0.7), N(3.5, 0.2, 60, 0.9)] },
+    { voice: 'tamb', gain: 0.7, notes: Array.from({ length: 8 }, (_, i) => N(i * 0.5, 0.2, 60, 0.35 + i * 0.08)) },
+    { voice: 'fiddle', gain: 0.8, pan: 0.18, notes: [N(2, 1, 69, 0.5), N(3, 0.5, 71, 0.7), N(3.5, 0.5, 73, 0.85)] },
   ],
   parts: [
     { voice: 'guitar', notes: festGuitar(), pan: -0.2, gain: 0.85 },
@@ -635,6 +648,7 @@ const WOODS: TrackDef = {
   bpm: 68,
   loop: 32,
   introBeats: 8,
+  gain: 0.72,
   intro: [
     { voice: 'drone', gain: 0.8, notes: [N(0, 8, 38, 0.7)] },
     { voice: 'harp', gain: 0.5, reverb: 0.5, notes: [N(4, 3, 62, 0.5)] },
@@ -690,10 +704,11 @@ const SHRINE: TrackDef = {
   id: 'shrine',
   bpm: 60,
   loop: 32,
-  introBeats: 4,
+  introBeats: 2,
   intensity: 0,
+  gain: 0.62,
   intro: [
-    { voice: 'drone', gain: 0.6, notes: [N(0, 4, 36, 0.5)] },
+    { voice: 'drone', gain: 0.6, notes: [N(0, 2, 36, 0.5)] },
   ],
   parts: [
     { voice: 'drone', gain: 1, reverb: 0.55, notes: [N(0, 32, 36, 0.9)] },
@@ -745,7 +760,7 @@ const SHRINE: TrackDef = {
     {
       voice: 'strings',
       minIntensity: 0.72,
-      gain: 1.1,
+      gain: 2.2,
       reverb: 0.35,
       notes: [
         N(0, 8, 48, 0.9), N(8, 8, 49, 0.9), N(16, 8, 54, 0.95), N(24, 8, 55, 1),

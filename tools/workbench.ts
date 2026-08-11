@@ -238,9 +238,9 @@ function main(): void {
 </div>`;
 
   mkdirSync(join(ROOT, 'docs'), { recursive: true });
-  writeFileSync(join(ROOT, 'docs', 'workbench.html'), html);
+  writeFileSync(join(ROOT, 'docs', 'progress.html'), html);
   const kb = Math.round(Buffer.byteLength(html) / 1024);
-  console.log(`  docs/workbench.html  (${kb} KB, ${shotNames.length} captures)`);
+  console.log(`  docs/progress.html  (${kb} KB, ${shotNames.length} captures)`);
 }
 
 main();

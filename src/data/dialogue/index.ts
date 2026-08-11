@@ -196,7 +196,9 @@ export interface IndexedLine {
 export function allLines(): IndexedLine[] {
   const out: IndexedLine[] = [];
   const pushExchange = (ex: Exchange) => {
-    walkLines(ex.beats, (l, p) => out.push({ path: `${ex.id}${p}`, speaker: l.speaker, text: l.text }));
+    walkLines(ex.beats, (l, p) => out.push({
+      path: `${ex.id}${p}`, speaker: l.speaker, text: l.text, ...(l.dup ? { dup: true } : {}),
+    }));
   };
   for (const ex of allExchanges()) pushExchange(ex);
   for (const [id, profile] of Object.entries(AMBIENT)) {

@@ -66,13 +66,14 @@ export const WOODS = {
   clearing: [21, 20] as const,
   narrows: [21, 31] as const,
   toadstools: [35, 31] as const,
-  hollow: [22, 42] as const,
+  hollow: [23, 45] as const,
   dell: [20, 65] as const,
   gully: [4, 60] as const,
   plateau: [9, 53] as const,
-  chest: [9, 57] as const,
+  /** The tile you stand on to open the chest — the chest itself is solid. */
+  chest: [9, 58] as const,
   terrace: [22, 74] as const,
-  carving: [36, 75] as const,
+  carving: [36, 77] as const,
   boulder: [9, 84] as const,
   ford: [9, 85] as const,
   camp: [8, 90] as const,
@@ -258,6 +259,9 @@ export function buildWoods(): MapDef {
   g.rect(2, 80, 4, 2, '#');
   g.rect(33, 80, 8, 2, '#');
   g.rect(29, 87, 5, 2, '#');
+  // The campsite island is sealed off from the south bank: the ford is the
+  // only way in, which is the only thing that makes the ford worth solving.
+  g.rect(13, 87, 4, 10, '#');
 
   // the frame, re-asserted after the carving
   g.rect(0, 0, W, 3, '#');

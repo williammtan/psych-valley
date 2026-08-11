@@ -306,25 +306,33 @@ async function main(): Promise<void> {
     }
 
     // ── music ──────────────────────────────────────────────────────────────
-    const mrows: Array<{ name: string; a: SoundAnalysis; gapMs: number }> = [];
+    const mrows: Array<{ name: string; a: SoundAnalysis; gapMs: number; startMs: number }> = [];
     for (const name of musicNames) {
       const a: SoundAnalysis = await page.evaluate(
         (n) => (window as any).__audio.renderMusic(n, 12), name,
       );
-      // Longest run of near-silent 100ms windows inside the first 10 seconds.
+      // Longest run of near-silent 100ms windows inside the first 10 seconds,
+      // measured from the first window that sounds — a track is allowed to fade
+      // in, it is not allowed to drop out once it has started.
+      const w10 = a.windows.slice(0, 100);
+      const start = w10.findIndex((w) => w >= 8e-4);
       let gap = 0;
       let run = 0;
-      for (const w of a.windows.slice(0, 100)) {
-        if (w < 8e-4) { run++; gap = Math.max(gap, run); } else run = 0;
+      if (start >= 0) {
+        for (const w of w10.slice(start)) {
+          if (w < 8e-4) { run++; gap = Math.max(gap, run); } else run = 0;
+        }
+      } else {
+        gap = w10.length;
       }
-      mrows.push({ name, a, gapMs: gap * 100 });
+      mrows.push({ name, a, gapMs: gap * 100, startMs: Math.max(0, start) * 100 });
     }
 
     console.log('\n\nMUSIC (12s render)\n');
     console.log(table(
-      ['track', 'peak', 'rms', 'sounding s', 'longest gap ms'],
+      ['track', 'peak', 'rms', 'starts ms', 'sounding s', 'longest gap ms'],
       mrows.map((m) => [
-        m.name, num(m.a.peak), num(m.a.rms, 4),
+        m.name, num(m.a.peak), num(m.a.rms, 4), m.startMs.toFixed(0),
         (m.a.windows.filter((w) => w >= 8e-4).length / 10).toFixed(1),
         m.gapMs.toFixed(0),
       ]),
@@ -336,14 +344,17 @@ async function main(): Promise<void> {
       ok: musicClip.length === 0,
       detail: musicClip.length ? musicClip.map((m) => `${m.name}=${num(m.a.peak)}`).join(', ') : `${mrows.length} tracks`,
     });
+    // Sound within half a second of starting, then no dropout longer than
+    // 250ms across the following eight seconds.
     const notContinuous = mrows.filter(
-      (m) => m.gapMs > 250 || m.a.windows.slice(0, 80).filter((w) => w >= 8e-4).length < 76,
+      (m) => m.gapMs > 250 || m.startMs > 500
+        || m.a.windows.slice(0, 90).filter((w) => w >= 8e-4).length < 80,
     );
     checks.push({
       name: 'every track sounds continuously for 8s+',
       ok: notContinuous.length === 0,
       detail: notContinuous.length
-        ? notContinuous.map((m) => `${m.name} gap ${m.gapMs}ms`).join(', ')
+        ? notContinuous.map((m) => `${m.name} starts ${m.startMs}ms gap ${m.gapMs}ms`).join(', ')
         : `${mrows.length} tracks`,
     });
 

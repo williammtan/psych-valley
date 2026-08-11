@@ -62,6 +62,18 @@ const TERMINOLOGY = [
   'behaviorism',
 ];
 
+/**
+ * Everything the body bitmap font can draw (tools/art/lib/font.ts). Anything
+ * outside this renders as a hole in the dialogue box.
+ */
+const GLYPHS = new Set([
+  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  ...'abcdefghijklmnopqrstuvwxyz',
+  ...'0123456789',
+  ...' !"\'(),-.:;?/&%+*<>[]#@',
+  ...'…—’“”',
+]);
+
 const lines = allLines();
 
 interface Finding { rule: string; path: string; detail: string }
@@ -97,13 +109,27 @@ for (const l of lines) {
 
   const key = l.text.trim().toLowerCase();
   const prev = seen.get(key);
-  if (prev) add('duplicate', l.path, `same text as ${prev}: ${l.text}`);
+  // `dup` marks deliberate repetition: a crowd chorus, or the Echo quoting.
+  if (l.dup) { /* deliberate: never reported, never claims the canonical slot */ }
+  else if (prev) add('duplicate', l.path, `same text as ${prev}: ${l.text}`);
   else seen.set(key, l.path);
 
   if (!PEOPLE[l.speaker]) add('unknown-speaker', l.path, `speaker "${l.speaker}"`);
 
-  const bad = [...l.text].filter((ch) => ch.charCodeAt(0) > 126);
-  if (bad.length) add('non-ascii', l.path, `${JSON.stringify(bad.join(''))} in: ${l.text}`);
+  const bad = [...l.text].filter((ch) => !GLYPHS.has(ch));
+  if (bad.length) add('bad-glyph', l.path, `${JSON.stringify(bad.join(''))} in: ${l.text}`);
+}
+
+// The Echo only ever says something it has heard a person say. Every one of its
+// lines must be a verbatim quote of a line that exists elsewhere in the game.
+const spokenElsewhere = new Set(
+  lines.filter((l) => l.speaker !== 'echo').map((l) => l.text.trim()),
+);
+for (const l of lines) {
+  if (l.speaker !== 'echo') continue;
+  if (!spokenElsewhere.has(l.text.trim())) {
+    add('echo-not-quoted', l.path, `no character ever says: ${l.text}`);
+  }
 }
 
 // Everyone in the cast who talks should have enough lines to feel present.
@@ -150,7 +176,7 @@ console.log('');
 
 const ORDER = [
   'too-long', 'didactic', 'terminology', 'duplicate', 'thin-character',
-  'unknown-speaker', 'non-ascii', 'thin-stage', 'missing-hint',
+  'unknown-speaker', 'bad-glyph', 'echo-not-quoted', 'thin-stage', 'missing-hint',
 ];
 
 console.log('CHECKS');

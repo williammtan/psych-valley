@@ -205,7 +205,7 @@ type Row = Record<string, string | number>;
 async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevServer; base: string }> {
   const server = await createServer({
     root: ROOT,
-    server: { port: 0, strictPort: false, host: '127.0.0.1' },
+    server: { port: 20000 + Math.floor(Math.random() * 20000), strictPort: false, host: '127.0.0.1' },
     logLevel: 'error',
   });
   await server.listen();
@@ -216,6 +216,12 @@ async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevSe
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
   });
   const page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
+  // tsx compiles with --keep-names, which rewrites functions to call a `__name`
+  // helper that does not exist in the browser; every evaluate() with a nested
+  // closure would throw without this identity shim.
+  await page.addInitScript(() => {
+    (window as unknown as { __name: <T>(f: T) => T }).__name = (f) => f;
+  });
   page.on('pageerror', (e) => console.log(`  [pageerror] ${String(e).slice(0, 200)}`));
   return { browser, page, server, base };
 }
@@ -284,13 +290,15 @@ async function calibrate(page: Page): Promise<number> {
 
 async function latency(ctx: Ctx): Promise<Row[]> {
   const { page } = ctx;
-  // Real keyboard, real InputManager: no scripted shortcut anywhere.
-  await page.evaluate(() => { (window as any).__F.reset(); (window as any).__F.clean(); (window as any).__F.scripted(false); });
+  // Pass 1: a real key on a real keyboard, through the real InputManager.
   await page.evaluate(() => {
     const F = (window as any).__F;
-    const p = F.scene.player;
-    F.place(Math.round(p.x) + 0.0, Math.round(p.y) + 0.0, 's');
+    F.reset(); F.clean();
+    const o = F.arena();
+    F.place((o.x + 2) * 16 + 8, (o.y + 6) * 16 + 16, 's');
+    F.scripted(false);
   });
+  await page.focus('canvas').catch(() => {});
   const run = page.evaluate(() => (window as any).__F.run(40));
   await page.waitForTimeout(120);
   await page.keyboard.down('ArrowRight');
@@ -298,15 +306,40 @@ async function latency(ctx: Ctx): Promise<Row[]> {
   await page.keyboard.up('ArrowRight');
 
   const firstAxis = s.findIndex((r) => r.ax !== 0);
-  const x0 = firstAxis > 0 ? s[firstAxis - 1].x : s[0].x;
-  const sx0 = firstAxis > 0 ? s[firstAxis - 1].sx : s[0].sx;
-  const firstMove = s.findIndex((r, i) => i >= firstAxis && r.x !== x0);
-  const firstDraw = s.findIndex((r, i) => i >= firstAxis && r.sx !== sx0);
-  const ok = firstAxis >= 0 && firstMove >= 0;
+  const ok = firstAxis > 0;
+  const x0 = ok ? s[firstAxis - 1].x : 0;
+  const firstMove = ok ? s.findIndex((r, i) => i >= firstAxis && r.x !== x0) : -1;
+
+  // Pass 2: sub-pixel sweep. The sprite is drawn at Math.round(x), so where the
+  // player happens to stand decides whether frame 1 moves a visible pixel.
+  const sweep = await page.evaluate(async () => {
+    const F = (window as any).__F;
+    const out: any[] = [];
+    for (const frac of [0, 0.25, 0.5, 0.75]) {
+      F.reset(); F.clean(); F.scripted(true);
+      const o = F.arena();
+      F.place((o.x + 2) * 16 + 8 + frac, (o.y + 6) * 16 + 16, 's');
+      F.at(1, 'F.move(1,0)');
+      const s2 = await F.run(12);
+      F.move(0, 0);
+      const x00 = s2[0].x, sx00 = s2[0].sx;
+      out.push({
+        frac,
+        pos: s2.findIndex((r: any, i: number) => i >= 1 && r.x !== x00),
+        draw: s2.findIndex((r: any, i: number) => i >= 1 && r.sx !== sx00),
+        step: +(s2[1].x - x00).toFixed(3),
+      });
+    }
+    return out;
+  }) as any[];
+
+  const worstDraw = Math.max(...sweep.map((r) => r.draw));
+  const worstPos = Math.max(...sweep.map((r) => r.pos));
   return [
-    { metric: 'input→position (frames)', value: ok ? firstMove - firstAxis : 'KEYBOARD FAIL', target: '0' },
-    { metric: 'input→rendered pixel (frames)', value: ok && firstDraw >= 0 ? firstDraw - firstAxis : 'n/a', target: '≤1' },
-    { metric: 'first-frame displacement (px)', value: ok ? fmt(Math.abs(s[firstAxis].x - x0), 2) : 'n/a', target: '>0.5' },
+    { metric: 'keyboard: axis→position (frames)', value: ok ? firstMove - firstAxis : 'KEYBOARD FAIL', target: '0' },
+    { metric: 'scripted: input→position (frames)', value: worstPos - 1, target: '0' },
+    { metric: 'input→rendered pixel, worst case (frames)', value: worstDraw - 1, target: '≤1' },
+    { metric: 'first-frame displacement (px)', value: fmt(sweep[0].step, 2), target: '>0.5' },
   ];
 }
 
@@ -314,8 +347,8 @@ async function ramp(ctx: Ctx): Promise<Row[]> {
   const s = await ctx.page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const p = F.scene.player;
-    F.place(p.x, p.y, 's');
+    const o = F.arena();
+    F.place((o.x + 2) * 16 + 8, (o.y + 6) * 16 + 16, 's');
     F.at(2, 'F.move(1,0)');
     F.at(50, 'F.move(0,0)');
     return await F.run(100);
@@ -340,8 +373,8 @@ async function diagonal(ctx: Ctx): Promise<Row[]> {
   const r = await ctx.page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const p = F.scene.player;
-    F.place(p.x, p.y, 's');
+    const o = F.arena();
+    F.place((o.x + 2) * 16 + 8, (o.y + 2) * 16 + 16, 's');
     F.at(2, 'F.move(1,0)');
     F.at(40, 'F.move(0,0)');
     F.at(46, 'F.move(1,1)');
@@ -374,7 +407,7 @@ async function corners(ctx: Ctx): Promise<Row[]> {
     const F = (window as any).__F;
     const TILE = 16;
     F.reset(); F.clean();
-    const open = F.findOpen(13, 13);
+    const open = F.arena();
     if (!open) return { error: 'no open arena' };
     // Wall across the middle of the arena with a single 1-tile gap.
     const wy = open.y + 6;
@@ -424,7 +457,7 @@ async function wallSlide(ctx: Ctx): Promise<Row[]> {
     const F = (window as any).__F;
     const TILE = 16;
     F.reset(); F.clean();
-    const open = F.findOpen(13, 13);
+    const open = F.arena();
     if (!open) return { error: 'no open arena' };
     const wy = open.y + 6;
     const cells: Array<[number, number]> = [];
@@ -468,8 +501,8 @@ async function attack(ctx: Ctx): Promise<Row[]> {
   const cad = await page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const p = F.scene.player;
-    F.place(p.x, p.y, 's');
+    const o = F.arena();
+    F.place((o.x + 6) * 16 + 8, (o.y + 6) * 16 + 16, 's');
     for (let i = 1; i < 180; i++) F.at(i, "F.act('attack')");
     const s = await F.run(185);
     let starts = 0;
@@ -485,8 +518,8 @@ async function attack(ctx: Ctx): Promise<Row[]> {
     const out: any[] = [];
     for (let k = 2; k <= 26; k++) {
       F.reset(); F.clean(); F.scripted(true);
-      const p = F.scene.player;
-      F.place(p.x, p.y, 's');
+      const o = F.arena();
+      F.place((o.x + 6) * 16 + 8, (o.y + 6) * 16 + 16, 's');
       F.at(1, "F.act('attack')");
       F.at(1 + k, "F.act('attack')");
       const s = await F.run(60);
@@ -515,8 +548,9 @@ async function attack(ctx: Ctx): Promise<Row[]> {
   const mv = await page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const p = F.scene.player;
-    F.place(p.x, p.y, 'e');
+    const o = F.arena();
+    const ax = (o.x + 1) * 16 + 8, ay = (o.y + 6) * 16 + 16;
+    F.place(ax, ay, 'e');
     F.at(1, 'F.move(1,0)');
     F.at(20, "F.act('attack')");
     F.at(80, 'F.move(0,0)');
@@ -526,14 +560,14 @@ async function attack(ctx: Ctx): Promise<Row[]> {
     const dist = s[75].x - s[20].x;
     // Reference: same window, no attack.
     F.reset();
-    F.place(p.x, p.y, 'e');
+    F.place(ax, ay, 'e');
     F.at(1, 'F.move(1,0)');
     F.at(80, 'F.move(0,0)');
     const s2 = await F.run(90);
     const dist2 = s2[75].x - s2[20].x;
     // Recovery cancel: does pushing a direction end the attack early?
     F.reset();
-    F.place(p.x, p.y, 'e');
+    F.place(ax, ay, 'e');
     F.at(1, "F.act('attack')");
     F.at(14, 'F.move(0,1)');
     const s3 = await F.run(50);
@@ -558,7 +592,8 @@ async function hitstop(ctx: Ctx): Promise<Row[]> {
   const r = await ctx.page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const p = F.scene.player;
+    const o = F.arena();
+    const p = { x: (o.x + 6) * 16 + 8, y: (o.y + 6) * 16 + 16 };
     F.place(p.x, p.y, 'e');
     const tx = Math.floor((p.x + 22) / 16);
     const ty = Math.floor((p.y - 8) / 16);
@@ -593,8 +628,9 @@ async function knockback(ctx: Ctx): Promise<Row[]> {
   const r = await ctx.page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
+    const o = F.arena();
     const p = F.scene.player;
-    F.place(p.x, p.y, 'e');
+    F.place((o.x + 6) * 16 + 8, (o.y + 6) * 16 + 16, 'e');
     const x0 = p.x, y0 = p.y;
     F.at(2, 'F.scene.player.hurt(1, F.scene.player.x - 20, F.scene.player.y)');
     const s = await F.run(60);
@@ -615,8 +651,7 @@ async function dash(ctx: Ctx): Promise<Row[]> {
   const r = await ctx.page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const p = F.scene.player;
-    const open = F.findOpen(13, 13);
+    const open = F.arena();
     const px = (open.x + 2) * 16 + 8, py = (open.y + 6) * 16 + 16;
     F.place(px, py, 'e');
     F.at(2, "F.act('dash')");
@@ -641,7 +676,7 @@ async function dash(ctx: Ctx): Promise<Row[]> {
   const safe = await ctx.page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const open = F.findOpen(13, 13);
+    const open = F.arena();
     const px = (open.x + 2) * 16 + 8, py = (open.y + 6) * 16 + 16;
     F.place(px, py, 'e');
     F.scene.enemies.spawn('bramble', Math.floor((px + 26) / 16), Math.floor((py - 8) / 16), { passive: true });
@@ -682,7 +717,7 @@ async function telegraphs(ctx: Ctx): Promise<Row[]> {
     // the player was standing on when it appeared.
     {
       F.reset(); F.clean(); F.scripted(true);
-      const open = F.findOpen(13, 13);
+      const open = F.arena();
       const px = (open.x + 6) * 16 + 8, py = (open.y + 9) * 16 + 16;
       F.place(px, py, 'n');
       F.scene.enemies.spawn('bramble', open.x + 6, open.y + 5);
@@ -702,7 +737,7 @@ async function telegraphs(ctx: Ctx): Promise<Row[]> {
     // WISP — aim frame to the projectile arriving at the player's position.
     {
       F.reset(); F.clean(); F.scripted(true);
-      const open = F.findOpen(13, 13);
+      const open = F.arena();
       const px = (open.x + 6) * 16 + 8, py = (open.y + 9) * 16 + 16;
       F.place(px, py, 'n');
       F.scene.enemies.spawn('wisp', open.x + 6, open.y + 5);
@@ -716,7 +751,7 @@ async function telegraphs(ctx: Ctx): Promise<Row[]> {
     // MIMICLING — no telegraph by design; measure the copy delay instead.
     {
       F.reset(); F.clean(); F.scripted(true);
-      const open = F.findOpen(13, 13);
+      const open = F.arena();
       const px = (open.x + 6) * 16 + 8, py = (open.y + 9) * 16 + 16;
       F.place(px, py, 'n');
       F.scene.enemies.spawn('mimicling', open.x + 6, open.y + 6);
@@ -742,7 +777,8 @@ async function load20(ctx: Ctx): Promise<Row[]> {
   const r = await ctx.page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const open = F.findOpen(13, 13);
+    F.trackHp = false;
+    const open = F.arena();
     const px = (open.x + 6) * 16 + 8, py = (open.y + 6) * 16 + 16;
     F.place(px, py, 's');
     let n = 0;
@@ -830,7 +866,6 @@ async function stuck(ctx: Ctx): Promise<Row[]> {
         p.setPosition(x * 16 + 8, y * 16 + 16);
         p.grid = F.scene.collisionGrid();
         p.ensureUnstuck();
-        const blocked = F.scene.enemies && (window as any).__psyche ? false : false;
         const bad = (function () {
           const g = F.scene.collisionGrid();
           const b = p.box;
@@ -858,8 +893,7 @@ async function fxCadence(ctx: Ctx): Promise<Row[]> {
   const r = await ctx.page.evaluate(async () => {
     const F = (window as any).__F;
     F.reset(); F.clean(); F.scripted(true);
-    const p = F.scene.player;
-    const open = F.findOpen(13, 13);
+    const open = F.arena();
     F.place((open.x + 1) * 16 + 8, (open.y + 6) * 16 + 16, 'e');
     F.at(2, 'F.move(1,0)');
     F.at(120, 'F.move(0,0)');

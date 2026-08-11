@@ -169,11 +169,13 @@ function build(): MapDef {
 function props(): PropPlacement[] {
   return [
     // ── hearth ─────────────────────────────────────────────────────────────
-    { key: 'prop/int/inn_fireplace_0', x: 5, y: 4, spec: { anim: 'fireplace_burn', solid: [44, 26] }, id: 'fireplace' },
-    { key: 'prop/int/inn_hearth_rug', x: 5, y: 6.4, spec: { depthBias: -70 } },
+    // Pip's rug, and — under the window, deliberately across the room from it —
+    // the basket he has not slept in for nine days.
+    { key: 'prop/int/inn_fireplace_0', x: 5, y: 4, spec: { anim: 'fireplace_burn', solid: [44, 26], interact: 'prop.innFireplace' }, id: 'fireplace' },
+    { key: 'prop/int/inn_hearth_rug', x: 5, y: 6.4, spec: { depthBias: -70 }, id: 'hearthrug' },
     { key: 'prop/int/inn_firewood', x: 3.4, y: 5.2, spec: {} },
-    { key: 'prop/int/inn_catbed', x: 8, y: 5.8, spec: { depthBias: -40 }, id: 'catbed' },
-    { key: 'prop/int/inn_catbowl', x: 9.3, y: 5.8, spec: { depthBias: -40 } },
+    { key: 'prop/int/inn_catbed', x: 8.4, y: 3.7, spec: { depthBias: -40, interact: 'clue.catbed' }, id: 'catbed' },
+    { key: 'prop/int/inn_catbowl', x: 9.6, y: 3.7, spec: { depthBias: -40, interact: 'prop.innCatBowl' } },
     { key: 'prop/int/inn_picture_b', x: 3, y: 2, spec: {} },
 
     // ── back wall ──────────────────────────────────────────────────────────
