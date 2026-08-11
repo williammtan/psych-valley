@@ -133,7 +133,7 @@ export const ENCOUNTERS: Encounter[] = [
 ];
 
 /** Ground chars a later pass is allowed to paint over. */
-const OPEN = ['.', ',', '"', 'l', 'm', 'd', 'S', 'p'];
+const OPEN = ['.', ',', '"', 'l', 'm', 'd', 'S', 'G', 'p'];
 
 /**
  * Draw into a scratch grid, then stamp the result only onto cells that are

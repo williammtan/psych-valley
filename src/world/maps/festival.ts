@@ -179,7 +179,7 @@ function build(): MapDef {
     }
     for (let x = x0 + 2; x <= x1 - 1; x += 3) {
       a.set(x, y, 'G');
-      P.lights.push({ x, y: y - 0.6, radius: 30, color: CANDLE, intensity: 0.3, flicker: 0.25 });
+      P.lights.push({ x, y: y - 0.6, radius: 30, color: CANDLE, intensity: 0.26, flicker: 0.25 });
     }
   };
 
@@ -188,7 +188,7 @@ function build(): MapDef {
   };
 
   // ── the trial: the centre of attention ───────────────────────────────────
-  put('prop/fest/trial_stage', 23.5, STAGE_Y, { solid: [88, 44] }, { radius: 82, color: AMBER, intensity: 0.36, dy: -2.6 }, 'trial_stage');
+  put('prop/fest/trial_stage', 23.5, STAGE_Y, { solid: [88, 44] }, { radius: 82, color: AMBER, intensity: 0.30, dy: -2.6 }, 'trial_stage');
   put('prop/fest/banner_0', 19.6, 19.8, {}, { radius: 34, color: ROSE, intensity: 0.22, dy: -1.6 });
   put('prop/fest/banner_2', 27.4, 19.8, {}, { radius: 34, color: TEAL, intensity: 0.22, dy: -1.6 });
   put('prop/fest/banner_1', 21.6, 15.8, { depthBias: -6 }, { radius: 30, color: AMBER, intensity: 0.2, dy: -1.6 });
@@ -264,6 +264,36 @@ function build(): MapDef {
     put(`prop/fest/ground_lantern_${i % 3}`, x, y, {}, { radius: 30, color: AMBER, intensity: 0.4, flicker: 0.35, dy: -0.9 });
   });
 
+  // ── the flanks: where the people who are not competing stand ─────────────
+  // The Night Market lesson is that a festival has no dead ground. These two
+  // clusters fill the bands either side of the trial floor with seating, spilled
+  // crates and light, without ever narrowing the route between them.
+  put('prop/fest/bench_fest_0', 12.6, 25.6, { solid: [34, 8] });
+  put('prop/fest/bench_fest_1', 12.0, 28.6, { solid: [34, 8] });
+  put('prop/fest/crate_stack_fest', 14.6, 30.2, { solid: [28, 12] });
+  put('prop/fest/barrel_fest', 10.6, 26.6, { solid: [18, 8] });
+  put('prop/fest/toy_windmill', 13.8, 23.4, {});
+  put('prop/fest/brazier_fest_0', 11.2, 30.4, { solid: [14, 8], anim: 'brazier_fest' },
+    { radius: 52, color: 0xff8a3c, intensity: 0.46, flicker: 0.9, dy: -1.8 });
+  put('prop/fest/ground_lantern_2', 15.0, 27.4, {}, { radius: 28, color: AMBER, intensity: 0.4, flicker: 0.35, dy: -0.9 });
+
+  put('prop/fest/bench_fest_1', 33.6, 25.6, { solid: [34, 8] });
+  put('prop/fest/bench_fest_0', 34.2, 28.6, { solid: [34, 8] });
+  put('prop/town/table_round', 36.4, 27.0, { solid: [26, 10] });
+  put('prop/fest/mug', 36.1, 26.8, {});
+  put('prop/fest/pie_stack', 36.8, 26.7, {});
+  put('prop/fest/crate_stack_fest', 31.8, 30.2, { solid: [28, 12] });
+  put('prop/fest/brazier_fest_0', 35.0, 30.6, { solid: [14, 8], anim: 'brazier_fest' },
+    { radius: 52, color: 0xff8a3c, intensity: 0.46, flicker: 0.9, dy: -1.8 });
+  put('prop/fest/ground_lantern_1', 31.6, 27.4, {}, { radius: 28, color: AMBER, intensity: 0.4, flicker: 0.35, dy: -0.9 });
+
+  // Spectator seating facing the trial floor, so the row of backs behind the
+  // player reads as an audience rather than as spare ground.
+  put('prop/fest/bench_fest_0', 18.4, 31.4, { solid: [34, 8] });
+  put('prop/fest/bench_fest_1', 28.0, 31.4, { solid: [34, 8] });
+  put('prop/fest/ground_lantern_0', 16.6, 31.6, {}, { radius: 28, color: AMBER, intensity: 0.42, flicker: 0.35, dy: -0.9 });
+  put('prop/fest/ground_lantern_2', 30.2, 31.6, {}, { radius: 28, color: AMBER, intensity: 0.42, flicker: 0.35, dy: -0.9 });
+
   // ── the entry: an arch, a lit approach, a signpost ───────────────────────
   put('prop/fest/flower_arch', 23.4, 32.6, {}, { radius: 40, color: ROSE, intensity: 0.3, dy: -2.6 });
   for (const y of [30.6, 33.2, 35.2]) {
@@ -329,7 +359,7 @@ function build(): MapDef {
     subtitle: 'the Festival of Lanterns',
     music: 'festival',
     tint: 0x1b1740,
-    darkness: 0.42,
+    darkness: 0.50,
     ground,
     legend: {
       '.': { base: 'town/grass' },

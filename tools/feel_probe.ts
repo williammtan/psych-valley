@@ -285,10 +285,25 @@ async function load(page: Page, base: string): Promise<void> {
     }
   });
   await page.evaluate(installHarness);
-  // Every gate in the game is a flag, and an ungated map runs its arrival
-  // cutscene — which locks the player and disables input. Jump past all of it.
-  await page.evaluate(() => (window as any).__psyche.jump('woods'));
+  // An ungated map runs its arrival cutscene, which locks the player, disables
+  // input, and then waits forever on a dialogue advance nobody presses. Stub
+  // cutscenes out entirely: this harness measures the controller, not the story.
+  await page.evaluate(() => {
+    const s = (window as any).__psyche.scene;
+    s.cutscene.run = async () => {};
+    s.cutscene.talk = async () => {};
+    s.cutscene.active = false;
+    s.keys.enabled = true;
+    s.player.unlock();
+    (window as any).__psyche.jump('woods');
+  });
   await page.waitForTimeout(800);
+  await page.evaluate(() => {
+    const s = (window as any).__psyche.scene;
+    s.cutscene.active = false;
+    s.keys.enabled = true;
+    s.player.unlock();
+  });
 }
 
 /**

@@ -70,16 +70,17 @@ await page.waitForFunction(() => !!(window as any).__psyche?.ready, undefined, {
 // a player choice — teleporting under it captures whatever the pan is looking
 // at. The 'town' checkpoint is the state straight after arrival, so the map
 // comes up in its ordinary, walk-around condition.
-// Play the arrival out rather than cutting it off: it ends on a dialogue
-// choice, and an abandoned choice leaves the box on screen in every shot.
-for (let i = 0; i < 60; i++) {
+// Jump straight to the post-arrival state, then dismiss whatever the arrival
+// cutscene already had on screen — it ends on a dialogue choice, and an
+// abandoned choice would sit in the corner of all eighteen shots. The box
+// listens for real keydowns, not injected actions.
+await page.evaluate(() => (window as any).__psyche?.jump('town'));
+for (let i = 0; i < 40; i++) {
   const busy = await page.evaluate(() => (window as any).__psyche?.state()?.cutscene !== false);
   if (!busy) break;
-  // The dialogue box listens for real keydowns, not injected actions.
   await page.keyboard.press('Space');
-  await page.waitForTimeout(320);
+  await page.waitForTimeout(280);
 }
-await page.evaluate(() => (window as any).__psyche?.jump('town'));
 await page.evaluate(() => (window as any).__psyche?.hideHud(true));
 await page.waitForTimeout(2600);   // let the location banner expire
 
