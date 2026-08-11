@@ -79,9 +79,26 @@ function main(): void {
     ? JSON.parse(readFileSync(join(SHOTS, 'report.json'), 'utf8'))
     : null;
 
-  const shotNames = existsSync(SHOTS)
-    ? [...new Set(readdirSync(SHOTS).filter((f) => /\.(png|jpg)$/.test(f)).map((f) => f.replace(/\.(png|jpg)$/, '')))]
-    : [];
+  /**
+   * The captures shown, in reading order. Everything else in shots/ is a
+   * builder's working capture; including them all pushed the page past the
+   * 16MB artifact ceiling and buried the review set in noise.
+   */
+  const REVIEW_ORDER = [
+    'title',
+    'town_square_nohud', 'town_square', 'town_north', 'town_river',
+    'town_courier_row', 'town_south_gate',
+    'inn', 'workshop', 'courier_office',
+    'festival_nohud', 'festival',
+    'woods',
+    'shrine_entrance', 'shrine_association', 'shrine_combat',
+    'shrine_memory', 'shrine_conformity', 'shrine_combination', 'boss',
+    'journal_insights', 'q2_threads_refused_memory',
+  ];
+  const present = existsSync(SHOTS)
+    ? new Set(readdirSync(SHOTS).filter((f) => /\.(png|jpg)$/.test(f)).map((f) => f.replace(/\.(png|jpg)$/, '')))
+    : new Set<string>();
+  const shotNames = REVIEW_ORDER.filter((n) => present.has(n));
 
   const commits = git('log --oneline -14').split('\n').filter(Boolean);
   const stubbed: string[] = art?.stubbed ?? [];

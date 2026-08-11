@@ -1,7 +1,7 @@
 {
-  "updated": "2026-08-12T01:00:00Z",
-  "phase": "Wave 3 \u2014 gauntlet rounds on the built game",
-  "headline": "Round two of the blind A/B moved the town from losing 10-0 to 'clearly behind, but the gap is one ground-plane pass wide \u2014 the assets are already competitive and were being wasted on the surface they sat on'. Buildings-integrated now scores for us. The conformity act is fully wired with its authored dialogue, the Memory Threads board no longer grades the player, and audio ships with the hand bell provably quoting the tower.",
+  "updated": "2026-08-12T03:30:00Z",
+  "phase": "Vertical slice playable end to end",
+  "headline": "The whole golden path now runs: 18 of 18 beats clean at 60fps, from arrival in Lumen Vale through all three psychology quests, Whisper Woods, five Echo Shrine rooms and the boss chamber, with the continuity probe confirming a fresh save starts correctly and nothing downstream is reachable early.",
   "areas": [
     {
       "name": "Art pipeline",
@@ -70,8 +70,8 @@
     },
     {
       "name": "Quest 1 \u2014 Pip",
-      "state": "critiqued",
-      "note": "Best of the three \u2014 a real puzzle with the psychology deleted"
+      "state": "good",
+      "note": "Two coprime clocks; 33/33 playtest"
     },
     {
       "name": "Quest 2 \u2014 Oren",
@@ -85,11 +85,13 @@
     },
     {
       "name": "Whisper Woods map",
-      "state": "building"
+      "state": "good",
+      "note": "44x116, six authored encounters, canopy over-layer, 3 min traversal"
     },
     {
       "name": "Echo Shrine dungeon",
-      "state": "building"
+      "state": "good",
+      "note": "All five rooms + entrance; 74 assertions, 0 failures"
     },
     {
       "name": "The Echo boss",
@@ -113,40 +115,34 @@
   ],
   "findings": [
     {
-      "area": "Lumen Vale",
-      "severity": "major",
-      "status": "fixed",
-      "text": "Dry grass and bare soil were declared as base families, painting hard tile-aligned rectangles across the whole map \u2014 a blind A/B read them as a rendering bug. Now blob overlays with organic boundaries."
-    },
-    {
-      "area": "Props",
-      "severity": "major",
-      "status": "fixed",
-      "text": "No prop cast a shadow \u2014 the critic called adding them 'the cheapest single improvement in the whole list'. The world builder now drops one under every prop that stands up, sized from the sprite."
-    },
-    {
-      "area": "Characters",
-      "severity": "major",
-      "status": "fixed",
-      "text": "Two villagers wore clothing within a few luminance points of the grass at nearly the same hue, so they camouflaged. Moss now separates by value, sage by hue, Oren's olive by value."
-    },
-    {
-      "area": "Quest 3",
+      "area": "Engine",
       "severity": "blocker",
       "status": "fixed",
-      "text": "All 236 authored lines are wired and the didactic inline version is gone; the naming moment is now the recognition version. The trial's answers match what the villagers say about it afterwards."
+      "text": "Cutscenes leaked across map loads: a scene still running when the player left kept narrating over the next place \u2014 re-emitting the town's location banner inside the shrine, and able to walk the player and fire insight cards over the wrong map. Scenes now abort on a map-generation change."
     },
     {
-      "area": "Quest 3",
-      "severity": "major",
-      "status": "fixed",
-      "text": "The reference lantern always played tone A, so in rounds where the answer was B or C the perceptual task was unsolvable by ear."
-    },
-    {
-      "area": "Quest 2",
+      "area": "Engine",
       "severity": "blocker",
       "status": "fixed",
-      "text": "The Memory Threads board graded every placement, printed a score, and volunteered the answer. Now a placement is a claim; ENTER commits the whole board, and a refusal returns a physical fact rather than a verdict."
+      "text": "Enemy.destroy() left the bramble's telegraph timer armed; the callback then hit a destroyed sprite and the exception killed the render loop permanently. It fired on every player death and every map change."
+    },
+    {
+      "area": "QA",
+      "severity": "major",
+      "status": "fixed",
+      "text": "Vite HMR was full-reloading the page mid-capture whenever another agent saved a file, resetting the game to a fresh save \u2014 so screenshots showed the wrong place and playtests reported failures that did not exist. Harnesses now pin the build they boot."
+    },
+    {
+      "area": "Engine",
+      "severity": "major",
+      "status": "fixed",
+      "text": "InputManager.inject() wrote into the set cleared at the top of each frame, so every action injected by the QA harness was silently dropped. Injections now queue for the next frame."
+    },
+    {
+      "area": "Engine",
+      "severity": "minor",
+      "status": "fixed",
+      "text": "CueFollower refused to move when its direct line was blocked, wedging a puzzle creature permanently against any pillar."
     },
     {
       "area": "Boss",
@@ -165,30 +161,6 @@
       "severity": "minor",
       "status": "open",
       "text": "Doors are narrower than the characters who must walk through them."
-    },
-    {
-      "area": "Journal",
-      "severity": "major",
-      "status": "fixed",
-      "text": "The journal rendered only definition, illustration and terms \u2014 misconception, real-world examples and every example the player earned were written and never displayed, tilting the notebook toward a vocabulary list. Now two pages: what happened to you first, formal terms second."
-    },
-    {
-      "area": "Dialogue",
-      "severity": "minor",
-      "status": "fixed",
-      "text": "Cut a naming-moment line that told the player they had learned, a Sera idle line that gave away the whole first puzzle before the player had tried it, and an insight-card eyebrow that asserted the player's inner state."
-    },
-    {
-      "area": "Build",
-      "severity": "blocker",
-      "status": "fixed",
-      "text": "A session token limit terminated nine in-flight agents mid-edit. Four partial edits were repaired (Web Audio typed-array generics, a half-written event helper, an unexported map symbol); all agents resumed from their transcripts rather than restarting."
-    },
-    {
-      "area": "Rendering",
-      "severity": "blocker",
-      "status": "fixed",
-      "text": "Phaser getFrame() returns the __BASE frame for unknown names, so every missing-art guard was drawing the entire 2048px atlas across the scene."
     }
   ],
   "comparisons": [

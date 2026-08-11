@@ -644,7 +644,10 @@ async function attack(ctx: Ctx): Promise<Row[]> {
 
   const fired = buf.out.filter((o: any) => o.n >= 2);
   const earliest = fired.length ? Math.min(...fired.map((o: any) => o.k)) : NaN;
-  const bufferMs = Number.isFinite(earliest) ? (buf.attackFrames - earliest + 1) * ctx.frameMs : NaN;
+  // Lead time the earliest still-honoured press had over the moment the player
+  // could act again. The attack starts on frame 1 and frees on 1+attackFrames,
+  // so a press on frame 1+k led it by exactly attackFrames-k frames.
+  const bufferMs = Number.isFinite(earliest) ? (buf.attackFrames - earliest) * ctx.frameMs : NaN;
 
   const mv = await page.evaluate(async () => {
     const F = (window as any).__F;
