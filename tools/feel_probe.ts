@@ -306,8 +306,17 @@ async function load(page: Page, base: string): Promise<void> {
     // The arrival cutscene that ran before the stub took hold left a per-frame
     // movePlayer() handler attached to the scene UPDATE event. It never detaches
     // once its target stops being reachable, and it drags the player about half
-    // a pixel every frame for the rest of the session.
-    s.events.removeAllListeners('update');
+    // a pixel every frame for the rest of the session. Remove that one listener
+    // only — Phaser's Clock rides on the same event, and clearing them all
+    // freezes scene.time, which freezes every timed state in the game.
+    const em = s.events;
+    const cur = em._events && em._events.update;
+    if (cur) {
+      const arr = Array.isArray(cur) ? cur : [cur];
+      for (const l of arr.slice()) {
+        if (typeof l.fn === 'function' && String(l.fn).indexOf('target.x') >= 0) em.off('update', l.fn, l.context, l.once);
+      }
+    }
   });
 }
 
