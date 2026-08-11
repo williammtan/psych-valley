@@ -67,7 +67,7 @@ async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevSe
   // during the gauntlet and a fixed port makes them collide.
   const server = await createServer({
     root: ROOT,
-    server: { port: 0, strictPort: false, host: '127.0.0.1' },
+    server: { port: 20000 + Math.floor(Math.random() * 20000), strictPort: false, host: '127.0.0.1' },
     logLevel: 'error',
   });
   await server.listen();
@@ -79,6 +79,13 @@ async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevSe
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
   });
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  // tsx compiles with --keep-names, which rewrites arrow functions to call an
+  // `__name` helper. When Playwright serialises such a function into the page
+  // that helper does not exist, so every evaluate() with a nested closure throws
+  // "__name is not defined". Defining it as identity in the page fixes them all.
+  await page.addInitScript(() => {
+    (window as unknown as { __name: <T>(f: T) => T }).__name = (f) => f;
+  });
 
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));

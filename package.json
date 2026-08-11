@@ -10,7 +10,8 @@
     "shot": "tsx tools/shot.ts",
     "play": "tsx tools/play.ts",
     "workbench": "tsx tools/workbench.ts",
-    "playthrough": "tsx tools/playthrough.ts"
+    "playthrough": "tsx tools/playthrough.ts",
+    "mapsmoke": "tsx tools/mapsmoke.ts"
   },
   "author": "",
   "license": "ISC",
