@@ -48,6 +48,12 @@ export interface Line extends Condition {
   emphasis?: boolean;
   /** Hold for this long instead of waiting for a button. */
   auto?: number;
+  /**
+   * This line repeats another one on purpose — a crowd saying the same word,
+   * or the Echo giving somebody's sentence back to them. Exempt from the
+   * duplicate check, and a note to the next writer not to "fix" it.
+   */
+  dup?: boolean;
 }
 
 export interface ChoiceOption extends Condition {

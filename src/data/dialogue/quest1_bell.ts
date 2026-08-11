@@ -17,7 +17,7 @@ export const Q1: ExchangeMap = namespaced('q1', {
 
   cluePipesAsk: exchange('q1.cluePipesAsk', [
     say('mira', 'Burst on the first night of the storm. Right over the cellar stair.'),
-    say('mira', 'Made a bang like a dropped anvil. Four nights of it before Bram’s lad soldered it.'),
+    say('mira', "Made a bang like a dropped anvil. Four nights of it before Bram's lad soldered it."),
     choose([
       opt('Four nights?', [
         say('mira', 'Four. I counted, because I was awake for all of them.'),
@@ -125,7 +125,7 @@ export const Q1: ExchangeMap = namespaced('q1', {
         say('mira', 'He worked something out. I would not push him on which.'),
       ]),
       opt('Your storeroom, madam.', [
-        say('mira', 'Flour, jam, and my mother’s good preserves. You are having supper here tonight.'),
+        say('mira', "Flour, jam, and my mother's good preserves. You are having supper here tonight."),
       ]),
     ]),
     cue('settle_moved', 'Mira shifts the settle; the storeroom door swings open'),

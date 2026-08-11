@@ -128,7 +128,7 @@ function build(): MapDef {
       { key: 'prop/int/post_scales', x: 14.6, y: 8, spec: { solid: [18, 10], interact: 'scales' }, id: 'scales' },
       { key: 'prop/int/post_parcel_stack', x: 17.2, y: 8, spec: { solid: [26, 12], interact: 'parcel_stack' }, id: 'parcel_stack' },
       { key: 'prop/int/lab_paperstack', x: 19.4, y: 8 },
-      { key: 'prop/int/post_parcel_slate', x: 18.6, y: 6.6 },
+      { key: 'prop/int/post_parcel_1', x: 18.6, y: 6.6 },
 
       // ── the public side ──────────────────────────────────────────────────
       { key: 'prop/int/post_bench', x: 26, y: 7, spec: { solid: [30, 8] } },
@@ -140,14 +140,14 @@ function build(): MapDef {
       { key: 'prop/int/boots', x: 25.8, y: 4.6 },
 
       // Parcels put down and never picked up again — the crisis, in objects.
-      { key: 'prop/int/post_parcel_kraft', x: 14.2, y: 12.2 },
-      { key: 'prop/int/post_parcel_sage', x: 16.4, y: 11.4 },
-      { key: 'prop/int/post_parcel_rose', x: 12.6, y: 14.2 },
-      { key: 'prop/int/post_parcel_slate', x: 15.6, y: 13.8 },
-      { key: 'prop/int/post_parcel_kraft', x: 18.4, y: 13.2 },
+      { key: 'prop/int/post_parcel_0', x: 14.2, y: 12.2 },
+      { key: 'prop/int/post_parcel_3', x: 16.4, y: 11.4 },
+      { key: 'prop/int/post_parcel_2', x: 12.6, y: 14.2 },
+      { key: 'prop/int/post_parcel_1', x: 15.6, y: 13.8 },
+      { key: 'prop/int/post_parcel_0', x: 18.4, y: 13.2 },
       { key: 'prop/town/parcel_2', x: 10.6, y: 13.4 },
       { key: 'prop/town/parcel_3', x: 9.4, y: 11.6 },
-      { key: 'prop/int/post_parcel_sage', x: 23.4, y: 12.6 },
+      { key: 'prop/int/post_parcel_3', x: 23.4, y: 12.6 },
       { key: 'prop/int/lab_crates', x: 27.2, y: 13, spec: { solid: [28, 10] } },
       { key: 'prop/int/books_stack', x: 24.4, y: 16.4 },
     ],

@@ -122,9 +122,10 @@ export class WorldScene extends Phaser.Scene {
       }));
     }
 
-    if (State.hasAbility('observe') && !def.indoor) {
-      this.mote = new Mote(this, px - 14, py - 18);
-    } else if (State.hasAbility('observe')) {
+    // Mote joins the player once they have met Sera (plan.md §30). It is not
+    // tied to the Observe ability — Observe is the player's own attentiveness,
+    // Mote is a character.
+    if (State.has('met_sera') && !State.has('mote_gone')) {
       this.mote = new Mote(this, px - 14, py - 18);
     }
 

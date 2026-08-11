@@ -128,30 +128,41 @@ export const BOSS: ExchangeMap = namespaced('boss', {
     nar('The chamber is not empty. It has been waiting the way a room waits.'),
     cue('boss_wake'),
     nar('It tries on a shape. Yours. Then Mira. Then something with too many shoulders.'),
-    say('echo', 'He has been doing that ever since the storm.'),
-    say('echo', 'I knew both routes.'),
-    say('echo', 'Second one. Easy.'),
+    // Every Echo line is stolen verbatim from someone the player has met.
+    say('echo', "He's been doing that ever since the storm.", { dup: true }),
+    say('echo', 'I knew both routes.', { dup: true }),
+    say('echo', 'Second one. Easy.', { dup: true }),
     pause(500),
     nar('It is not talking to you. It is practising.', { emphasis: true }),
   ]),
 
   phase1: exchange('boss.phase1', [
     nar('It has watched you swing three times. It is already moving to where you were going.'),
+    say('echo', 'Tell me what you noticed.', { dup: true }),
   ]),
 
   phase2: exchange('boss.phase2', [
     nar('Two sets of marks on the floor. One of them is from a minute ago and still glowing.'),
+    say('echo', 'Every time I reached for today, yesterday was already standing in the doorway.', { dup: true }),
   ]),
 
   phase3: exchange('boss.phase3', [
     nar('The small ones copy it exactly, a half-beat late, all of them, every single time.'),
+    say('echo', 'Second.', { dup: true }),
+    say('echo', 'Second, same as Tavi.', { dup: true }),
   ]),
+
+  taunt: exchange('boss.taunt', [
+    say('echo', 'Do not thank me yet. You have not met the stairs.', { dup: true }),
+    say('echo', 'Nine years. Not one wrong door.', { dup: true }),
+    say('echo', 'It is the size of a plum. So is a wasp.', { dup: true }),
+  ], 'optional interstitial barks; it only ever repeats what it has heard'),
 
   defeat: exchange('boss.defeat', [
     cue('boss_collapse'),
     nar('The shape comes apart and does not fall. It goes down through the floor, unhurried.'),
     pause(700),
-    say('echo', 'I know what I heard.'),
+    say('echo', 'I know what I heard.', { dup: true }),
     pause(600),
     nar('Then nothing. The chamber is a room again, and cold, and quite ordinary.'),
   ], `sets ${FLAGS.bossBeaten}`),

@@ -36,7 +36,13 @@ export class GameFlow {
   constructor(private scene: WorldScene) {
     on('player:down', () => this.handleDown());
     on('flag', (p: { flag: string; value: boolean }) => {
-      if (p.value && AUTOSAVE_FLAGS.includes(p.flag)) this.autosave();
+      if (!p.value) return;
+      if (AUTOSAVE_FLAGS.includes(p.flag)) this.autosave();
+      // Observe is the player's own attentiveness rather than a granted power,
+      // so it comes on as soon as the arrival sequence hands over control. Quest
+      // scripts may grant it earlier; this is the backstop that guarantees the
+      // ability is never orphaned.
+      if (p.flag === 'intro_done') State.grant('observe');
     });
     on('map:entered', () => {
       // Entering a map is always a safe point to fall back to.

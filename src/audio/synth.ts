@@ -31,6 +31,24 @@ export const vary = (amount: number): number => 1 + (Math.random() * 2 - 1) * am
 /** exponentialRampToValueAtTime cannot touch zero. */
 const EPS = 0.0001;
 
+/**
+ * Deterministic RNG for anything baked into a buffer — the noise bed and the
+ * reverb impulse. Those are the *room*, not a performance: they should sound
+ * the same in every session, and making them reproducible is also what lets the
+ * offline probe compare two renders of the same effect sample-for-sample.
+ * Per-trigger variation still uses Math.random via `rand`/`vary`.
+ */
+function prng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // ── the rack ────────────────────────────────────────────────────────────────
 
 export interface Rack {
@@ -60,10 +78,29 @@ export interface RackOpts {
 }
 
 /**
+ * Soft-clip curve for the safety limiter: perfectly linear below 0.6, a tanh
+ * knee above it, asymptotic to 0.98. Signals are mixed at levels that keep this
+ * dormant; it exists so that an unlucky pile-up — a bell, a crit and a boss
+ * roar landing on the same sample — saturates gently instead of clipping.
+ */
+function limiterCurve(): Float32Array {
+  const n = 4097;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    // The shaper sees the signal at half level, so the curve covers ±2.
+    const v = ((i / (n - 1)) * 2 - 1) * 2;
+    const a = Math.abs(v);
+    const y = a <= 0.6 ? a : 0.6 + 0.38 * Math.tanh((a - 0.6) / 0.4);
+    curve[i] = v < 0 ? -y : y;
+  }
+  return curve;
+}
+
+/**
  * Build the full signal graph on a context:
  *
  *   voices ─┬─→ music ─┐
- *           └─→ sfx  ──┼─→ master ─→ compressor ─→ destination
+ *           └─→ sfx  ──┼─→ master ─→ compressor ─→ limiter ─→ destination
  *   sends ──→ reverb ──┤
  *          └─→ delay ──┘
  *
@@ -80,8 +117,17 @@ export function createRack(ctx: BaseAudioContext, o: RackOpts = {}): Rack {
   compressor.ratio.value = 3;
   compressor.attack.value = 0.006;
   compressor.release.value = 0.25;
+
+  const half = ctx.createGain();
+  half.gain.value = 0.5;
+  const shaper = ctx.createWaveShaper();
+  shaper.curve = limiterCurve();
+  shaper.oversample = '2x';
+
   master.connect(compressor);
-  compressor.connect(ctx.destination);
+  compressor.connect(half);
+  half.connect(shaper);
+  shaper.connect(ctx.destination);
 
   const music = ctx.createGain();
   music.gain.value = o.musicGain ?? 0.62;
@@ -136,9 +182,10 @@ export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   if (hit) return hit;
   const len = Math.floor(ctx.sampleRate * 2);
   const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  const rnd = prng(0x5eedbeef);
   for (let c = 0; c < 2; c++) {
     const d = buf.getChannelData(c);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < len; i++) d[i] = rnd() * 2 - 1;
   }
   noiseCache.set(ctx, buf);
   return buf;
@@ -163,12 +210,13 @@ export function impulse(ctx: BaseAudioContext, seconds: number, decay: number): 
   const len = Math.max(64, Math.floor(sr * seconds) + pre);
   const buf = ctx.createBuffer(2, len, sr);
   const early = [0.013, 0.021, 0.031, 0.044, 0.058, 0.077];
+  const rnd = prng(0xa17e9b21);
 
   for (let c = 0; c < 2; c++) {
     const d = buf.getChannelData(c);
     for (let i = pre; i < len; i++) {
       const x = (i - pre) / (len - pre);
-      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - x, decay);
+      d[i] = (rnd() * 2 - 1) * Math.pow(1 - x, decay);
     }
     // Early reflections give the tail a sense of size.
     for (let e = 0; e < early.length; e++) {

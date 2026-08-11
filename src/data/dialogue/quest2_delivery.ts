@@ -101,7 +101,7 @@ export const Q2: ExchangeMap = namespaced('q2', {
   ], `sets ${FLAGS.threadsOpen}`),
 
   threadsWrongMemory: exchange('q2.threadsWrongMemory', [
-    say('oren', 'I remember that. I remember it on both days. That is exactly the trouble.'),
+    say('oren', 'I remember it. I remember it on both days. That is exactly the trouble.'),
   ], 'feedback when the player pins a memory-only clue'),
 
   threadsWrongOrder: exchange('q2.threadsWrongOrder', [
@@ -161,7 +161,7 @@ export const Q2: ExchangeMap = namespaced('q2', {
     say('sera', 'Not one of those lives in his head. They were just out there, being the world.'),
     pause(300),
     say('sera', 'He had both days. Whole. Neither one had gone anywhere.'),
-    you('They were getting in each other’s way.'),
+    you("They were getting in each other's way."),
     say('sera', 'Yes. The old day shoving in front of the new one, mostly.'),
     say('sera', 'And a bit the other way about — today rubbing at the edges of yesterday.'),
     pause(400),
