@@ -37,15 +37,18 @@ function A(c: string, a: number): string {
  * Rule 2. Do this to every creature body before it is composited over its shadow.
  */
 function seal(s: Surface, glow: string, glowAlpha = 0.34, diagonals = true): Surface {
-  s.outline(P.OUTLINE, diagonals);
+  // SHRINE_INK, not OUTLINE: at L 32 the standard outline falls inside the
+  // shrine floor's own luminance range, so a creature had no dark anchor
+  // underground. This reads on bright grass too.
+  s.outline(P.SHRINE_INK, diagonals);
   s.outline(A(glow, glowAlpha), diagonals);
   return s;
 }
 
 /** Contact shadow: doubled ellipse so the middle is denser than the edge. */
 function contact(s: Surface, cx: number, cy: number, w: number, h: number, a = 0.30): Surface {
-  s.ellipse(Math.round(cx - w / 2), Math.round(cy - h / 2), w, h, P.OUTLINE, a);
-  s.ellipse(Math.round(cx - w / 2) + 1, Math.round(cy - h / 2), Math.max(2, w - 2), Math.max(1, h - 1), P.OUTLINE, a * 0.8);
+  s.ellipse(Math.round(cx - w / 2), Math.round(cy - h / 2), w, h, P.SHRINE_INK, a);
+  s.ellipse(Math.round(cx - w / 2) + 1, Math.round(cy - h / 2), Math.max(2, w - 2), Math.max(1, h - 1), P.SHRINE_INK, a * 0.8);
   return s;
 }
 

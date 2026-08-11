@@ -154,9 +154,24 @@ function drawBeams(w: WorldScene, st: S, t: number): void {
     const end = cut
       ? { x: st.block.sprite.x, y: st.block.sprite.y - 12 }
       : c;
+    // 3px in a hue that appears nowhere else in the shrine, with a dark
+    // underlay so the line reads against a lit floor. A critic measured the
+    // old 1px violet as indistinguishable from a floor crack — and this line
+    // IS the room's mechanic, so it should be among the loudest things in it.
     const pulse = 0.18 + Math.sin(t / 260 + m.x * 0.01) * 0.06;
-    st.beams.lineStyle(1, SHRINE_VIOLET, cut ? pulse * 0.5 : pulse + 0.14);
+    const alpha = cut ? pulse * 0.5 : pulse + 0.14;
+    st.beams.lineStyle(5, 0x08070f, alpha * 0.7);
     st.beams.lineBetween(a.x, a.y, end.x, end.y);
+    st.beams.lineStyle(3, 0xe85a96, Math.min(1, alpha * 3.2));
+    st.beams.lineBetween(a.x, a.y, end.x, end.y);
+    // A brighter travelling dash gives the link a direction: leader -> follower.
+    const flow = ((t / 520) % 1);
+    const fx0 = a.x + (end.x - a.x) * flow;
+    const fy0 = a.y + (end.y - a.y) * flow;
+    const fx1 = a.x + (end.x - a.x) * Math.min(1, flow + 0.16);
+    const fy1 = a.y + (end.y - a.y) * Math.min(1, flow + 0.16);
+    st.beams.lineStyle(3, 0xffa8c8, Math.min(1, alpha * 4));
+    st.beams.lineBetween(fx0, fy0, fx1, fy1);
   }
 }
 
