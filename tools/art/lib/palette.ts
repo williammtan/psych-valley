@@ -432,3 +432,65 @@ export const ECHO_FLAME: Ramp = ['#2b0f4e', '#4b1d84', '#7a3ec0', '#a778e4', '#e
 export const ECHO_RUNE_DIM = '#3d6b80';
 /** The 1–2 px core of a *lit* rune. The brightest thing in the shrine. */
 export const ECHO_RUNE_CORE = '#e8fdff';
+
+// ── Echo Shrine: the figure-ground pass (appended) ────────────────────────
+//
+// The shrine's first value ladder put architecture, floor and objects inside
+// one narrow dark band, and measurement showed the result: a pressure plate at
+// 1.5:1 against the flagstone it stood on, switch nodes at 1.02:1. Nothing the
+// player could act on left the floor's luminance envelope, at either end.
+//
+// The fix is a MATERIAL rule rather than a per-sprite fix, so it cannot drift:
+//
+//   SHRINE_VOID    out-of-bounds mass — not a wall, the absence of room.
+//   SHRINE_FLOOR   the ground. Deliberately the quietest surface on screen.
+//   SHRINE_STONE   carved architecture: walls, pillars, rubble, wreckage.
+//   SHRINE_MARBLE  everything the observatory built to be OPERATED.
+//
+// Marble is reserved the way ECHO_VIOLET is reserved. If it is pale dressed
+// stone with live brass on it, you can touch it; if it is dark carved stone,
+// you cannot. That single rule is what `operable()` in the shrine art module
+// enforces, and what tools/art/contrast_check.ts measures.
+
+/**
+ * Out-of-bounds. The Stardew mine reads as legible while being darker on
+ * average than ours precisely because 57% of its frame is a true black void
+ * and the rest is warmly lit; the binary is the readability, not the average.
+ * Kept a hair off #000000 so it still drifts violet under the room tint.
+ */
+export const SHRINE_VOID: Ramp = ['#020206', '#04040c', '#070713', '#0b0b1b', '#111124'];
+
+/**
+ * Prop ink. Deliberately darker than OUTLINE (#241d33, L 32) because the
+ * shrine floor's own darkest pixel sits at L 26 — an OUTLINE silhouette on a
+ * shrine floor is *inside* the floor's range and does nothing. Every operable
+ * prop gets a 1 px silhouette of this, which is the "anchor" half of the
+ * contract: a pixel darker than any floor pixel, at the object's edge.
+ */
+export const SHRINE_INK = '#08070f';
+
+/**
+ * Dressed marble — the material of every operable object in the shrine.
+ * Runs from a shadow that still reads as stone to a highlight bright enough to
+ * clear the floor's brightest pixel by a factor of three, which is the "rim"
+ * half of the contract.
+ */
+export const SHRINE_MARBLE: Ramp = ['#3d3a58', '#615d85', '#938fb8', '#c0bcdc', '#eeebfa'];
+
+/** Live brass: fittings on things that still work. SHRINE_BRASS is dead metal. */
+export const SHRINE_BRASS_LIT: Ramp = ['#5e4415', '#906c22', '#c69a3b', '#ecc86e', '#fff2c4'];
+
+/**
+ * The conformity room's sightlines. A hue used nowhere else in the game — not
+ * Echo violet, not Echo cyan, not lantern amber — because those lines are the
+ * only statement of the room's rule and they were reading as floor cracks.
+ */
+export const SHRINE_LINK: Ramp = ['#4a1030', '#7d1b4e', '#b62d70', '#e85a96', '#ffa8c8'];
+
+/**
+ * Shrine water shoreline. The lip is near-ink so a pool has a hard shadowed
+ * edge, and the foam line is the one bright mark on an otherwise black mirror,
+ * so "the floor stops here" is legible without walking into it.
+ */
+export const SHRINE_SHORE_LIP = '#06060e';
+export const SHRINE_FOAM = '#a8e4ee';

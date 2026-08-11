@@ -198,6 +198,16 @@ class Indicator {
   sprite: Phaser.GameObjects.Sprite;
   struck = false;
   dead = false;
+  /**
+   * A faint glow so the mark is visible on the unlit half of the floor.
+   *
+   * DELIBERATELY the same colour and nearly the same strength for live and
+   * stale marks. The player's job is to see every mark and then work out which
+   * ones matter from the room, so making the mark itself announce its own state
+   * would delete the phase. What separates them is the brazier standing over
+   * the live ones, which is an order of magnitude louder than this.
+   */
+  private glow?: Phaser.GameObjects.Image;
 
   constructor(
     private scene: WorldScene,
@@ -218,6 +228,9 @@ class Indicator {
       .setAlpha(0);
     const anim = live ? 'echo_indicator_live' : 'echo_indicator_stale';
     if (scene.anims.exists(anim)) this.sprite.play(anim);
+    this.glow = makeGlow(scene, 24 * scale, COLORS.echoGlow);
+    this.glow?.setPosition(Math.round(x), Math.round(y)).setDepth(DEPTH.SCATTER + 5);
+    if (this.glow) scene.tweens.add({ targets: this.glow, alpha: live ? 0.34 : 0.3, duration: 220 });
     // Stale marks must be clearly *visible* and clearly *not charged*: the
     // player's job is to see them and decide they do not matter, which they
     // cannot do if the dark floor hides them.
@@ -253,15 +266,24 @@ class Indicator {
   fade(): void {
     if (this.dead) return;
     this.dead = true;
+    const glow = this.glow;
+    this.glow = undefined;
     this.scene.tweens.add({
       targets: this.sprite, alpha: 0, scale: this.scale * 0.8, duration: 260,
       onComplete: () => this.sprite.destroy(),
     });
+    if (glow) {
+      this.scene.tweens.add({
+        targets: glow, alpha: 0, duration: 260, onComplete: () => glow.destroy(),
+      });
+    }
   }
 
   destroy(): void {
     this.dead = true;
     this.sprite.destroy();
+    this.glow?.destroy();
+    this.glow = undefined;
   }
 }
 

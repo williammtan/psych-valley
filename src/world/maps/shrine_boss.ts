@@ -56,7 +56,7 @@ const CY = 8;
 /** Beyond this the floor is gone: the four corners of the rectangle are void. */
 const ISLAND = { rx: 12.4, ry: 5.4 };
 /** The raised platform. Different stone, hard south edge, and the whole fight. */
-const DAIS = { rx: 11.0, ry: 4.4 };
+const DAIS = { rx: 11.2, ry: 4.5 };
 /** The causeway columns, which is where the ring opens. */
 const GATE_X0 = 13;
 const GATE_X1 = 16;
@@ -98,17 +98,26 @@ export const CHAMBER = {
 
 const LEGEND: Record<string, Material> = {
   ...SHRINE_LEGEND,
-  /** The dais: a different stone from the rest of the shrine, used nowhere else. */
-  'd': { base: 'tile/shrine/shrine_floor' },
-  /** Flagstone apron and causeway. */
-  'f': { base: 'tile/shrine_ext/flag' },
-  /** Worn flagstone, for the inlaid courses on the dais. */
-  'F': { base: 'tile/shrine_ext/flag_cracked' },
+  /**
+   * THE DAIS, and the value structure of the whole room.
+   *
+   * The platform is the BRIGHT stone and everything around it is the dungeon's
+   * ordinary dark floor. That way round matters: a raised surface reads as
+   * raised because it catches more light than what surrounds it, and it makes
+   * the arena the brightest shape on the floor without a single extra light.
+   * The first attempt had the dais in a stone one shade off the apron's and the
+   * platform simply vanished.
+   */
+  'd': { base: 'tile/shrine_ext/flag' },
+  /** The apron: the same floor as the rest of the shrine, so the dais is what
+   *  is unusual rather than the surround. */
+  'f': { base: 'tile/shrine/floor' },
+  /** Courses inlaid into the platform — darker stone set into the bright. */
+  'F': { base: 'tile/shrine/shrine_floor' },
   /** The dais edge. Solid, so the platform has a real lip you can be backed against. */
   'L': { base: 'tile/shrine/ledge_s', solid: true },
   'M': { base: 'tile/shrine/ledge_sw', solid: true },
   'm': { base: 'tile/shrine/ledge_se', solid: true },
-  'n': { base: 'tile/shrine/ledge_n', solid: true },
 };
 
 const OBJECTS: Record<string, ObjectSpec> = {
@@ -121,12 +130,18 @@ function build(): MapDef {
   const g = shell(ROOM_W, ROOM_H, FLOOR as Rect);
 
   // ── the island ──────────────────────────────────────────────────────────
-  // The room is a rectangle; the FLOOR is not. Cutting the four corners to void
-  // is what stops this reading as another store room with props in it, and it
-  // is the one piece of geometry that exists nowhere else in the shrine.
+  // The room is a rectangle; the FLOOR is not. The four corners are chamfered
+  // away to void, which turns the chamber into an octagon and is the one piece
+  // of geometry that exists nowhere else in the shrine. Straight diagonal runs
+  // rather than a curve, because the pit's edge art autotiles cleanly along
+  // them and a wobbling rim reads as damage rather than as architecture.
+  const edgeX = (x: number) => Math.min(x - FLOOR.x, FLOOR.x + FLOOR.w - 1 - x);
+  const edgeY = (y: number) => Math.min(y - FLOOR.y, FLOOR.y + FLOOR.h - 1 - y);
+  const chamfered = (x: number, y: number) => edgeX(x) + edgeY(y) * 2.2 < 6.5;
+
   for (let y = FLOOR.y; y < FLOOR.y + FLOOR.h; y++) {
     for (let x = FLOOR.x; x < FLOOR.x + FLOOR.w; x++) {
-      if (!inside(x, y, ISLAND)) g.set(x, y, 'o');
+      if (chamfered(x, y)) g.set(x, y, 'o');
       else if (inside(x, y, DAIS)) g.set(x, y, 'd');
       else g.set(x, y, 'f');
     }
@@ -138,29 +153,24 @@ function build(): MapDef {
   // are all on one vertical axis, and that axis terminates exactly where the
   // Echo comes up.
   for (let x = GATE_X0; x <= GATE_X1; x++) {
-    for (let y = 12; y <= 13; y++) if (g.get(x, y) !== '#') g.set(x, y, 'f');
+    for (let y = 12; y <= 13; y++) if (g.get(x, y) !== '#') g.set(x, y, 'd');
     g.set(x, 13, 'x');
   }
-  for (let y = 9; y <= 12; y++) for (let x = 14; x <= 15; x++) g.set(x, y, 'f');
+  for (let y = 9; y <= 12; y++) for (let x = 14; x <= 15; x++) g.set(x, y, 'F');
 
   // ── the dais edge ───────────────────────────────────────────────────────
   // In a top-down view elevation is sold almost entirely by the south-facing
-  // edge, so the bottom of the platform gets a real ledge course with a hard
-  // shadow under it. The causeway is the one gap in it.
+  // edge, so only the bottom of the platform gets a ledge course, with a hard
+  // shadow under it. Running one along the north edge too was tried and read as
+  // a wall cutting the room in half. The causeway is the one gap in it.
   for (let x = FLOOR.x; x < FLOOR.x + FLOOR.w; x++) {
     if (x >= GATE_X0 && x <= GATE_X1) continue;
     let lowest = -1;
-    let highest = -1;
-    for (let y = FLOOR.y; y < FLOOR.y + FLOOR.h; y++) {
-      if (g.get(x, y) !== 'd') continue;
-      if (highest < 0) highest = y;
-      lowest = y;
-    }
+    for (let y = FLOOR.y; y < FLOOR.y + FLOOR.h; y++) if (g.get(x, y) === 'd') lowest = y;
     if (lowest < 0) continue;
-    const leftEdge = highest === lowest || !inside(x - 1, lowest, DAIS);
-    const rightEdge = !inside(x + 1, lowest, DAIS);
-    g.set(x, lowest, leftEdge ? 'M' : rightEdge ? 'm' : 'L');
-    if (highest !== lowest) g.set(x, highest, 'n');
+    const leftEnd = g.get(x - 1, lowest) !== 'd' && g.get(x - 1, lowest) !== 'L';
+    const rightEnd = g.get(x + 1, lowest) !== 'd';
+    g.set(x, lowest, leftEnd ? 'M' : rightEnd ? 'm' : 'L');
   }
 
   // ── the inlay ───────────────────────────────────────────────────────────
@@ -170,9 +180,9 @@ function build(): MapDef {
   for (let y = FLOOR.y; y < FLOOR.y + FLOOR.h; y++) {
     for (let x = FLOOR.x; x < FLOOR.x + FLOOR.w; x++) {
       if (g.get(x, y) !== 'd') continue;
-      const outer = Math.abs(norm(x, y, { rx: 8.4, ry: 3.4 }) - 1);
-      const inner = Math.abs(norm(x, y, { rx: 4.6, ry: 1.9 }) - 1);
-      if (outer < 0.1 || inner < 0.13) g.set(x, y, 'F');
+      const outer = Math.abs(norm(x, y, { rx: 8.6, ry: 3.5 }) - 1);
+      const inner = Math.abs(norm(x, y, { rx: 4.8, ry: 2.0 }) - 1);
+      if (outer < 0.12 || inner < 0.16) g.set(x, y, 'F');
     }
   }
 
@@ -180,9 +190,9 @@ function build(): MapDef {
   g.rect(14, 7, 2, 2, '=');
 
   // Wear: heaviest in the middle, where something has been standing a long time.
-  g.blob(CX, CY, 4.4, 1.9, ':', 23, 0.26);
-  g.scatter('*', ['f'], 0.34, 41);
-  g.scatter(':', ['d'], 0.1, 47);
+  g.scatter('*', ['f'], 0.42, 41);
+  g.scatter('%', ['f'], 0.12, 43);
+  g.scatter(':', ['d'], 0.13, 47);
 
   const ground = g.rows();
 

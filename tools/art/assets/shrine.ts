@@ -7,44 +7,83 @@
  * A dungeon reads because of its *value ladder*, and here it is inverted from
  * the town: the architecture is the dark end and the gameplay is the light end.
  *
- *   wall cap  (SHRINE_CAP, near-void)   ← "not room". Darkest thing on screen.
- *   floor     (SHRINE_FLOOR, quiet)     ← mid. Two ramp steps, no incident.
- *   wall face (SHRINE_STONE, carved)    ← the only textured architecture.
- *   objects   (ECHO_RUNE / ECHO_FLAME)  ← the only bright pixels in the room.
+ *   void      (SHRINE_VOID,   L 3)    ← "not room". Genuinely black.
+ *   wall face (SHRINE_STONE,  L 60)   ← the boundary band, carved and textured.
+ *   floor     (SHRINE_FLOOR,  L 42)   ← quiet ground. Two ramp steps, no incident.
+ *   operable  (SHRINE_MARBLE, L 140+) ← everything the player can act on.
  *
- * So: the boundary of the room is unmistakable because the mass beyond it is
- * darker than everything, and every puzzle object is legible because it is the
- * only thing emitting light. Detail lives on walls and objects, never underfoot.
+ * THE MATERIAL RULE — read this before adding anything to this file
+ * ─────────────────────────────────────────────────────────────────
+ * The first version of this module put architecture, floor and puzzle objects
+ * inside one narrow dark band and the result was measurable: pressure plates at
+ * 1.5:1 against the flagstone they stood on, switch nodes at 1.02:1 — a
+ * difference of two luminance levels out of 255. Nothing the player could act
+ * on left the floor's luminance envelope at either end, so the eye had no way
+ * to sort "thing I can touch" from "thing I walk over".
+ *
+ * The fix is a material rule, not a per-sprite fix:
+ *
+ *   DARK CARVED STONE  = architecture. Walls, pillars, rubble, wreckage,
+ *                        the wall band, the ground. You cannot touch it.
+ *   PALE DRESSED MARBLE + LIVE BRASS = the observatory's *instruments*.
+ *                        Plates, switches, levers, statues, blocks, coffers,
+ *                        doors, gates. You can always touch it.
+ *
+ * Everything operable goes through `operable()` as its final step, which:
+ *   (a) remaps its stone and brass to marble and live brass;
+ *   (b) lays a 1 px SHRINE_INK silhouette — darker than the floor's darkest
+ *       pixel — plus a hard contact shadow, so it is pinned to the ground;
+ *   (c) rims its top and left edges in SHRINE_MARBLE[4] — brighter than the
+ *       floor's brightest pixel.
+ *
+ * (b) and (c) together are the property the ALTTP reference has and we did
+ * not: the sprite contains pixels both darker *and* brighter than any floor
+ * pixel. `tools/art/contrast_check.ts` measures all three and fails the build
+ * if any operable prop falls under 3:1 mean luminance against the floor.
+ *
+ * THE GLYPH RULE
+ * ──────────────
+ * The four rune glyphs (`drawGlyph`) are the memory puzzle's *state*, and they
+ * appear on nothing else. Anything that wants a carved decoration uses
+ * `armillary()` instead — astronomical arcs, which is what an observatory
+ * would have carved anyway. A glyph on a door, a chest, a wall or a standing
+ * stone costs the four symbols the only job they have.
  *
  * WALL SYSTEM (16×16, tile/shrine/wall_*)
  * ───────────────────────────────────────
  * A rectangular room is enclosed like this — two rows for the north band so
  * the wall has visible thickness, one tile for the other three sides:
  *
- *     C C C C C C C     C = wall_top_cap   (top surface of the wall)
+ *     C C C C C C C     C = wall_top_cap   (the void beyond the room)
  *     N N N N N N N     N = wall_top_n     (the tall carved face, 4 variants)
  *     W . . . . . E     W/E = wall_w / wall_e
  *     W . . . . . E     . = floor_*
  *     w S S S S S s     S = wall_s,  w = wall_corner_sw,  s = wall_corner_se
  *
- * Every side tile carries a "coping" on the edge that faces the room: a 1 px
- * shadow line against the floor, then a 2 px lit lip, then it falls away into
- * the cap. That lip is what makes a wall read as a step up rather than a
- * painted rectangle. Corner tiles are named for *the room corner they sit in*
- * (wall_corner_sw = the room's south-west corner → coping on its N and E
- * edges). wall_inner_* are the diagonal joins where two wall bands meet and
- * only the very corner of the tile touches the room.
+ * All four sides now get the SAME three-band treatment, packed into the single
+ * tile the side walls are allotted: a hard shadow line against the floor, a lit
+ * coping lip, a carved face, and then the fall into void. The side walls used
+ * to be a 2 px hairline on a field of cap, measuring ΔL 17.7 against
+ * out-of-bounds, while the north wall had a full cap/face/base; a room read as
+ * having one wall and three edges. Corner tiles are named for *the room corner
+ * they sit in* (wall_corner_sw = the room's south-west corner → coping on its N
+ * and E edges). wall_inner_* are the diagonal joins where two wall bands meet
+ * and only the very corner of the tile touches the room.
  */
 import { Surface, rng, valueNoise, speckle, type Rng } from '../lib/pixel.js';
 import { ArtBuild, TILE } from '../lib/registry.js';
 import { registerBlobSet, edgePixels } from '../lib/autotile.js';
 import * as P from '../lib/palette.js';
 
-const CAP = P.SHRINE_CAP;
+const CAP = P.SHRINE_VOID;
 const ST = P.SHRINE_STONE;
 const FL = P.SHRINE_FLOOR;
 const TR = P.SHRINE_TRIM;
 const BR = P.SHRINE_BRASS;
+/** The operable materials. Never used on architecture — see the header. */
+const MB = P.SHRINE_MARBLE;
+const BL = P.SHRINE_BRASS_LIT;
+const INK = P.SHRINE_INK;
 
 // ── shared helpers ─────────────────────────────────────────────────────────
 
@@ -89,6 +128,94 @@ function halo(
 /** Squashed contact shadow at a sprite's base. Nothing floats. */
 function contact(s: Surface, cx: number, baseY: number, w: number, h = 4, alpha = 0.34): void {
   s.ellipse(Math.round(cx - w / 2), baseY - h + 1, w, h, P.OUTLINE, alpha);
+}
+
+// ── THE FIGURE-GROUND CONTRACT ─────────────────────────────────────────────
+
+/**
+ * A HARD contact shadow — opaque ink at the core, one dithered ring, done.
+ *
+ * The soft 34%-alpha ellipse every prop used to sit on composited to roughly
+ * L 39 over a floor whose own darkest pixel is L 26: it was *lighter* than the
+ * ground it was supposed to be darkening. A shadow that never gets darker than
+ * the floor is not a shadow, it is a smudge, and the prop goes on floating.
+ */
+function hardContact(s: Surface, cx: number, baseY: number, w: number, h = 5): void {
+  const x0 = Math.round(cx - w / 2);
+  s.ellipse(x0, baseY - h + 1, w, h, INK, 0.9);
+  s.ellipse(x0 + 1, baseY - h + 2, w - 2, h - 2, INK);
+  // one dithered ring so the ellipse does not read as a painted-on decal
+  for (let i = 0; i < w; i += 2) s.px(x0 + i, baseY - h, INK, 0.45);
+  for (let i = 1; i < w; i += 2) s.px(x0 + i, baseY + 1, INK, 0.4);
+}
+
+/**
+ * Turn a drawn figure into an operable object. THE contract; see the header.
+ *
+ * Order matters and is not negotiable:
+ *   1. re-material  — stone → marble, dead brass → live brass. Doing this by
+ *      exact ramp swap rather than by redrawing every prop means the rule can
+ *      never drift out of sync between two props that were authored months
+ *      apart, and it keeps each prop's own form shading intact.
+ *   2. rim          — SHRINE_MARBLE[4] on the inside of the top and left
+ *      edges. Light is upper-left everywhere in this game, so this is the
+ *      specular a real dressed edge would catch, and it is three times
+ *      brighter than the brightest pixel in the floor.
+ *   3. anchor       — 1 px SHRINE_INK outside the silhouette, darker than the
+ *      darkest pixel in the floor.
+ *   4. shadow       — laid *behind* the finished figure, so the outline never
+ *      gets outlined and the shadow never eats the rim.
+ *
+ * `shadow: null` is for objects that are already flush with the ground (floor
+ * plates, portal voids) — they get their anchor from a socket instead.
+ */
+function operable(
+  fig: Surface,
+  shadow: { cx: number; y: number; w: number; h?: number } | null,
+): Surface {
+  fig.swapRamp(ST, MB);
+  fig.swapRamp(BR, BL);
+  fig.innerShade(MB[4], 0.9, [[0, -1], [-1, 0]]);
+  fig.outline(INK, true);
+  if (!shadow) return fig;
+  const out = new Surface(fig.w, fig.h);
+  hardContact(out, shadow.cx, shadow.y, shadow.w, shadow.h ?? 5);
+  out.blit(fig);
+  return out;
+}
+
+/**
+ * The decorative motif that replaced the rune glyphs: an armillary quadrant.
+ *
+ * Concentric arcs about an off-centre pole with a single crossing bar — the
+ * kind of thing the people who built an observatory would cut into their own
+ * doors. It is deliberately *not* a closed symbol: no ring, no chevron, no
+ * spiral, no bar stack, so it cannot be mistaken for puzzle state at a glance
+ * even at 1×, which is the only reason it exists.
+ */
+function armillary(s: Surface, cx: number, cy: number, r: number, tone: string, alpha = 1): void {
+  const arc = (rad: number, a0: number, a1: number, c: string, al: number) => {
+    for (let t = a0; t <= a1; t += 0.06) {
+      s.px(Math.round(cx + Math.cos(t) * rad), Math.round(cy + Math.sin(t) * rad * 0.86), c, al);
+    }
+  };
+  arc(r, -2.5, 0.45, tone, alpha);
+  arc(r, -2.5, 0.45, tone, alpha * 0.5);
+  arc(r * 0.6, 0.5, 3.5, tone, alpha * 0.9);
+  arc(r * 0.28, -3.2, 1.2, tone, alpha * 0.8);
+  // the pole and its crossing bar
+  s.vline(Math.round(cx + r * 0.32), Math.round(cy - r), Math.round(r * 2), tone, alpha * 0.75);
+  s.hline(Math.round(cx - r * 0.7), Math.round(cy + r * 0.25), Math.round(r * 1.5), tone, alpha * 0.6);
+}
+
+/**
+ * An engraved armillary: dark groove, lit lower-right lip, faint cold trace.
+ * The drop-in replacement for `glyphPlate(..., lit=false)` as decoration.
+ */
+function armillaryPlate(s: Surface, cx: number, cy: number, r: number, tone = TR[3]): void {
+  armillary(s, cx + 1, cy + 1, r, ST[4], 0.28);
+  armillary(s, cx, cy, r, P.OUTLINE, 0.8);
+  armillary(s, cx, cy, r, tone, 0.5);
 }
 
 /** A jagged crack. Returns nothing; draws a dark fissure with a lit lip. */
