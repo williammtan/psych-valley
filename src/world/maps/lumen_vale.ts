@@ -566,18 +566,23 @@ function build(): MapDef {
   }
 
   // ── fences: the farm, the market gardens, the inn paddock, the boundary ──
+  // There is one fence rail tile and one post tile in the atlas, so a long run
+  // is inherently a repeat. What can vary is the rhythm: posts every third or
+  // fourth bay rather than metronomically every fourth, which is enough to
+  // stop the eye locking onto the period.
   const fenceH = (x0: number, x1: number, y: number, gapAt?: number) => {
     for (let x = x0; x <= x1; x++) {
       if (gapAt !== undefined && (x === gapAt || x === gapAt + 1)) continue;
       if (!SOFT.includes(g.get(x, y)) && g.get(x, y) !== 'x') continue;
-      g.set(x, y, x === x0 ? '<' : x === x1 ? '>' : (x - x0) % 4 === 0 ? 'o' : 'f');
+      const post = (x - x0) % 4 === 0 || rnd(x * 61 + y, 17) < 0.16;
+      g.set(x, y, x === x0 ? '<' : x === x1 ? '>' : post ? 'o' : 'f');
     }
   };
   const fenceV = (y0: number, y1: number, x: number, gapAt?: number) => {
     for (let y = y0; y <= y1; y++) {
       if (gapAt !== undefined && (y === gapAt || y === gapAt + 1)) continue;
       if (!SOFT.includes(g.get(x, y)) && g.get(x, y) !== 'x') continue;
-      g.set(x, y, y === y0 || y === y1 ? 'o' : 'f');
+      g.set(x, y, y === y0 || y === y1 || rnd(y * 59 + x, 23) < 0.18 ? 'o' : 'f');
     }
   };
   fenceH(6, 17, 18, 12);
@@ -989,6 +994,17 @@ function build(): MapDef {
     P('prop/town/chicken_0', 35.2, 26.4, { anim: 'chicken_peck' });
     P('prop/town/chicken_2', 36.8, 26.1, { anim: 'chicken_peck', interact: 'prop.chicken' });
     laundry(36, 25.4, { interact: 'laundry' });
+    // The oven yard, in the two-tile strip between the shop and Vale Road. It
+    // was the last stretch of blank lawn in this frame, and a bakery is
+    // exactly the building that would fill it with split wood.
+    P('prop/town/woodpile_1', 40.6, 33.4, { solid: [20, 10], interact: 'woodpile' });
+    P('prop/town/log_1', 40.6, 35.4, { solid: [22, 8] });
+    P('prop/town/tree_stump', 41.4, 36.6, { solid: [16, 8], interact: 'prop.stump' });
+    P('prop/town/barrel_0', 40.4, 37.4, { solid: [14, 8] });
+    P('prop/town/hay_bale', 41.4, 31.4, { solid: [22, 10] });
+    P('prop/town/crate_0', 40.4, 30.4, {});
+    P('prop/town/cat_sleeping_0', 41.5, 34.4, { anim: 'cat_sleeping_idle', interact: 'cat' });
+    lamp(41.4, 38.4, 42, 0.38);
   }
 
   // ── THE MARKET GREEN ────────────────────────────────────────────────────
@@ -1036,6 +1052,11 @@ function build(): MapDef {
     for (const [x, y] of [[25.4, 33.4], [36.4, 36.2], [30.4, 39.6], [34.6, 30.4]] as const) lamp(x, y, 44, 0.42);
     P('prop/town/stone_lantern', 33.4, 32.6, { solid: [10, 8], interact: 'prop.stoneLantern' });
     lights.push({ x: 33.4, y: 31.8, radius: 32, color: 0xffd08a, intensity: 0.26, flicker: 0.7 });
+    // A lamp hung under each awning. Warm pools under the canvas are what make
+    // a stall look open rather than shut, and they give the market its own
+    // pocket of light distinct from the square's cool fountain.
+    lights.push({ x: 27.8, y: 32.6, radius: 44, color: 0xffc45e, intensity: 0.30, flicker: 0.2 });
+    lights.push({ x: 27.8, y: 37.8, radius: 44, color: 0xffc45e, intensity: 0.30, flicker: 0.2 });
   }
 
   // ── Bell tower green ────────────────────────────────────────────────────
@@ -1072,9 +1093,19 @@ function build(): MapDef {
   P('prop/town/hay_bale', 53, 22.2, { solid: [22, 10] });
   P('prop/town/picnic_table', 37.5, 21.5, { solid: [36, 12] });
   P('prop/town/picnic_table', 49.5, 12.5, { solid: [36, 12] });
+  // The plaza's lanterns actually cast now. Three ground lanterns and the run
+  // of strung lights across the middle: dim, close-spaced, cool-warm — the
+  // festival is a week away and the town is already testing the wiring.
   P('prop/fest/ground_lantern_0', 40, 13.4, {});
   P('prop/fest/ground_lantern_1', 47, 13.4, {});
   P('prop/fest/ground_lantern_2', 43.5, 19.6, { interact: 'prop.festLights' });
+  for (const [x, y, r, i] of [[40, 13, 30, 0.28], [47, 13, 30, 0.28], [43.5, 19.2, 32, 0.30]] as const) {
+    lights.push({ x, y, radius: r, color: 0xffd08a, intensity: i, flicker: 0.8 });
+  }
+  for (const x of [39.5, 41.5, 43.5, 45.5]) {
+    lights.push({ x, y: 11, radius: 26, color: 0xffcf7a, intensity: 0.20, flicker: 0.9 });
+  }
+  lights.push({ x: 43.5, y: 8.2, radius: 34, color: 0xffe0a0, intensity: 0.26, flicker: 0.4 });
   P('prop/town/notice_board', 46.6, 22, { solid: [30, 12], interact: 'courier_roster' }, 'plaza_board');
   for (const [x, y] of [[38, 8.6], [49, 8.6], [34, 22], [53, 22]] as const) lamp(x, y, 44, 0.38);
   P('prop/town/flowerbed_0', 33, 11, { solid: [28, 8] });
@@ -1337,15 +1368,15 @@ function build(): MapDef {
   const npcs: NpcPlacement[] = [
     { id: 'mira', x: 79, y: 42, facing: 's', path: [[79, 42], [79, 45], [82, 46], [79, 45]], dwell: 3.2 },
     { id: 'sera', x: 15, y: 60, facing: 's', path: [[15, 60], [20, 61], [21, 63], [16, 61]], dwell: 4 },
-    { id: 'oren', x: 13, y: 36, facing: 's', path: [[13, 36], [20, 35], [27, 35], [20, 35], [17, 43], [17, 37]], dwell: 1.6 },
+    { id: 'oren', x: 13, y: 36, facing: 's', path: [[13, 36], [20, 35], [28, 36], [22, 35], [17, 43], [17, 37]], dwell: 1.6 },
     { id: 'elia', x: 44, y: 17, facing: 's', path: [[44, 17], [37, 17], [37, 13], [48, 13], [50, 18], [44, 20]], dwell: 2.2 },
     { id: 'tavi', x: 45, y: 22, facing: 's', path: [[45, 22], [44, 27], [45, 32], [44, 27]], dwell: 3.4 },
     { id: 'nia', x: 58, y: 51, facing: 'e', path: [[58, 51], [58, 54], [59, 57], [58, 53]], dwell: 5 },
-    // The baker: store to square and back.
-    { id: 'villager_a', x: 36, y: 37, facing: 's', path: [[36, 37], [38, 42], [44, 48], [40, 43], [36, 37]], dwell: 2.6 },
+    // The baker: shop door, across the market, down to the square and back.
+    { id: 'villager_a', x: 36, y: 37, facing: 's', path: [[36, 37], [31, 37], [30, 34], [33, 37], [38, 40], [44, 48], [39, 41], [36, 37]], dwell: 2.4 },
     // The fisher, on the east bank of the pool.
     { id: 'villager_b', x: 71, y: 57, facing: 'w', dwell: 6 },
-    { id: 'villager_c', x: 17, y: 40, facing: 'n', path: [[17, 40], [17, 35], [24, 35], [17, 35], [17, 43], [24, 45]], dwell: 2 },
+    { id: 'villager_c', x: 17, y: 40, facing: 'n', path: [[17, 40], [17, 35], [26, 36], [31, 38], [26, 36], [17, 35], [17, 43], [24, 45]], dwell: 2 },
     { id: 'villager_d', x: 42, y: 61, facing: 'n', path: [[42, 61], [42, 65], [34, 64], [42, 65], [42, 57]], dwell: 2.8 },
     // The gate keeper.
     { id: 'villager_e', x: 45, y: 70, facing: 'w', dwell: 8 },
@@ -1378,9 +1409,12 @@ function build(): MapDef {
     subtitle: 'a valley that remembers',
     music: 'town',
     ambience: 'town_day',
-    // Late-afternoon shade. Small, but it is what gives the map a dark end of
-    // the tonal range for the lamps and windows to read against.
-    darkness: 0.17,
+    // Late-afternoon shade. Pushed up from 0.17: the light layer is the one
+    // thing this engine has that the reference plate does not, and it was
+    // being wasted on a frame that had almost no dark end to read against.
+    // Every lamp, window and doorway gains contrast from this single number,
+    // and at 0.21 nothing gameplay-relevant is any harder to see.
+    darkness: 0.21,
     ground: g.rows(),
     legend: {
       '.': { base: 'town/grass' },

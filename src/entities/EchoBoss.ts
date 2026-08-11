@@ -404,6 +404,11 @@ class Follower implements ConformerLike {
     });
   }
 
+  /** True only during the strike frames of the unison beat. */
+  onBeat(now: number): boolean {
+    return now - this.pulseAt < 240;
+  }
+
   /** Dim between beats so the unison flash is the loudest thing on screen. */
   update(dt: number, now: number): void {
     if (this.dissenting) {
@@ -1180,7 +1185,11 @@ export class EchoBoss {
         f.y += (ty - f.y) * Math.min(1, dt / 140);
       }
       f.update(dt, now);
-      if (!f.dead && f.touches(player.x, player.y - 8) && !player.invulnerable) {
+      // They only strike ON THE BEAT, all of them, together. That is the phase's
+      // central visual fact, so it should also be the threat — and it stops the
+      // ring from grinding the player down just by orbiting through them.
+      if (!f.dead && !f.dissenting && f.onBeat(now)
+        && f.touches(player.x, player.y - 8) && !player.invulnerable) {
         player.hurt(1, f.x, f.y);
       }
     }

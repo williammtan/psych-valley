@@ -34,10 +34,23 @@ export interface SayOptions {
 }
 
 export class CutsceneContext {
+  /** The map generation this scene was started for. */
+  generation = -1;
+
   constructor(private w: WorldScene) {}
+
+  /**
+   * True once the map has changed under this scene. Every awaitable below
+   * resolves immediately when it is set, so a scene that is still running when
+   * the player leaves unwinds instead of narrating over the next place.
+   */
+  get aborted(): boolean {
+    return this.generation >= 0 && this.w.mapGeneration !== this.generation;
+  }
 
   /** One short line of dialogue. speaker is an NPC id, or 'player'/'narrator'. */
   say(speaker: string, text: string, opts: SayOptions = {}): Promise<void> {
+    if (this.aborted) return Promise.resolve();
     const npc = this.w.npc(speaker);
     if (npc) { npc.talking = true; npc.faceTowards(this.w.player.x, this.w.player.y); }
     if (opts.emote && npc) this.w.fx.emote(npc.x, npc.y, opts.emote);
@@ -52,6 +65,7 @@ export class CutsceneContext {
 
   /** A player dialogue choice. Resolves to the chosen index. */
   choose(prompt: string, choices: Choice[]): Promise<number> {
+    if (this.aborted) return Promise.resolve(0);
     return new Promise((resolve) => {
       once('dialogue:chose', (p: { index: number }) => resolve(p.index));
       emit('dialogue:choices', { prompt, choices });
@@ -59,11 +73,13 @@ export class CutsceneContext {
   }
 
   wait(ms: number): Promise<void> {
+    if (this.aborted) return Promise.resolve();
     return new Promise((resolve) => this.w.time.delayedCall(ms, resolve));
   }
 
   /** Walk an NPC to a tile and wait for arrival. */
   walk(npcId: string, tx: number, ty: number): Promise<void> {
+    if (this.aborted) return Promise.resolve();
     const npc = this.w.npc(npcId);
     if (!npc) return Promise.resolve();
     return new Promise((resolve) => npc.walkTo(tx, ty, resolve));
@@ -80,6 +96,7 @@ export class CutsceneContext {
 
   /** Move the player along a path (arrival sequences). */
   movePlayer(tx: number, ty: number, speed = 60): Promise<void> {
+    if (this.aborted) return Promise.resolve();
     return new Promise((resolve) => {
       const target = { x: tx * 16 + 8, y: ty * 16 + 16 };
       const startedOn = this.w.mapId;
@@ -113,6 +130,7 @@ export class CutsceneContext {
   }
 
   panTo(tx: number, ty: number, ms = 700): Promise<void> {
+    if (this.aborted) return Promise.resolve();
     return new Promise((resolve) => {
       const cam = this.w.cameras.main;
       cam.stopFollow();
@@ -149,6 +167,7 @@ export class CutsceneContext {
 
   /** Show the big concept-unlock card and wait for dismissal. */
   insight(id: string): Promise<void> {
+    if (this.aborted) return Promise.resolve();
     return new Promise((resolve) => {
       once('insight:closed', () => resolve());
       emit('insight:show', { id });
@@ -156,10 +175,12 @@ export class CutsceneContext {
   }
 
   banner(title: string, subtitle?: string): void {
+    if (this.aborted) return;
     emit('ui:banner', { title, subtitle });
   }
 
   toast(text: string): void {
+    if (this.aborted) return;
     emit('ui:toast', { text });
   }
 
@@ -177,6 +198,7 @@ export class Cutscene {
   async run(fn: (c: CutsceneContext) => Promise<void>): Promise<void> {
     if (this.active) return;
     this.active = true;
+    this.ctx.generation = this.w.mapGeneration;
     this.w.player.lock();
     this.w.keys.enabled = false;
     emit('cutscene:start', {});
@@ -186,8 +208,13 @@ export class Cutscene {
       console.error('cutscene failed', e);
     } finally {
       this.active = false;
-      this.w.keys.enabled = true;
-      this.w.player.unlock();
+      // Only hand control back if we are still in the map that took it; the new
+      // map has its own idea of whether the player should be able to move.
+      if (!this.ctx.aborted) {
+        this.w.keys.enabled = true;
+        this.w.player.unlock();
+      }
+      this.ctx.generation = -1;
       emit('cutscene:end', {});
     }
   }

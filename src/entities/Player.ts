@@ -213,8 +213,14 @@ export class Player {
     }
 
     // One ghost every few frames; every frame stacks into an unreadable smear.
+    // Dropped behind the body rather than under it, so the trail reads as a
+    // wake the character has left instead of a blur attached to the sprite.
     if (this.mode === 'dash' && this.dashFrame++ % PLAYER.DASH_TRAIL_EVERY === 0) {
-      emit('player:dashtrail', { x: this.x, y: this.y, dir: this.dir });
+      emit('player:dashtrail', {
+        x: this.x - this.dashDir[0] * 7,
+        y: this.y - this.dashDir[1] * 4,
+        dir: this.dir,
+      });
     }
 
     this.trail.push({ x: this.x, y: this.y, dir: this.dir, t: now });

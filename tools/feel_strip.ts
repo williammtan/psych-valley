@@ -34,6 +34,8 @@ interface Strip {
   note: string;
   /** Runs in the page; schedules the action and returns when capture is done. */
   script: string;
+  /** Frames to run before capturing, for beats with a slow approach. */
+  warm?: number;
 }
 
 const STRIPS: Strip[] = [
@@ -65,15 +67,16 @@ const STRIPS: Strip[] = [
       const o = F.arena();
       const cx = o.x + Math.floor(o.w / 2), cy = o.y + Math.floor(o.h / 2);
       F.place(F.px(cx - 3), F.py(cy), 'e');
-      const wisp = F.scene.enemies.spawn('wisp', cx + 3, cy, { passive: true });
+      const wisp = F.scene.enemies.spawn('wisp', cx + 4, cy, { passive: true });
       // Fire straight down the lane, then dash into the shot as it arrives.
       F.at(1, 'F.wisp.fire(F.scene.player.x, F.scene.player.y - 10)');
       F.wisp = wisp;
       F.dashArmed = false;
-      for (let i = 2; i < 60; i++) {
-        F.at(i, "if (!F.dashArmed) { const s = F.wisp.shots[0]; if (s && s.img.x - F.scene.player.x < 30) { F.dashArmed = true; F.act('dash'); } }");
+      for (let i = 2; i < 90; i++) {
+        F.at(i, "if (!F.dashArmed) { const s = F.wisp.shots[0]; if (s && s.img.x - F.scene.player.x < 40) { F.dashArmed = true; F.act('dash'); } }");
       }
     `,
+    warm: 44,
   },
 ];
 
@@ -99,12 +102,13 @@ function installStrip(): void {
   });
 
   /** Run a scripted beat, capturing every `every` frames. */
-  F.strip = async (setup: string, every: number, count: number, cw: number, ch: number) => {
+  F.strip = async (setup: string, every: number, count: number, cw: number, ch: number, warm: number) => {
     F.reset(); F.clean(); F.scripted(true);
     F.frames = [];
     new Function('F', 'w', setup)(F, w);
     const cx = Math.round((480 - cw) / 2);
     const cy = Math.round((270 - ch) / 2);
+    if (warm > 0) await F.run(warm);
     for (let i = 0; i < count; i++) {
       await F.run(every);
       // run() resolves inside postupdate, which is exactly when a snapshot
@@ -187,7 +191,7 @@ async function main(): Promise<void> {
       if (only && strip.name !== only) continue;
       const dataUrl = await page.evaluate(async (s) => {
         const F = (window as any).__F;
-        await F.strip(s.script, s.every, s.count, s.cw, s.ch);
+        await F.strip(s.script, s.every, s.count, s.cw, s.ch, s.warm || 0);
         return F.compose(s.cols, s.zoom, s.cw, s.ch, `${s.name.toUpperCase()} — ${s.note}`);
       }, { ...strip, every: EVERY, count: COUNT, cols: COLS, zoom: ZOOM, cw: CROP.w, ch: CROP.h });
       const png = Buffer.from(dataUrl.split(',')[1], 'base64');

@@ -42,9 +42,15 @@ export class UIScene extends Phaser.Scene {
 
     on('ui:banner', (p: { title: string; subtitle?: string }) => this.showBanner(p.title, p.subtitle));
     on('ui:toast', (p: { text: string; icon?: string }) => this.showToast(p.text, p.icon));
-    on('map:entered', (p: { name: string; subtitle?: string }) => {
-      if (State.visited.size <= 1 || !this.seen.has(p.name)) {
-        this.seen.add(p.name);
+    on('map:entered', (p: { id: string; name: string; subtitle?: string }) => {
+      // Anything still on screen belongs to the place we just left. A banner or
+      // toast that outlives its map is worse than none — it labels the new
+      // location with the old one's name.
+      this.clearTransient();
+      // Keyed by map id, not display name: the shrine rooms share a name and
+      // each still deserves its own arrival card for its subtitle.
+      if (!this.seen.has(p.id)) {
+        this.seen.add(p.id);
         this.showBanner(p.name, p.subtitle);
       }
     });
@@ -70,6 +76,17 @@ export class UIScene extends Phaser.Scene {
   }
 
   private seen = new Set<string>();
+
+  /** Drop banners and toasts that belong to the map we just left. */
+  private clearTransient(): void {
+    if (this.banner) {
+      this.tweens.killTweensOf(this.banner);
+      this.banner.destroy();
+      this.banner = undefined;
+    }
+    for (const t of this.toasts) { this.tweens.killTweensOf(t); t.destroy(); }
+    this.toasts = [];
+  }
 
   update(_t: number, dt: number): void {
     this.dialogue.update(dt);

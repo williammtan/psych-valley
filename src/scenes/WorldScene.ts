@@ -39,6 +39,13 @@ export class WorldScene extends Phaser.Scene {
 
   area?: AreaScript;
   mapId = '';
+  /**
+   * Incremented on every map load. Anything asynchronous that was started for a
+   * particular map compares against this to know the world has moved on — a
+   * cutscene that outlives its map keeps writing banners, walking the player and
+   * firing dialogue over whatever place you are in now.
+   */
+  mapGeneration = 0;
 
   /** Extra colliders contributed by area scripts (moving gates, blocks). */
   dynamicSolids: boolean[][] = [];
@@ -91,6 +98,7 @@ export class WorldScene extends Phaser.Scene {
     this.tearDown();
 
     this.mapId = id;
+    this.mapGeneration++;
     State.currentMap = id;
     State.currentSpawn = spawnId;
     State.visited.add(id);

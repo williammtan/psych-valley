@@ -264,6 +264,13 @@ export class Enemy {
       this.play('wisp_shoot');
       this.fire(player.x, player.y - 8);
     }
+    if (this.mode === 'telegraph') {
+      // Dead still while aiming. A tell that drifts is a tell you cannot read.
+      this.vx = this.vy = 0;
+      this.faceVec(dx, dy);
+      return;
+    }
+
     // Keeps its distance: closes if far, backs off if close.
     const want = 62;
     const len = Math.hypot(dx, dy) || 1;
@@ -280,7 +287,7 @@ export class Enemy {
       this.mode = 'telegraph';
       this.modeUntil = now + ENEMY.WISP_TELL_MS;
       this.play('wisp_aim');
-    } else if (this.mode !== 'telegraph') {
+    } else if (this.mode !== 'recover') {
       this.play('wisp_idle');
     }
   }
