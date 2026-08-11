@@ -1,0 +1,28 @@
+{
+  "name": "project-psyche",
+  "version": "0.1.0",
+  "scripts": {
+    "art": "tsx tools/art/build.ts",
+    "dev": "vite",
+    "build": "npm run art && vite build",
+    "preview": "vite preview --port 4178 --strictPort",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "shot": "tsx tools/shot.ts",
+    "play": "tsx tools/play.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "playwright": "^1.62.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3",
+    "vite-plugin-checker": "^0.14.5"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "private": true,
+  "type": "module"
+}
