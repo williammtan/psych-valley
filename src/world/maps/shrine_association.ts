@@ -132,7 +132,11 @@ function build(): MapDef {
   // The plate gets a light of its own. A pressure plate that blends into the
   // flagstone is a room that has failed, and this one is fourteen tiles from
   // where the player is standing when they need to notice it.
-  lights.push({ x: R1.plate.x, y: R1.plate.y, radius: 46, color: SHRINE_VIOLET, intensity: 0.5, flicker: 0.12 });
+  // Amber, so the plate is the one warm thing at the far end of a cold room.
+  lights.push({ x: R1.plate.x, y: R1.plate.y, radius: 60, color: 0xffb937, intensity: 0.8, flicker: 0.1 });
+  // The creature's end of the room needs enough light to watch it in. The whole
+  // first half of this puzzle is the player standing still and looking.
+  lights.push({ x: 8, y: 7.6, radius: 128, color: 0x6c7bb8, intensity: 0.26, flicker: 0 });
 
   // Two braziers, at the two ends of the room's long axis.
   props.push({ key: 'prop/shrine/brazier_0', x: 4.5, y: 4.6, spec: { anim: 'shrine_brazier', solid: [14, 8] } });
@@ -142,8 +146,10 @@ function build(): MapDef {
 
   props.push({ key: 'prop/shrine/broken_instrument_1', x: 25.6, y: 6.4, spec: { solid: [22, 10] } });
   props.push({ key: 'prop/shrine/broken_instrument_2', x: 20.4, y: 4.4, spec: { solid: [22, 10] } });
-  props.push({ key: 'prop/shrine/brazier_0', x: 24.6, y: 9.4, spec: { anim: 'shrine_brazier', solid: [14, 8] } });
-  lights.push(brazierLight(24.6, 8.4, 62));
+  // Cold, not warm: the plate two tiles away is the only amber thing in this
+  // half of the room and it has to keep that to itself.
+  props.push({ key: 'prop/shrine/crystal_0', x: 24.8, y: 9.4, spec: { anim: 'shrine_crystal' } });
+  lights.push(crystalLight(24.8, 8.6, 62));
   props.push({ key: 'prop/shrine/rubble_2', x: 21.4, y: 7.6 });
   // A collapsed column across the south-centre, so the walk from the jar to the
   // plate is a route through something rather than a stroll across a car park.
@@ -174,7 +180,7 @@ function build(): MapDef {
     subtitle: 'the west chamber',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.5,
+    darkness: 0.42,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

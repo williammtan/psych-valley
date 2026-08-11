@@ -202,7 +202,7 @@ function build(): MapDef {
     subtitle: 'the two ways down',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.48,
+    darkness: 0.42,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

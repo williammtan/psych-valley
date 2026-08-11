@@ -15,7 +15,10 @@ const expr = process.argv[3] ?? '__psyche.state()';
 
 const server = await createServer({
   root: ROOT,
-  server: { port: 20000 + Math.floor(Math.random() * 20000), strictPort: false, host: '127.0.0.1' },
+  server: {
+    port: 20000 + Math.floor(Math.random() * 20000), strictPort: false, host: '127.0.0.1',
+    watch: null, hmr: false,
+  },
   logLevel: 'error',
 });
 await server.listen();

@@ -172,13 +172,23 @@ export class CueFollower {
     if (d < 5) return true;
     const step = (this.speed * dt) / 1000;
     // Deliberately simple movement: these creatures are dumb, which is the point.
-    const nx = this.enemy.x + (dx / d) * step;
-    const ny = this.enemy.y + (dy / d) * step;
-    const tx = Math.floor(nx / TILE);
-    const ty = Math.floor((ny - 1) / TILE);
-    if (ty >= 0 && ty < grid.length && tx >= 0 && tx < grid[0].length && !grid[ty][tx]) {
-      this.enemy.x = nx;
-      this.enemy.y = ny;
+    // But "dumb" must not mean "wedges against a pillar forever" — if the direct
+    // line is blocked, slide along whichever single axis is still free. That is
+    // enough to round an obstacle without turning this into pathfinding.
+    const free = (px: number, py: number) => {
+      const tx = Math.floor(px / TILE);
+      const ty = Math.floor((py - 1) / TILE);
+      return ty >= 0 && ty < grid.length && tx >= 0 && tx < grid[0].length && !grid[ty][tx];
+    };
+    const mx = (dx / d) * step;
+    const my = (dy / d) * step;
+    if (free(this.enemy.x + mx, this.enemy.y + my)) {
+      this.enemy.x += mx;
+      this.enemy.y += my;
+    } else if (free(this.enemy.x + mx, this.enemy.y)) {
+      this.enemy.x += mx;
+    } else if (free(this.enemy.x, this.enemy.y + my)) {
+      this.enemy.y += my;
     }
     this.enemy.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'e' : 'w') : (dy > 0 ? 's' : 'n');
     return true;

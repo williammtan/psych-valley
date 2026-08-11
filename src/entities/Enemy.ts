@@ -9,7 +9,7 @@
  *   echomote  — copies its leader; used by the conformity puzzles
  */
 import Phaser from 'phaser';
-import { DEPTH, TILE } from '@/core/config';
+import { DEPTH, ENEMY, FEEL, TILE } from '@/core/config';
 import { moveBox, type Box, type SolidGrid } from '@/core/collision';
 import { emit } from '@/core/events';
 import type { Player } from './Player';
@@ -79,6 +79,12 @@ export class Enemy {
   private bob = Math.random() * Math.PI * 2;
   private shots: Array<{ img: Phaser.GameObjects.Sprite; vx: number; vy: number; life: number }> = [];
   private aggro = false;
+  /**
+   * Set by destroy(). Anything deferred — the hit flash, the death tween — has
+   * to check it: a callback that fires against a destroyed sprite throws inside
+   * Phaser's clock, and an exception there stops the whole game loop.
+   */
+  private destroyed = false;
 
   constructor(private scene: WorldScene, kind: EnemyKind, x: number, y: number, opts: EnemyOpts = {}) {
     this.kind = kind;
@@ -143,7 +149,10 @@ export class Enemy {
       return;
     }
 
-    if ((this.mode === 'hurt' || this.mode === 'recover' || this.mode === 'telegraph' || this.mode === 'attack')
+    // 'telegraph' is deliberately absent: each type resolves its own wind-up in
+    // its update, so the commit lands on an exact frame instead of racing a
+    // timer against this expiry check.
+    if ((this.mode === 'hurt' || this.mode === 'recover' || this.mode === 'attack')
       && now >= this.modeUntil) {
       this.mode = this.aggro ? 'chase' : 'idle';
     }
@@ -159,11 +168,16 @@ export class Enemy {
       Audio.sfx('aggro', { volume: 0.4 });
     }
 
-    switch (this.kind) {
-      case 'bramble': this.updateBramble(dt, dist, dx, dy, now); break;
-      case 'wisp': this.updateWisp(dt, dist, dx, dy, now, player); break;
-      case 'mimicling': this.updateMimicling(dt, now, player); break;
-      case 'echomote': this.updateEchomote(dt, now); break;
+    // While reeling, knockback owns the body. Letting the per-type AI run here
+    // zeroes the recoil velocity on the very frame it is applied, which is why
+    // struck enemies used to absorb a hit without budging.
+    if (this.mode !== 'hurt') {
+      switch (this.kind) {
+        case 'bramble': this.updateBramble(dt, dist, dx, dy, now); break;
+        case 'wisp': this.updateWisp(dt, dist, dx, dy, now, player); break;
+        case 'mimicling': this.updateMimicling(dt, now, player); break;
+        case 'echomote': this.updateEchomote(dt, now); break;
+      }
     }
 
     if (this.mode !== 'hurt') {
@@ -176,8 +190,12 @@ export class Enemy {
       const res = moveBox(grid, this.box, this.vx * dts, this.vy * dts, { cornerAssist: false });
       this.x = res.x;
       this.y = res.y;
-      this.vx *= 0.86;
-      this.vy *= 0.86;
+      // Decay by elapsed time, not per frame: hitstop shrinks dt to nearly
+      // nothing, and a per-frame decay would spend the whole recoil while the
+      // world is frozen and the body has not moved.
+      const decay = Math.pow(0.86, dt / 16.667);
+      this.vx *= decay;
+      this.vy *= decay;
     }
 
     this.updateShots(dt, grid, player);
@@ -193,7 +211,18 @@ export class Enemy {
   // ── per-type behaviour ───────────────────────────────────────────────────
 
   private updateBramble(dt: number, dist: number, dx: number, dy: number, now: number): void {
-    if (this.mode === 'telegraph') { this.vx = this.vy = 0; return; }
+    if (this.mode === 'telegraph') {
+      this.vx = this.vy = 0;
+      // Braced and still for the whole wind-up, then it commits. The direction
+      // was locked when the tell started, so sidestepping always works.
+      if (now >= this.modeUntil) {
+        this.mode = 'attack';
+        this.modeUntil = now + 520;
+        this.play(`bramble_charge_${this.animDir}`);
+        Audio.sfx('charge', { volume: 0.35 });
+      }
+      return;
+    }
     if (this.mode === 'attack') {
       this.vx = this.chargeDir[0] * this.def.speed * 3.4;
       this.vy = this.chargeDir[1] * this.def.speed * 3.4;
@@ -204,19 +233,12 @@ export class Enemy {
     if (dist < 78 && now >= this.nextThink) {
       // Telegraph: hold still, compress, then commit to a straight line.
       this.mode = 'telegraph';
-      this.modeUntil = now + 460;
+      this.modeUntil = now + ENEMY.BRAMBLE_TELL_MS;
       this.nextThink = now + 1900;
       const len = Math.hypot(dx, dy) || 1;
       this.chargeDir = [dx / len, dy / len];
       this.faceVec(dx, dy);
       this.play('bramble_charge_wind');
-      this.scene.time.delayedCall(460, () => {
-        if (this.dead || this.mode !== 'telegraph') return;
-        this.mode = 'attack';
-        this.modeUntil = this.scene.time.now + 520;
-        this.play(`bramble_charge_${this.animDir}`);
-        Audio.sfx('charge', { volume: 0.35 });
-      });
       return;
     }
 
@@ -236,6 +258,12 @@ export class Enemy {
 
   private updateWisp(dt: number, dist: number, dx: number, dy: number, now: number, player: Player): void {
     if (!this.aggro) { this.vx = this.vy = 0; this.play('wisp_idle'); return; }
+    if (this.mode === 'telegraph' && now >= this.modeUntil) {
+      this.mode = 'recover';
+      this.modeUntil = now + 220;
+      this.play('wisp_shoot');
+      this.fire(player.x, player.y - 8);
+    }
     // Keeps its distance: closes if far, backs off if close.
     const want = 62;
     const len = Math.hypot(dx, dy) || 1;
@@ -250,13 +278,8 @@ export class Enemy {
     if (now >= this.nextThink && dist < this.def.sight) {
       this.nextThink = now + 2100;
       this.mode = 'telegraph';
-      this.modeUntil = now + 420;
+      this.modeUntil = now + ENEMY.WISP_TELL_MS;
       this.play('wisp_aim');
-      this.scene.time.delayedCall(420, () => {
-        if (this.dead) return;
-        this.play('wisp_shoot');
-        this.fire(player.x, player.y - 8);
-      });
     } else if (this.mode !== 'telegraph') {
       this.play('wisp_idle');
     }
@@ -343,19 +366,31 @@ export class Enemy {
     this.hp -= amount;
     this.invulnUntil = this.scene.time.now + 320;
     this.scene.fx.impact(this.x, this.y - this.def.hitH / 2, amount > 1);
-    this.scene.shake(0.0035, 90);
-    this.scene.setTimeScale(0.25, 45);
+    this.scene.shake(FEEL.SHAKE_HIT, FEEL.SHAKE_HIT_MS);
+    // A real freeze, not a slow-motion nudge: at 0.04 the world is stopped for
+    // the ~3 frames it takes the eye to register that the blow landed.
+    this.scene.setTimeScale(FEEL.HITSTOP_SCALE, FEEL.HITSTOP_MS);
+    this.flash();
     Audio.sfx('hit', { volume: 0.5 });
 
     const a = Math.atan2(this.y - fromY, this.x - fromX);
-    this.vx = Math.cos(a) * 150;
-    this.vy = Math.sin(a) * 150;
+    this.vx = Math.cos(a) * ENEMY.KNOCKBACK;
+    this.vy = Math.sin(a) * ENEMY.KNOCKBACK;
     this.mode = 'hurt';
     this.modeUntil = this.scene.time.now + 240;
     this.aggro = true;
     this.play(`${this.kind}_hurt`);
 
     if (this.hp <= 0) this.die();
+  }
+
+  /** Blow out to white for a few frames so the hit reads at a glance. */
+  private flash(): void {
+    this.sprite.setTintFill(0xffffff);
+    this.scene.time.delayedCall(FEEL.HIT_FLASH_MS, () => {
+      if (this.destroyed) return;
+      this.sprite.clearTint();
+    });
   }
 
   die(): void {
@@ -383,6 +418,7 @@ export class Enemy {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.shots.forEach((s) => s.img.destroy());
     this.shots = [];
     this.sprite.destroy();

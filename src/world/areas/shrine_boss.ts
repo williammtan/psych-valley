@@ -82,8 +82,7 @@ function onEnter(w: WorldScene): void {
   // health. All we owe it is the fight, restarted at the phase they were in.
   room.unsubscribe.push(on('room:reset', (p: { map: string }) => {
     if (p.map !== 'shrine_boss' || !room || room.ended) return;
-    const phase = room.checkpointPhase;
-    room.boss.beginPhase(phase);
+    room.boss.restartPhase();
     // Keep the fight paused for a moment so the player is not walking into a
     // slam the instant the screen comes back.
     w.time.delayedCall(200, () => emit('ui:toast', { text: `The Echo is still here.` }));

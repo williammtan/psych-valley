@@ -17,21 +17,28 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'shots', 'lv');
 
-const SCREENS: Array<[string, number, number]> = [
+/**
+ * [name, camera centre x, camera centre y, optional tile the player stands on].
+ *
+ * The stand tile exists because `teleport` puts the player's feet on the target
+ * and `ensureUnstuck` then shoves them out of anything solid — which, framed on
+ * a building, means the door. A door transition mid-sweep sent every screen
+ * after it into the inn's interior, so framing and standing are now separate.
+ */
+const SCREENS: Array<[string, number, number, number?, number?]> = [
   ['sq', 44, 46],            // Town Square + fountain
   ['sq_north', 45, 34],      // bell tower + general store
+  ['square_n', 44, 40],      // the north approach to the square
   ['plaza', 44, 15],         // Festival Plaza, ordinary state
   ['plaza_n', 44, 8],        // plaza north arch / festival transition
+  ['store', 36, 32, 36, 38], // the bakery frontage and its apron
   ['courier', 16, 34],       // Courier Row
   ['courier_s', 12, 44],     // Courier Row south + house_a
   ['farm', 12, 15],          // north farm
   ['workshop', 16, 57],      // Sera's Workshop
   ['gardens', 18, 68],       // market gardens
   ['bridge', 62, 44],        // the bridge
-  // NB: keep this OFF the inn's door row (y=41) — `teleport` puts the player's
-  // feet on the target tile, and standing in a door zone transitions the map.
-  // Every screen after it then captured the inn's interior instead.
-  ['inn', 79, 38],           // The Lantern Inn
+  ['inn', 79, 41, 79, 46],   // The Lantern Inn — stand in the yard, frame the door
   ['inn_yard', 80, 47],      // inn garden
   ['pool', 65, 55],          // the slow pool + jetties
   ['ford', 68, 27],          // the ford
@@ -39,6 +46,8 @@ const SCREENS: Array<[string, number, number]> = [
   ['gate', 42, 71],          // South Gate
   ['east_wood', 78, 22],     // east bank overlook
   ['sq_west', 32, 47],       // square west approach
+  ['north_edge', 44, 6],     // the top border — check the frame does not leak
+  ['west_edge', 6, 30],      // the west border
 ];
 
 const only = process.argv.slice(2);
@@ -107,15 +116,24 @@ async function ensureTown(name: string): Promise<void> {
   await page.evaluate(() => (window as any).__psyche?.hideHud(true));
 }
 
-for (const [name, x, y] of list) {
+for (const [name, x, y, sx, sy] of list) {
   await ensureTown(name);
+  const stand: [number, number] = [sx ?? x, sy ?? y];
   // Two teleports with a wait between: the camera follows on an exponential
   // lerp and swiftshader runs well under 60fps, so a single call leaves the
   // view part-way through the jump.
-  await page.evaluate(([tx, ty]) => (window as any).__psyche?.teleport(tx, ty), [x, y]);
+  await page.evaluate(([tx, ty]) => (window as any).__psyche?.teleport(tx, ty), stand);
+  await page.waitForTimeout(600);
+  await page.evaluate(([tx, ty]) => (window as any).__psyche?.teleport(tx, ty), stand);
+  await page.waitForTimeout(500);
+  // Pin the camera on the framing point rather than trusting the follow lerp,
+  // so the window is exactly the 30x17 tiles the screen name claims.
+  await page.evaluate(([cx, cy]) => {
+    const cam = (window as any).__psyche?.scene?.cameras?.main;
+    cam?.stopFollow();
+    cam?.centerOn(cx * 16 + 8, cy * 16 + 8);
+  }, [x, y]);
   await page.waitForTimeout(700);
-  await page.evaluate(([tx, ty]) => (window as any).__psyche?.teleport(tx, ty), [x, y]);
-  await page.waitForTimeout(900);
   const map = await page.evaluate(() => (window as any).__psyche?.state()?.map);
   if (map !== 'lumen_vale') { console.log(`  ⚠ ${name} landed in '${map}' — shot skipped`); continue; }
   await page.screenshot({ path: join(OUT, `${name}.png`) });

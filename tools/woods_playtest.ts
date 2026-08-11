@@ -99,21 +99,37 @@ window.__wt = {
     }
     return null;
   },
-  /** Reduce a dense tile path to corners, which is all the driver needs. */
-  corners(path) {
-    if (!path || path.length < 2) return path || [];
+  /**
+   * Sample the dense path every few tiles.
+   *
+   * Reducing to corners and beelining between them looks tidier and is wrong:
+   * on any route with a bend the straight line between two corners can cut
+   * straight through the thicket, and the walk stalls against a wall that the
+   * route never asked it to cross.
+   */
+  corners(path, every) {
+    if (!path || !path.length) return path || [];
+    const step = every || 3;
     const out = [];
-    for (let i = 1; i < path.length; i++) {
-      const a = path[i - 1], b = path[i], c = path[i + 1];
-      if (!c) { out.push(b); break; }
-      const d1x = b[0] - a[0], d1y = b[1] - a[1];
-      const d2x = c[0] - b[0], d2y = c[1] - b[1];
-      if (d1x !== d2x || d1y !== d2y) out.push(b);
-    }
+    for (let i = 0; i < path.length; i += step) out.push(path[i]);
+    const last = path[path.length - 1];
+    if (out[out.length - 1] !== last) out.push(last);
     return out;
   },
   enemies() { return window.__psyche.scene.enemies.aliveCount; },
-  clearEnemies() { window.__psyche.scene.enemies.clear(); },
+  /**
+   * Kill the field the way the game does, NOT via enemies.clear().
+   *
+   * EnemyManager.clear() calls Enemy.destroy(), which does not set \`dead\` and
+   * does not cancel the bramble's 460ms telegraph timer. When that timer fires
+   * on a destroyed sprite it throws inside Phaser's step, the RAF chain is
+   * never re-armed, and the whole game loop stops. die() sets \`dead\`, so the
+   * guard in that timer holds. See the report: this is an engine bug that also
+   * fires on death and on any map change mid-telegraph.
+   */
+  clearEnemies() {
+    for (const e of window.__psyche.scene.enemies.list) if (!e.dead) e.die();
+  },
   map() { return window.__psyche.scene.mapId; },
   flag(f) { return !!window.__psyche.flags()[f]; },
   cutscene() { return window.__psyche.scene.cutscene.active; },
@@ -186,9 +202,13 @@ window.__wt = {
       vel: [Math.round(p.vx), Math.round(p.vy)],
       staticSolidBelow: sc.world.solid[ty + 1] ? sc.world.solid[ty + 1][tx] : 'oob',
       dynSolidBelow: sc.dynamicSolids[ty + 1] ? sc.dynamicSolids[ty + 1][tx] : 'oob',
-      route: (window.__wt.corners(window.__wt.route(21, 31)) || 'none'),
-      trace: window.__wt.lastTrace.slice(-3),
+      trace: window.__wt.lastTrace.slice(-6),
       overlap: window.__wt.overlapProbe(),
+      scenePaused: sc.scene.isPaused(),
+      sceneActive: sc.scene.isActive(),
+      loopRunning: window.__game.loop.running,
+      loopDelta: Math.round(window.__game.loop.delta),
+      sceneTime: Math.round(sc.time.now),
       enemies: sc.enemies.aliveCount,
       hp: window.__psyche.state().hp,
       around: rows,
@@ -212,6 +232,17 @@ async function clearDialogue(page: Page, tries = 40): Promise<void> {
     await page.keyboard.press('Space');
     await page.waitForTimeout(110);
   }
+}
+
+/** Turn the player without meaningfully moving them. */
+async function face(page: Page, dx: number, dy: number): Promise<void> {
+  await page.evaluate(
+    (d: number[]) => (window as unknown as { __psyche: { move(x: number, y: number): void } }).__psyche.move(d[0], d[1]),
+    [dx, dy],
+  );
+  await page.waitForTimeout(90);
+  await page.evaluate(() => (window as unknown as { __psyche: { move(x: number, y: number): void } }).__psyche.move(0, 0));
+  await page.waitForTimeout(120);
 }
 
 async function walkTo(page: Page, tx: number, ty: number): Promise<{ ok: boolean; tiles: number; ms: number }> {
@@ -349,7 +380,11 @@ async function main(): Promise<void> {
       ok(r.ok, `${step.name} — ${r.ok ? `arrived ${at} in ${(r.ms / 1000).toFixed(1)}s` : `STUCK at ${at}`}`);
       if (!r.ok) {
         const d = await page.evaluate(() => (window as unknown as { __wt: { diag(): unknown } }).__wt.diag());
-        console.log(`        ${JSON.stringify(d).slice(0, 700)}`);
+        console.log(`        ${JSON.stringify(d).slice(0, 900)}`);
+        if (errors.length) {
+          console.log(`        page errors during the stall:`);
+          errors.slice(0, 4).forEach((e) => console.log(`          ${e.slice(0, 300)}`));
+        }
         // One stuck step poisons every later one; stop and report the cause.
         break;
       }
@@ -407,32 +442,36 @@ async function main(): Promise<void> {
     );
     ok(blocked, 'the chest is sealed behind the cuttable bushes before they are cut');
 
-    // Cut them: face north and swing until the flag sets.
-    await page.evaluate(async () => {
-      const p = (window as unknown as { __psyche: { move(x: number, y: number): void; press(a: string): void; flags(): Record<string, boolean> } }).__psyche;
-      for (let i = 0; i < 30; i++) {
-        p.move(0, -1);
-        await new Promise((r2) => setTimeout(r2, 90));
-        p.move(0, 0);
-        p.press('attack');
-        await new Promise((r2) => setTimeout(r2, 260));
-        if (p.flags().woods_gully_open) break;
-      }
-      p.move(0, 0);
-    });
+    // Cut them: press north into the bushes and swing, with REAL keys.
+    // `__psyche.press` injects into `pressedThisFrame`, which InputManager
+    // clears at the top of the very next frame — so it is unreliable for the
+    // player. Only `scripted.actions` and real keydowns survive the frame.
+    for (let i = 0; i < 24; i++) {
+      await page.evaluate(() => (window as unknown as { __psyche: { move(x: number, y: number): void } }).__psyche.move(0, -1));
+      await page.waitForTimeout(120);
+      await page.evaluate(() => (window as unknown as { __psyche: { move(x: number, y: number): void } }).__psyche.move(0, 0));
+      // Hold the key across at least one frame: a press+release inside a
+      // single frame can be missed by Phaser's JustDown.
+      await page.keyboard.down('KeyJ');
+      await page.waitForTimeout(90);
+      await page.keyboard.up('KeyJ');
+      await page.waitForTimeout(260);
+      const open = await page.evaluate(() => (window as unknown as { __wt: { flag(f: string): boolean } }).__wt.flag('woods_gully_open'));
+      if (open) break;
+    }
     const cutOk = await page.evaluate(() => (window as unknown as { __wt: { flag(f: string): boolean } }).__wt.flag('woods_gully_open'));
     ok(cutOk, 'the bushes can be cut with the sword');
 
     const toChest = await walkTo(page, WOODS.chest[0], WOODS.chest[1]);
     ok(toChest.ok, `the chest is reachable through the gully (${(toChest.ms / 1000).toFixed(1)}s)`);
+    // Interaction is a cone in front of the player, so face the thing first.
+    await face(page, 0, -1);
+    await page.waitForTimeout(150);
     await page.evaluate(() => (window as unknown as { __wt: { clearEnemies(): void } }).__wt.clearEnemies());
-    await page.evaluate(async () => {
-      const p = (window as unknown as { __psyche: { press(a: string): void } }).__psyche;
-      p.press('interact');
-      await new Promise((r2) => setTimeout(r2, 500));
-    });
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(300);
+    await page.keyboard.down('Space');
+    await page.waitForTimeout(90);
+    await page.keyboard.up('Space');
+    await page.waitForTimeout(600);
     await clearDialogue(page);
     const gotChest = await page.evaluate(() => (window as unknown as { __wt: { flag(f: string): boolean } }).__wt.flag('woods_chest'));
     ok(gotChest, 'the chest opens');
@@ -449,15 +488,11 @@ async function main(): Promise<void> {
     );
     ok(campBlocked, 'the campsite is sealed until the ford is made');
 
-    await page.evaluate(async () => {
-      const p = (window as unknown as { __psyche: { move(x: number, y: number): void; press(a: string): void } }).__psyche;
-      p.move(0, 1);
-      await new Promise((r2) => setTimeout(r2, 200));
-      p.move(0, 0);
-      await new Promise((r2) => setTimeout(r2, 150));
-      p.press('interact');
-      await new Promise((r2) => setTimeout(r2, 1600));
-    });
+    await face(page, 0, 1);
+    await page.keyboard.down('Space');
+    await page.waitForTimeout(90);
+    await page.keyboard.up('Space');
+    await page.waitForTimeout(1900);
     await clearDialogue(page);
     const fordOk = await page.evaluate(() => (window as unknown as { __wt: { flag(f: string): boolean } }).__wt.flag('woods_ford_open'));
     ok(fordOk, 'the boulder can be shoved into the ford');

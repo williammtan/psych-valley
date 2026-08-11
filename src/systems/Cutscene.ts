@@ -82,23 +82,33 @@ export class CutsceneContext {
   movePlayer(tx: number, ty: number, speed = 60): Promise<void> {
     return new Promise((resolve) => {
       const target = { x: tx * 16 + 8, y: ty * 16 + 16 };
+      const startedOn = this.w.mapId;
+      const startedPlayer = this.w.player;
+      let done = false;
+      const finish = (snap: boolean) => {
+        if (done) return;
+        done = true;
+        this.w.events.off(Phaser.Scenes.Events.UPDATE, step);
+        if (snap) startedPlayer.setPosition(target.x, target.y, startedPlayer.dir);
+        resolve();
+      };
       const step = (_: unknown, dt: number) => {
+        // Abandon if the world moved on under us. Without this the handler
+        // outlives its map and keeps walking whoever the player is now.
+        if (this.w.mapId !== startedOn || this.w.player !== startedPlayer) { finish(false); return; }
         const p = this.w.player;
         const dx = target.x - p.x;
         const dy = target.y - p.y;
         const d = Math.hypot(dx, dy);
-        if (d < 2) {
-          this.w.events.off(Phaser.Scenes.Events.UPDATE, step);
-          p.setPosition(target.x, target.y, p.dir);
-          resolve();
-          return;
-        }
+        if (d < 2) { finish(true); return; }
         const m = (speed * dt) / 1000;
         p.x += (dx / d) * m;
         p.y += (dy / d) * m;
         p.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'e' : 'w') : (dy > 0 ? 's' : 'n');
       };
       this.w.events.on(Phaser.Scenes.Events.UPDATE, step);
+      // Hard ceiling: a path blocked by geometry must not hang a cutscene.
+      this.w.time.delayedCall(12000, () => finish(false));
     });
   }
 

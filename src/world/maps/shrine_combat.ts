@@ -111,10 +111,16 @@ function build(): MapDef {
     });
   });
 
-  for (const [x, y] of [[3.8, 8.6], [26.2, 8.6]] as Array<[number, number]>) {
+  // Four braziers and the brightest darkness level in the shrine. A combat room
+  // is the one place where atmosphere must lose an argument with legibility:
+  // an enemy silhouette you cannot separate from the flagstone is not a
+  // telegraph, it is an ambush (see the Stardew mine reference).
+  for (const [x, y] of [[3.8, 6], [26.2, 6], [3.8, 12.4], [26.2, 12.4]] as Array<[number, number]>) {
     props.push({ key: 'prop/shrine/brazier_0', x, y, spec: { anim: 'shrine_brazier', solid: [14, 8] } });
-    lights.push(brazierLight(x, y - 1, 78));
+    lights.push(brazierLight(x, y - 1, 96));
   }
+  // And the wreck itself throws light across the middle of the floor.
+  lights.push({ x: 14.7, y: 8.4, radius: 104, color: 0x8ce6e6, intensity: 0.34, flicker: 0.1 });
 
   lights.push(doorLight(R2.doorIn + 1, F.y - 0.6));
   lights.push(doorLight(R2.doorOut + 1, F.y + F.h - 0.4));
@@ -137,7 +143,7 @@ function build(): MapDef {
     subtitle: 'the collapsed array',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.46,
+    darkness: 0.34,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

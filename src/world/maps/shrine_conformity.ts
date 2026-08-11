@@ -132,7 +132,13 @@ function build(): MapDef {
   props.push({ key: 'prop/shrine/crystal_0', x: 16.4, y: 4.6, spec: { anim: 'shrine_crystal' } });
   lights.push(crystalLight(12.6, 4, 46));
   lights.push(crystalLight(16.4, 4, 46));
-  lights.push({ x: 14.5, y: 4.6, radius: 54, color: SHRINE_VIOLET, intensity: 0.36, flicker: 0.16 });
+  lights.push({ x: 14.5, y: 4.4, radius: 78, color: SHRINE_VIOLET, intensity: 0.6, flicker: 0.16 });
+  // A wash over the floor the four stand on. Their facing is the entire puzzle
+  // state, and a facing you have to squint at is a puzzle state you cannot read.
+  lights.push({ x: 14.5, y: 9, radius: 150, color: 0x6c7bb8, intensity: 0.26, flicker: 0 });
+  for (const f of R4.followers) {
+    lights.push({ x: f.x, y: f.y - 1.2, radius: 42, color: 0x9fb0e0, intensity: 0.3, flicker: 0 });
+  }
 
   props.push({ key: 'prop/shrine/broken_instrument_0', x: 3.9, y: 4.6, spec: { solid: [22, 10] } });
   props.push({ key: 'prop/shrine/echo_pool_0', x: 26, y: 11, spec: { anim: 'shrine_echo_pool', depthBias: -60 } });
@@ -159,7 +165,7 @@ function build(): MapDef {
     subtitle: 'the hall of agreement',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.48,
+    darkness: 0.42,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

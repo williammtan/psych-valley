@@ -61,7 +61,17 @@ import type { Dir, Player } from '@/entities/Player';
 // because the difference between "readable" and "unfair" in this encounter is
 // entirely a question of how long the player gets to look at things.
 
-const HP = { 1: 12, 2: 6, 3: 8 } as const;
+/**
+ * Phase health.
+ *
+ * Not a sponge (plan.md §44 is explicit about that): each number is chosen so
+ * the phase lasts a fixed number of *its own structural beats* rather than a
+ * fixed number of swings. Phase two is "about three clean reads", phase three
+ * is "about three collapses" — so a player who understands spends the phase
+ * doing the interesting thing three times, and a player who does not spends it
+ * failing to.
+ */
+const HP = { 1: 20, 2: 12, 3: 16 } as const;
 
 const P1 = {
   /** Identical approaches needed before it commits to a prediction. */
@@ -72,11 +82,15 @@ const P1 = {
   PUNISH_DAMAGE: 3,
   PUNISH_STAGGER_MS: 1300,
   /**
-   * A block is not just "no damage" — it counters. The Echo swipes the ground
-   * it was already guarding, telegraphed, so backing off after being read is
-   * free and walking straight back into the same approach is not.
+   * A block is not just "no damage" — it counters, and shoves you off.
+   *
+   * It deliberately costs TEMPO rather than HEALTH. An earlier version had the
+   * counter take a heart, and a player who had not yet worked out the rule
+   * simply died over and over: the phase became a wall instead of a slow lane.
+   * Time is the right currency here, because the whole phase is a claim about
+   * how fast understanding is.
    */
-  COUNTER_FUSE_MS: 420,
+  COUNTER_SHOVE: true,
   /** After it blocks, it has to re-learn from scratch — and it is open. */
   RECOVER_MS: 1250,
   /** Dash in, do not swing: it commits its counter to empty air. */
@@ -94,7 +108,7 @@ const P2 = {
   /** Two, then four, then six (§46). */
   RAMP: [2, 4, 6],
   /** Reward for a clean read: the only real window it can be hurt in. */
-  STAGGER_MS: 2300,
+  STAGGER_MS: 1900,
   /**
    * Every wave leaves a much shorter opening whether or not it was read.
    *
@@ -131,7 +145,16 @@ const P3 = {
   /** Free hits once unanimity is gone. */
   BREAK_STAGGER_MS: 3000,
   /** Grinding one conformist eventually works too — slowly. See notes below. */
-  SNAPBACKS_TO_BREAK: 5,
+  SNAPBACKS_TO_BREAK: 7,
+  /**
+   * Hitting the wrong one closes ranks: the whole group pulses at once, becomes
+   * briefly untouchable, and shoves you off.
+   *
+   * Without this, "swing at whichever is nearest" is nearly as good as knowing
+   * which one is out of step — one in six per swing, and swings are cheap. The
+   * cost of a wrong guess is what makes the right guess worth having.
+   */
+  CLOSE_RANKS_MS: 1100,
   /** If nobody has worked it out, the odd one drifts further out of line. */
   DESPERATION_MS: 26000,
   SLAM_EVERY_MS: 4200,
@@ -352,6 +375,7 @@ class Follower implements ConformerLike {
   }
 
   setFacing(dir: Dir, _copied: boolean): void {
+    if (this.dead) return;
     this.facing = dir;
     this.sprite.setFlipX(dir === 'w');
     const key = `echomote_walk_${dir === 'w' ? 'e' : dir}`;
@@ -370,6 +394,8 @@ class Follower implements ConformerLike {
 
   /** The unison flash. The whole phase is legible because of this one beat. */
   pulse(now: number): void {
+    // The odd one's pulse is scheduled on a delay, so it can outlive the phase.
+    if (this.dead) return;
     this.pulseAt = now;
     if (this.scene.anims.exists('echomote_sync_pulse')) this.sprite.play('echomote_sync_pulse');
     this.scene.tweens.add({
@@ -416,6 +442,9 @@ class Follower implements ConformerLike {
   }
 
   destroy(): void {
+    // Mark it dead first: a delayed pulse firing after the sprite is gone
+    // would call play() on a destroyed object.
+    this.dead = true;
     this.sprite.destroy();
     this.shadow.destroy();
   }
@@ -473,6 +502,8 @@ export class EchoBoss {
   private shield?: Phaser.GameObjects.Graphics;
   private unanimousSince = 0;
   private cycle = 0;
+  /** While the group is covering for a struck member, nothing can be hit. */
+  private ranksClosedUntil = 0;
 
   constructor(private scene: WorldScene, private opts: EchoBossOpts) {
     this.x = opts.home.x;
@@ -508,6 +539,20 @@ export class EchoBoss {
     this.scene.tweens.add({
       targets: this, x: this.opts.home.x, y: this.opts.home.y, duration: 1100, ease: 'Sine.easeInOut',
     });
+  }
+
+  /**
+   * Restart the phase the player was in when they went down.
+   *
+   * plan.md §67: failure must be lightweight. Crucially the Echo does NOT heal
+   * — restoring it to full every death makes a phase a player is struggling
+   * with mathematically unwinnable rather than merely slow, which is the exact
+   * opposite of "the game should encourage experimentation".
+   */
+  restartPhase(): void {
+    const carried = Math.max(1, this.hp);
+    this.beginPhase(this.phase);
+    this.hp = carried;
   }
 
   /** Begin (or restart) a phase. Used by both progression and respawn. */
@@ -646,14 +691,31 @@ export class EchoBoss {
     const hb = player.hitbox;
     if (!hb.active || now < this.lastSwingAt + 280) return;
 
-    // Phase three: followers are hit before the boss, because the answer to the
-    // phase is a follower and the player should never feel their aim was eaten.
-    if (this.phase === 3) {
-      for (const f of this.followers) {
-        if (f.dead || !f.overlapsRect(hb)) continue;
-        this.lastSwingAt = now;
-        this.hitFollower(f, now, player);
-        return;
+    // Phase three: while the ring is unanimous, followers take the hit before
+    // the boss does — the answer to the phase is a follower, and the player
+    // should never feel their aim was eaten by the thing they cannot hurt.
+    //
+    // Once unanimity is broken the priority inverts. The formation has come
+    // apart; it is not defending anything any more, and a ring of bodies
+    // swallowing every swing would make the reward for solving the phase
+    // unreachable.
+    if (this.phase === 3 && this.shielded) {
+      // While ranks are closed the swing finds nothing: they are all covering
+      // for each other.
+      if (now < this.ranksClosedUntil) {
+        for (const f of this.followers) {
+          if (f.dead || !f.overlapsRect(hb)) continue;
+          this.lastSwingAt = now;
+          Audio.sfx('block', { volume: 0.3, rate: 1.35 });
+          return;
+        }
+      } else {
+        for (const f of this.followers) {
+          if (f.dead || !f.overlapsRect(hb)) continue;
+          this.lastSwingAt = now;
+          this.hitFollower(f, now, player);
+          return;
+        }
       }
     }
 
@@ -775,23 +837,11 @@ export class EchoBoss {
         Audio.sfx('block', { volume: 0.55 });
         this.scene.fx.burst(this.x, this.y - 30, 'fx/echo_burst');
         this.scene.shake(0.004, 120);
-        const a = Math.atan2(player.y - this.y, player.x - this.x);
-        player.vx = Math.cos(a) * 190;
-        player.vy = Math.sin(a) * 190;
+        // A zero-damage hurt: real knockback and a moment of lost control, no
+        // heart. Setting velocities directly would not work — the player's own
+        // acceleration overwrites them on the very next frame.
+        if (P1.COUNTER_SHOVE) player.hurt(0, this.x, this.y - 30);
         emit('boss:blocked', { signature: sig });
-
-        // ...and it swipes the ground it was guarding. Telegraphed, so a player
-        // who reads the block and backs off takes nothing; one who bounces off
-        // and walks straight back into the same approach eats it.
-        const [gx, gy] = SIDE_VEC[sig[0] as Side];
-        this.indicators.push(new Indicator(
-          this.scene,
-          this.x + gx * 30,
-          this.y - 14 + gy * 22,
-          true,
-          now + P1.COUNTER_FUSE_MS,
-          1.4,
-        ));
 
         // Blocking still costs it the read: it drops its guard and has to watch
         // you again from scratch. That is what stops a repeat-attacker
@@ -1196,6 +1246,8 @@ export class EchoBoss {
       return;
     }
 
+    // Wrong one. It turns to face you, and then the group closes around it —
+    // the snap-back the shrine's conformity room already taught, at speed.
     f.snapbacks++;
     const dir: Dir = Math.abs(player.x - f.x) > Math.abs(player.y - f.y)
       ? (player.x > f.x ? 'e' : 'w')
@@ -1204,6 +1256,14 @@ export class EchoBoss {
     if (this.scene.anims.exists('echomote_hurt')) f.sprite.play('echomote_hurt');
     Audio.sfx('block', { volume: 0.4, rate: 1.1 });
     this.scene.fx.impact(f.x, f.y - 9);
+
+    this.ranksClosedUntil = now + P3.CLOSE_RANKS_MS;
+    for (const other of this.followers) {
+      if (other.dead || other.dissenting) continue;
+      other.pulse(now);
+    }
+    player.hurt(0, f.x, f.y);
+    this.scene.shake(0.003, 110);
   }
 
   /** The moment the phase turns. It has to be unmistakable. */

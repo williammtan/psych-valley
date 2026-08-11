@@ -123,12 +123,24 @@ export function boxBlocked(grid: SolidGrid, box: Box, x = box.x, y = box.y): boo
  */
 export function unstick(grid: SolidGrid, box: Box): { x: number; y: number } {
   if (!overlaps(grid, box, box.x, box.y)) return { x: box.x, y: box.y };
+  // A full ring rather than eight rays: rays leave blind corridors, so a body
+  // wedged in a corner or against the map border can sit two tiles from open
+  // ground and never find it. Nearest free spot wins, so the push-out is the
+  // smallest one that works.
   for (let r = 1; r <= 48; r++) {
-    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-      const nx = box.x + dx * r;
-      const ny = box.y + dy * r;
-      if (!overlaps(grid, box, nx, ny)) return { x: nx, y: ny };
+    let best: { x: number; y: number; d: number } | null = null;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        // Only the newly reached ring; the interior was covered by earlier r.
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = box.x + dx;
+        const ny = box.y + dy;
+        if (overlaps(grid, box, nx, ny)) continue;
+        const d = dx * dx + dy * dy;
+        if (!best || d < best.d) best = { x: nx, y: ny, d };
+      }
     }
+    if (best) return { x: best.x, y: best.y };
   }
   return { x: box.x, y: box.y };
 }

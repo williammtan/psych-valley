@@ -18,7 +18,7 @@ import { registerArea } from '../registry';
 import { R2 } from '../maps/shrine_combat';
 import { ROOM_FLOOR, northWallY, southWallY } from '../maps/shrine_common';
 import { TALK, playExchange } from '@/data/dialogue';
-import { BARS_ART, RoomRig, completeRoom, doorGate, readEnv } from './shrine_kit';
+import { BARS_ART, RoomRig, clearHarness, completeRoom, doorGate, installHarness, readEnv } from './shrine_kit';
 import type { Gate } from '@/systems/Puzzle';
 import type { WorldScene } from '@/scenes/WorldScene';
 
@@ -75,6 +75,18 @@ registerArea('shrine_combat', {
     };
     s.rig.onReset(() => armRoom(w));
     armRoom(w);
+
+    installHarness(w, {
+      snapshot() {
+        return {
+          alive: w.enemies.aliveCount,
+          kinds: w.enemies.list.filter((e) => !e.dead).map((e) => e.kind),
+          northOpen: s?.north.open ?? false,
+          southOpen: s?.south.open ?? false,
+          fighting: s?.fighting ?? false,
+        };
+      },
+    });
   },
 
   onTrigger(w, id) {
@@ -96,6 +108,7 @@ registerArea('shrine_combat', {
     s?.north.destroy();
     s?.south.destroy();
     s?.rig.destroy();
+    clearHarness();
     s = null;
   },
 });

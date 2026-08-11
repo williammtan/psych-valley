@@ -24,6 +24,14 @@ export interface Material {
   solid?: boolean;
   /** Scatter rule key applied to this cell (grass tufts, pebbles...). */
   scatter?: string;
+  /**
+   * A specific tile drawn on the scatter layer above this cell's base, chosen
+   * deterministically. Accepts an exact tile name ('tile/woods/stairs_up_0') or
+   * a family ('woods/cliff_top_n'), in which case a stable per-cell variant is
+   * picked. Use this — not `scatter` — for anything whose exact identity
+   * matters, like a ledge lip or one half of a staircase.
+   */
+  overlay?: string;
   /** Deep water / pit — blocks movement and is lethal-ish (respawn nudge). */
   pit?: boolean;
   /** Overrides depth-sorted rendering for the ground layer (bridges). */

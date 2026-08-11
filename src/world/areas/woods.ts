@@ -124,16 +124,12 @@ registerArea('woods', {
       w.setDynamicSolid(fx, fy, true);
     }
 
-    // A hint you find by looking, not by being told.
-    w.addInteractable({
-      id: 'woods_boulder_hint',
-      x: (fx + 0.5) * TILE,
-      y: (fy - 1) * TILE,
-      label: 'Look',
-      observable: true,
-      forbids: 'woods_ford_open',
-      onInteract: () => { say(w, BOULDER_HINT); },
-    });
+    // NOTE: the hint about the shallows deliberately does NOT get its own
+    // interactable. A second target one tile from the boulder wins the
+    // interaction cone as often as the boulder does, and the player ends up
+    // reading a description of the puzzle instead of solving it. It is folded
+    // into the boulder itself: approach it from the wrong side and it tells you
+    // which side is the right one.
 
     // ── the chest ───────────────────────────────────────────────────────────
     if (State.has('woods_chest')) {
@@ -287,9 +283,15 @@ function shoveBoulder(w: WorldScene): boolean {
     say(w, ['It is not going anywhere now.']);
     return true;
   }
-  // You have to be pushing it the way it would actually go.
-  if (w.player.dir !== 's') {
-    say(w, ['It rocks in its socket. From the other side, it would go over.']);
+  // You have to be on the upstream side to put your weight behind it.
+  //
+  // This tests POSITION, not facing. `Interactions` turns the player to face
+  // whatever they interacted with before dispatching, and it aims at the
+  // sprite's mid-height — so by the time this runs the player's `dir` says
+  // where the boulder is, not which way they were pushing. Standing north of it
+  // is the thing the player actually did, so that is the thing to check.
+  if (w.player.tileY > WOODS.boulder[1]) {
+    say(w, BOULDER_HINT);
     return true;
   }
   const [fx, fy] = WOODS.ford;

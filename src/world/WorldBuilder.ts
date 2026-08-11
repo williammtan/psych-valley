@@ -7,7 +7,7 @@
  */
 import Phaser from 'phaser';
 import { TILE, DEPTH } from '@/core/config';
-import { blobTable, blobAnimation, familyTiles, hash01, hasFamily, tileIndex, variantAt } from './art';
+import { blobTable, blobAnimation, familyTiles, hash01, hasFamily, hasTile, tileIndex, variantAt } from './art';
 import { hasFrame } from '@/core/textures';
 import type { MapDef, Material, ObjectSpec, ScatterRule } from './types';
 import { validateMap } from './types';
@@ -104,6 +104,13 @@ export function buildWorld(scene: Phaser.Scene, def: MapDef): BuiltWorld {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const m = mat(x, y)!;
+      if (m.overlay) {
+        // Exact tile name wins; otherwise treat it as a family.
+        if (hasTile(m.overlay)) scatter.putTileAt(tileIndex(m.overlay), x, y);
+        else if (hasFamily(m.overlay)) scatter.putTileAt(variantAt(m.overlay, x, y, 31), x, y);
+        else console.warn(`[psyche] map '${def.id}': unknown overlay tile '${m.overlay}'`);
+        continue;
+      }
       if (!m.scatter) continue;
       const rule: ScatterRule | undefined = rules[m.scatter];
       if (!rule) continue;

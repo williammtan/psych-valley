@@ -36,8 +36,12 @@ export class Player {
   vy = 0;
 
   private modeUntil = 0;
+  /** When the current mode began — the clock every attack phase reads from. */
+  private modeSince = 0;
   private dashReadyAt = 0;
+  private attackReadyAt = 0;
   private invulnUntil = 0;
+  private dashFrame = 0;
   private attackBufferedAt = -9999;
   private dashBufferedAt = -9999;
   private dashDir: [number, number] = [0, 1];
@@ -126,9 +130,17 @@ export class Player {
       if (now >= this.modeUntil) this.mode = 'free';
     }
 
+    // Recovery cancel: once the strike is spent, pushing a direction ends the
+    // swing early. The next swing still waits out the full ATTACK_MS, so the
+    // sword stays rhythmic instead of becoming a mash button.
+    if (this.mode === 'attack' && now - this.modeSince >= PLAYER.ATTACK_CANCEL_MS) {
+      const a = input.axis();
+      if (a.x !== 0 || a.y !== 0) this.mode = 'free';
+    }
+
     if (this.mode === 'free') {
       // Buffered actions fire the instant we're able to act.
-      if (now - this.attackBufferedAt <= PLAYER.ATTACK_BUFFER_MS) {
+      if (now - this.attackBufferedAt <= PLAYER.ATTACK_BUFFER_MS && now >= this.attackReadyAt) {
         this.attackBufferedAt = -9999;
         this.startAttack();
       } else if (now - this.dashBufferedAt <= PLAYER.ATTACK_BUFFER_MS && now >= this.dashReadyAt) {
@@ -157,12 +169,14 @@ export class Player {
       targetVx = this.dashDir[0] * PLAYER.DASH_SPEED;
       targetVy = this.dashDir[1] * PLAYER.DASH_SPEED;
     } else if (this.mode === 'attack') {
-      // Small forward lunge, decaying over the attack window.
-      const t = 1 - (this.modeUntil - now) / PLAYER.ATTACK_MS;
-      const push = Math.max(0, 1 - t * 2.2);
+      // A forward lunge on the strike frames, decaying through the recovery,
+      // plus reduced walking authority: swinging mid-stride must not plant the
+      // character. A stop here reads as the game dropping your input.
+      const push = Math.max(0, 1 - ((now - this.modeSince) / PLAYER.ATTACK_MS) * 2.2);
       const [dx, dy] = DIR_VEC[this.dir];
-      targetVx = dx * PLAYER.ATTACK_LUNGE * push;
-      targetVy = dy * PLAYER.ATTACK_LUNGE * push;
+      const axis = input.axis();
+      targetVx = dx * PLAYER.ATTACK_LUNGE * push + axis.x * PLAYER.SPEED * PLAYER.ATTACK_MOVE;
+      targetVy = dy * PLAYER.ATTACK_LUNGE * push + axis.y * PLAYER.SPEED * PLAYER.ATTACK_MOVE;
     } else if (this.mode === 'hurt') {
       targetVx = this.vx * 0.86;
       targetVy = this.vy * 0.86;
@@ -198,7 +212,10 @@ export class Player {
       this.stepAccum = 12;
     }
 
-    if (this.mode === 'dash') emit('player:dashtrail', { x: this.x, y: this.y, dir: this.dir });
+    // One ghost every few frames; every frame stacks into an unreadable smear.
+    if (this.mode === 'dash' && this.dashFrame++ % PLAYER.DASH_TRAIL_EVERY === 0) {
+      emit('player:dashtrail', { x: this.x, y: this.y, dir: this.dir });
+    }
 
     this.trail.push({ x: this.x, y: this.y, dir: this.dir, t: now });
     if (this.trail.length > 240) this.trail.shift();
@@ -220,7 +237,9 @@ export class Player {
 
   private startAttack(): void {
     this.mode = 'attack';
+    this.modeSince = this.scene.time.now;
     this.modeUntil = this.scene.time.now + PLAYER.ATTACK_MS;
+    this.attackReadyAt = this.scene.time.now + PLAYER.ATTACK_MS;
     this.lastAnim = '';
     this.playAnim(`player_attack_${this.animDir}`);
     emit('player:attack', { x: this.x, y: this.y, dir: this.dir });
@@ -233,6 +252,8 @@ export class Player {
     dx /= len; dy /= len;
     this.dashDir = [dx, dy];
     this.mode = 'dash';
+    this.modeSince = this.scene.time.now;
+    this.dashFrame = 0;
     this.modeUntil = this.scene.time.now + PLAYER.DASH_MS;
     this.dashReadyAt = this.scene.time.now + PLAYER.DASH_MS + PLAYER.DASH_COOLDOWN_MS;
     this.invulnUntil = Math.max(this.invulnUntil, this.scene.time.now + PLAYER.DASH_IFRAMES_MS);
@@ -244,7 +265,7 @@ export class Player {
   /** The attack's damage rectangle, live only during the strike frames. */
   private updateHitbox(now: number): void {
     if (this.mode !== 'attack') { this.hitbox.active = false; return; }
-    const elapsed = PLAYER.ATTACK_MS - (this.modeUntil - now);
+    const elapsed = now - this.modeSince;
     // Active window: after the wind-up, through the strike.
     const active = elapsed > 70 && elapsed < 190;
     this.hitbox.active = active;
@@ -263,6 +284,7 @@ export class Player {
     State.hp = Math.max(0, State.hp - amount);
     this.invulnUntil = this.scene.time.now + PLAYER.HURT_IFRAMES_MS;
     this.mode = 'hurt';
+    this.modeSince = this.scene.time.now;
     this.modeUntil = this.scene.time.now + 220;
     const a = Math.atan2(this.y - fromY, this.x - fromX);
     this.vx = Math.cos(a) * PLAYER.KNOCKBACK;

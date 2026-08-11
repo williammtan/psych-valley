@@ -27,6 +27,7 @@ import { tileIndex } from '@/world/art';
 import { Gate } from '@/systems/Puzzle';
 import { RUNES, type Rune } from '@/systems/Puzzle';
 import { describe, runBeats } from '@/data/dialogue';
+import type { CueFollower } from '@/systems/Abilities';
 import type { Enemy } from '@/entities/Enemy';
 import type { WorldScene } from '@/scenes/WorldScene';
 
@@ -286,6 +287,38 @@ export function installHarness(w: WorldScene, api: Record<string, unknown>): voi
 
 export function clearHarness(): void {
   delete (window as unknown as { __shrine?: unknown }).__shrine;
+}
+
+/**
+ * Walk a creature toward the cue it has learned, and get it round the furniture.
+ *
+ * `CueFollower` moves in a straight line and simply declines to move when the
+ * tile ahead is solid — which is correct for the open room it was written for
+ * and useless in a dungeon, where the line from a creature to a plate goes
+ * through a pillar about half the time. So: let the CueFollower drive, and if it
+ * has a heading but has not actually moved, slide along the obstruction instead.
+ * A creature wedged against a plinth for the rest of the dungeon is the single
+ * most likely way any of these rooms could become unsolvable.
+ *
+ * Returns true if the creature is acting on a cue at all.
+ */
+export function driveCue(
+  w: WorldScene,
+  e: Enemy,
+  follower: CueFollower,
+  kind: string,
+  speed: number,
+  dt: number,
+  grid: boolean[][],
+): boolean {
+  const bx = e.x;
+  const by = e.y;
+  const active = follower.update(dt, w.cues, grid);
+  if (!active) return false;
+  if (e.x !== bx || e.y !== by) return true;
+  const cue = w.cues.strongest(kind, e.x, e.y);
+  if (cue) stepToward(e, cue.x, cue.y, speed, dt, grid);
+  return true;
 }
 
 // ── room completion ─────────────────────────────────────────────────────────

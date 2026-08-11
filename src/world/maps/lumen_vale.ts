@@ -93,7 +93,9 @@ const BUILDINGS: Bld[] = [
   { id: 'house_e', key: 'prop/build/house_e', tx: 8, ty: 62, w: 6, h: 5, gap: 10, door: [2, 2] },
   { id: 'barn', key: 'prop/build/barn_small', tx: 8, ty: 9, w: 6, h: 5, gap: 5 },
   { id: 'wellhouse', key: 'prop/build/wellhouse', tx: 22, ty: 64, w: 3, h: 4, gap: 10 },
-  { id: 'shed_courier', key: 'prop/build/shed', tx: 26, ty: 30, w: 3, h: 3, gap: 4 },
+  // Moved two tiles west out of what is now the Market Green, so the stall row
+  // has a clear north side to stand on.
+  { id: 'shed_courier', key: 'prop/build/shed', tx: 23, ty: 29, w: 3, h: 3, gap: 4 },
   { id: 'shed_inn', key: 'prop/build/shed', tx: 84, ty: 45, w: 3, h: 3, gap: 4 },
   { id: 'outhouse', key: 'prop/build/outhouse', tx: 18, ty: 68, w: 2, h: 3, gap: 4 },
   { id: 'south_gate', key: 'prop/build/south_gate_closed', tx: 39, ty: 71, w: 6, h: 6, gap: 6 },
@@ -109,23 +111,133 @@ function build(): MapDef {
   const zones: Zone[] = [];
   const lights: LightDef[] = [];
 
-  const P = (key: string, x: number, y: number, spec?: PropPlacement['spec'], id?: string) => {
-    props.push({ key, x, y, spec, id });
-  };
   /** Deterministic 0..1 noise, so "random" dressing is stable across reloads. */
   const rnd = (a: number, b = 0) => {
     let n = (a * 374761393 + b * 668265263) | 0;
     n = (n ^ (n >>> 13)) * 1274126177;
     return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
   };
-  /** A lamppost plus the light it actually casts. */
+
+  /**
+   * VARIANT SPREADING
+   * ─────────────────
+   * A blind A/B against a commercial reference counted, in one frame, twelve
+   * pixel-identical trees, ten identical twigs, five identical crates and
+   * three identical lampposts. Nearly all of it came from hand-placed props:
+   * an author writing dressing reaches for `crate_1` and `chicken_0` every
+   * time, and 393 placements later the town is a copy-paste sheet.
+   *
+   * The grid legend already lists every variant, so this table does the same
+   * job for the explicit `props` array: any key whose family appears here is
+   * re-picked from the family's full range using the position it stands on.
+   * Deterministic, so the town looks the same on every load, and the fix
+   * survives someone adding another crate next month.
+   *
+   * Counts come from `public/assets/atlas.json`. Families NOT listed are
+   * deliberate: signposts point in different directions, bunting and string
+   * lights are laid in ordered runs, awnings are chosen per building, and
+   * chimney smoke plays an animation that replaces the frame anyway.
+   */
+  const VARIANTS: Record<string, number> = {
+    'prop/town/tree_oak': 4, 'prop/town/tree_pine': 3, 'prop/town/tree_blossom': 2,
+    'prop/town/bush': 4, 'prop/town/sapling': 2, 'prop/town/rock': 4,
+    'prop/town/mossy_rock': 2, 'prop/town/river_rock': 3, 'prop/town/lilypad': 2,
+    'prop/town/reeds': 3, 'prop/town/vegetable_row': 3, 'prop/town/flowerbed': 3,
+    'prop/town/planter': 2, 'prop/town/bench': 2, 'prop/town/crate': 3,
+    'prop/town/basket': 3, 'prop/town/barrel': 2, 'prop/town/sack': 2,
+    'prop/town/woodpile': 2, 'prop/town/log': 2, 'prop/town/parcel': 4,
+    'prop/town/chicken': 4, 'prop/town/duck': 4, 'prop/town/butterfly': 4,
+    'prop/town/bird_perched': 2, 'prop/town/cat_sleeping': 2, 'prop/town/chair': 2,
+    'prop/town/laundry_line': 3, 'prop/fest/ground_lantern': 3,
+  };
+
+  /**
+   * CONTACT SHADOWS
+   * ───────────────
+   * The builder now drops a shadow under every prop, which is right for the
+   * ninety per cent of them that stand on the ground and wrong — visibly,
+   * embarrassingly wrong — for the rest. Two kinds opt out:
+   *
+   *   airborne   chimney smoke, hanging trade signs, wall-mounted awnings and
+   *              window boxes, butterflies, birds sitting on a roof ridge. A
+   *              shadow directly under these lands several tiles from where
+   *              the thing actually is.
+   *   flat       lilypads and rocks lying in the river, the jetty deck. A dark
+   *              ellipse painted on open water reads as a hole in the river.
+   *
+   * Held here rather than at each of the forty call sites, so it cannot be
+   * forgotten the next time somebody hangs a sign.
+   */
+  const NO_SHADOW = [
+    'prop/build/chimney_smoke', 'prop/build/sign_', 'prop/build/awning_',
+    'prop/town/window_box', 'prop/town/butterfly_', 'prop/town/bird_perched_',
+    'prop/town/lilypad_', 'prop/town/river_rock_', 'prop/town/jetty',
+  ];
+  /** Low boxes: they stand up, but only just. A tight ellipse, not a blob. */
+  const SMALL_SHADOW = ['prop/town/flowerbed_', 'prop/town/vegetable_row_'];
+
+  const P = (key: string, x: number, y: number, spec?: PropPlacement['spec'], id?: string) => {
+    const m = /^(.*)_(\d+)$/.exec(key);
+    const n = m ? VARIANTS[m[1]] : undefined;
+    const k = n ? `${m![1]}_${Math.floor(rnd(Math.round(x * 4) * 131 + 7, Math.round(y * 4) * 197 + 13) * n) % n}` : key;
+    let s = spec;
+    if (!s?.shadow) {
+      if (NO_SHADOW.some((p) => k.startsWith(p))) s = { ...s, shadow: 'none' };
+      else if (SMALL_SHADOW.some((p) => k.startsWith(p))) s = { ...s, shadow: 'small' };
+    }
+    props.push({ key: k, x, y, spec: s, id });
+  };
+
+  /**
+   * A washing line and the two posts holding it up.
+   *
+   * The line sprite is a rope and three garments with nothing at either end,
+   * so at normal framing the washing floats. The posts are the bridge's
+   * railing posts — 22px, which is exactly where the rope sits — and they are
+   * ordinary ground props, so they take a contact shadow and the player walks
+   * behind them. There is no dedicated laundry post in the atlas; this is the
+   * closest existing part and it reads correctly. (Art gap, noted.)
+   */
+  const laundry = (x: number, y: number, spec?: PropPlacement['spec']) => {
+    P('prop/town/laundry_line_0', x, y, { over: true, sway: 0.5, ...spec });
+    P('prop/town/bridge_post', x - 1.5, y, { depthBias: 60 });
+    P('prop/town/bridge_post', x + 1.5, y, { depthBias: 60 });
+  };
+
+  /**
+   * A lamppost plus the light it actually casts.
+   *
+   * There is one lamppost design in the atlas and no budget to draw another,
+   * so the variation has to come from here. Three things vary per lamp: which
+   * of the three lit frames it rests on, whether it runs the flicker cycle at
+   * all (running it on every lamp put thirty-one posts in perfect lockstep,
+   * which reads worse than no animation), and the size and warmth of the pool
+   * it throws. The light layer is the one thing this engine has that the
+   * reference does not, so it is where the individuality goes.
+   */
   const lamp = (x: number, y: number, radius = 46, intensity = 0.42) => {
-    P('prop/town/lamppost_lit_0', x, y, { anim: 'lamppost_flicker', solid: [8, 6] });
-    lights.push({ x, y: y - 2, radius, color: 0xffb937, intensity, flicker: 0.5 });
+    const v = rnd(Math.round(x * 8) + 91, Math.round(y * 8) + 37);
+    const frame = Math.floor(v * 3) % 3;
+    const warm = [0xffb937, 0xffc766, 0xffa62e, 0xffd08a][Math.floor(v * 4) % 4];
+    props.push({
+      key: `prop/town/lamppost_lit_${frame}`,
+      x, y,
+      spec: { solid: [8, 6], ...(v < 0.42 ? { anim: 'lamppost_flicker' } : {}) },
+    });
+    lights.push({
+      x, y: y - 2,
+      radius: Math.round(radius * (0.86 + v * 0.3)),
+      color: warm,
+      intensity: intensity * (0.86 + rnd(Math.round(x * 8) + 5, Math.round(y * 8) + 3) * 0.32),
+      flicker: 0.34 + v * 0.4,
+    });
   };
 
   const SOFT = '.,"*;y';
-  const WALK = 'pdcxg=';
+  const WALK = 'pdcxgWEQK=';
+  /** Every cell a `route()` painted. Squares and greens are deliberately not in
+   *  here: only roads get a worn centre lane rubbed through them. */
+  const onRoute: boolean[][] = Array.from({ length: H }, () => new Array<boolean>(W).fill(false));
 
   // ══ 1. grass, in bands rather than one flat texture ══════════════════════
   g.scatter(',', ['.'], 0.44, 11);
@@ -146,18 +258,29 @@ function build(): MapDef {
   // ══ 2. the tree line ═════════════════════════════════════════════════════
   // 'X' is grass that is solid: deep wood the player reads as scenery, not as
   // a route. Blobs only — no straight edges anywhere on the map border.
-  g.rect(0, 0, W, 2, 'X');
-  g.rect(0, 0, 2, H, 'X');
+  //
+  // The wood is deliberately DEEP on the north and west sides. A blind review
+  // found the frame leaking at every border — trees cut mid-canopy, a lane
+  // running off the edge — and the cure is not a fence, it is enough wood that
+  // the canopy the camera crops is the third row back rather than the first.
+  // Roads leave through gaps cut on purpose, listed below.
+  g.rect(0, 0, W, 3, 'X');
+  g.rect(0, 0, 3, H, 'X');
   g.rect(W - 2, 0, 2, H, 'X');
   g.rect(0, H - 2, W, 2, 'X');
   for (const [cx, cy, rx, ry, sd] of [
-    [10, 2, 12, 4, 2], [34, 1, 14, 4, 3], [58, 2, 12, 4, 5], [80, 3, 10, 5, 7],
-    [3, 14, 4, 12, 11], [2, 34, 4, 10, 13], [3, 54, 4, 9, 17], [4, 70, 6, 6, 19],
+    [10, 3, 12, 6, 2], [34, 2, 14, 5, 3], [58, 3, 12, 6, 5], [80, 3, 10, 6, 7],
+    [22, 4, 9, 5, 91], [48, 3, 10, 5, 93], [68, 4, 9, 5, 95],
+    [4, 14, 6, 12, 11], [3, 34, 5, 10, 13], [4, 54, 5, 9, 17], [4, 70, 6, 6, 19],
+    [3, 24, 5, 7, 97], [3, 44, 4, 7, 99], [4, 62, 5, 6, 101],
     [82, 12, 7, 14, 23], [84, 34, 5, 10, 29], [83, 58, 6, 10, 31],
     [20, 76, 10, 4, 37], [46, 76, 12, 4, 41], [70, 75, 12, 5, 43],
     [79, 19, 5, 9, 47], [78, 66, 8, 8, 53], [64, 72, 8, 5, 61],
     [30, 21, 3, 3, 67], [8, 31, 3, 3, 71], [1, 45, 3, 6, 73],
   ] as const) g.blob(cx, cy, rx, ry, 'X', sd, 0.34);
+  // The one gap cut on purpose in the north border: the road out to Festival
+  // Plaza. The south exit is the gate building itself, which frames its own.
+  g.blob(43.5, 7, 3.6, 6, ',', 111, 0.22);
   g.blob(18, 20, 8, 6, ',', 79, 0.3);   // keep the north meadow open
   g.blob(12, 62, 6, 5, ',', 83, 0.3);   // keep the south-west gardens open
 
@@ -197,7 +320,10 @@ function build(): MapDef {
             const px = Math.round(cx) + dx;
             const py = Math.round(cy) + dy;
             const d = Math.hypot(px + 0.5 - cx, py + 0.5 - cy);
-            if (d <= r + (rnd(px * 3 + sd, py * 5) - 0.45) * 0.9) g.set(px, py, ch);
+            if (d <= r + (rnd(px * 3 + sd, py * 5) - 0.45) * 0.9) {
+              g.set(px, py, ch);
+              if (g.inside(px, py)) onRoute[py][px] = true;
+            }
           }
         }
       }
@@ -205,31 +331,78 @@ function build(): MapDef {
     }
   };
 
-  // Vale Road: the north-south spine, with a dogleg so nothing lines up.
-  route([[44, 6], [44, 16], [45, 24], [44, 32], [44, 40], [43, 47]], 4.4, 4.0, 'p', 1);
+  /**
+   * A junction, a doorway apron or a passing place: a road is not a constant
+   * ribbon, it swells wherever people stop, turn or set something down. Every
+   * crossing in the town gets one, which is what stops the lanes reading as
+   * pipes laid over a lawn.
+   */
+  const bulge = (cx: number, cy: number, r: number, ch: string, sd: number) => {
+    const R = Math.ceil(r) + 1;
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        const px = cx + dx;
+        const py = cy + dy;
+        const d = Math.hypot(dx, dy);
+        if (d > r + (rnd(px * 7 + sd, py * 11 + sd) - 0.4) * 1.3) continue;
+        if (!g.inside(px, py)) continue;
+        const c = g.get(px, py);
+        if (!SOFT.includes(c) && !WALK.includes(c)) continue;   // never over water, fence or bridge
+        g.set(px, py, ch);
+        onRoute[py][px] = true;
+      }
+    }
+  };
+
+  // Vale Road: the north-south spine, with a dogleg so nothing lines up. It
+  // starts at the plaza's flower arch — NOT in the trees above it. A road that
+  // fades into scenery is the single loudest tell that a map was painted
+  // rather than planned, so every polyline here ends on a door, a crossing, a
+  // gate or a landmark, and the treeline closes over it afterwards.
+  route([[44, 8], [44, 16], [45, 24], [44, 32], [44, 40], [43, 47]], 4.4, 4.0, 'p', 1);
   route([[43, 47], [42, 54], [42, 62], [41, 68], [41, 71]], 4.0, 3.6, 'p', 2);
   // Bridge Street: Courier Row → square → bridge → the inn.
   route([[15, 44], [24, 45], [33, 45], [44, 45]], 2.8, 3.6, 'p', 3);
   route([[44, 45], [52, 44], [58, 44]], 3.6, 3.2, 'p', 4);
 
   // Lanes — narrower, dirt, district-flavoured.
-  route([[8, 35], [17, 35], [24, 35], [28, 34]], 1.9, 1.7, 'd', 5);   // Courier Row front
+  route([[8, 35], [17, 35], [24, 35], [29, 35]], 1.9, 2.1, 'd', 5);   // Courier Row → the market
   route([[17, 35], [17, 40], [16, 44]], 1.7, 1.9, 'd', 6);            // down to Bridge Street
-  route([[20, 22], [20, 28], [20, 34]], 1.7, 1.7, 'd', 7);            // north through the row
+  route([[20, 15], [20, 24], [20, 30], [20, 34]], 1.5, 1.9, 'd', 7);  // farm road → the row
   route([[6, 45], [11, 45], [16, 44]], 1.9, 1.7, 'd', 8);             // house_a's lane
   route([[13, 14], [13, 22], [13, 30], [12, 34]], 1.7, 1.7, 'd', 9);  // farm lane
-  route([[13, 14], [20, 14], [27, 15], [33, 17]], 1.9, 1.7, 'd', 10); // farm → plaza
-  route([[34, 48], [28, 50], [22, 51], [21, 56], [21, 61]], 1.9, 1.9, 'd', 11); // Sera's lane
-  route([[21, 61], [17, 60], [16, 60]], 1.9, 1.7, 'd', 12);
+  route([[13, 14], [20, 14], [27, 15], [34, 16]], 1.9, 1.9, 'd', 10); // farm → plaza
+  route([[36, 48], [28, 50], [22, 51], [21, 56], [21, 61]], 2.1, 1.9, 'd', 11); // Sera's lane
+  route([[21, 61], [16, 61], [14, 65], [13, 69]], 1.9, 1.7, 'd', 12); // Sera's → the gardens
   route([[21, 61], [21, 67], [20, 70], [13, 70]], 1.9, 1.7, 'd', 13); // market gardens
   route([[42, 64], [48, 65], [52, 64]], 1.9, 1.7, 'd', 14);           // house_d lane
   route([[42, 64], [36, 65], [33, 64]], 1.9, 1.7, 'd', 15);           // house_c lane
-  route([[46, 21], [52, 24], [57, 25], [62, 27]], 1.9, 1.7, 'd', 16); // plaza → ford
+  route([[46, 19], [52, 24], [57, 25], [64, 27]], 1.9, 1.7, 'd', 16); // plaza → ford
   route([[74, 27], [74, 34], [74, 41], [74, 48], [73, 56]], 1.9, 1.7, 'd', 17); // east track
   route([[74, 41], [78, 41]], 1.7, 2.1, 'd', 18);                     // inn approach
   route([[73, 56], [70, 57]], 1.7, 1.7, 'd', 19);                     // down to the jetty
   route([[74, 27], [78, 24], [79, 21]], 1.7, 1.5, 'd', 20);           // up to the overlook
   route([[71, 44], [74, 44]], 2.6, 2.4, 'p', 21);                     // bridge → east track
+  // The Market Green's own approaches: down to Bridge Street, and across to
+  // the square's north-west shoulder. Both exist so the bakery is reachable
+  // from every direction a player might arrive from.
+  route([[32, 38], [31, 42], [30, 45]], 2.1, 2.4, 'd', 22);
+  route([[35, 38], [37, 39], [39, 40]], 2.4, 2.8, 'p', 23);
+
+  // Junctions and doorway aprons: the road swells wherever people stop or turn.
+  for (const [jx, jy, jr, jc, js] of [
+    [44, 16, 3.4, 'p', 301], [45, 24, 3.2, 'p', 302], [44, 40, 3.8, 'p', 303],
+    [43, 47, 3.6, 'p', 304], [42, 62, 3.2, 'p', 305], [41, 68, 3.4, 'p', 306],
+    [16, 44, 3.0, 'p', 307], [24, 45, 3.0, 'p', 308], [33, 45, 3.0, 'p', 309],
+    [17, 35, 2.8, 'd', 310], [20, 34, 2.4, 'd', 311], [13, 14, 2.6, 'd', 312],
+    [20, 14, 2.4, 'd', 313], [21, 61, 2.8, 'd', 314], [42, 64, 3.0, 'p', 315],
+    [74, 41, 2.6, 'd', 316], [74, 27, 2.6, 'd', 317], [30, 45, 2.6, 'd', 318],
+    [12, 34, 2.2, 'd', 319], [52, 24, 2.2, 'd', 320], [73, 56, 2.2, 'd', 321],
+    [11, 45, 2.2, 'd', 322], [13, 70, 2.2, 'd', 323], [48, 65, 2.2, 'd', 324],
+    [44, 9, 3.0, 'p', 325],                            // under the plaza's flower arch
+    [30, 36, 2.6, 'd', 326], [35, 37, 2.4, 'c', 327],  // the market and the bakery apron
+    [30, 45, 2.6, 'd', 328],
+  ] as const) bulge(jx, jy, jr, jc, js);
 
   // ══ 5. paved places ══════════════════════════════════════════════════════
   // Festival Plaza: a green. The paving is a ring where the stalls stand, not
@@ -242,11 +415,30 @@ function build(): MapDef {
   // Bell-tower green: an apron at the foot of the tower, not a courtyard.
   g.blob(49, 31, 6, 3.5, 'c', 109, 0.26);
 
+  // THE MARKET GREEN — the dead band.
+  //
+  // Everything between Courier Row's east end and the bakery's west wall was
+  // eight tiles by thirteen of unbroken lawn with three oaks on it: measurably
+  // the lowest structural energy anywhere in the town, sitting between the
+  // blossom line and the rooftops where the eye rests longest. A blind A/B
+  // review found it before anyone here did.
+  //
+  // It is now the working half of the town's public life: the bakery's
+  // forecourt, a stall row, the well, and the point where four routes meet.
+  // Its paving is coarser and dirtier than the square's — this is where carts
+  // unload, not where the town poses for itself.
+  g.blob(31.0, 35.2, 5.0, 3.4, 'c', 141, 0.26);
+  g.blob(29.0, 32.0, 2.8, 2.2, 'c', 145, 0.42);   // the arm up the bakery's west flank
+  g.blob(35.5, 37.4, 3.0, 1.9, 'c', 143, 0.34);   // the bakery apron
+  g.blob(31.0, 35.2, 3.0, 1.7, 'p', 147, 0.22);   // the well court, in the coarser stone
+
   // TOWN SQUARE — deliberately small. Roughly 17x13 including its kerb, which
   // is under half of what it was: the space it gave up is now planting,
   // market frontage and front gardens.
   g.blob(44, 45, 8.2, 6.2, 'c', 113, 0.20);
-  g.blob(37.5, 42, 3, 2.5, 'c', 127, 0.35);
+  // The noticeboard pocket. It was a two-tile ledge of paving with the board
+  // parked on it; it is now a recess deep enough to stand a group in.
+  g.blob(37.2, 42.4, 4.0, 3.0, 'c', 127, 0.32);
   g.blob(50, 49.5, 3, 2.5, 'c', 131, 0.35);
   // The fountain court: a contrasting stone circle, so the centrepiece sits in
   // a frame instead of floating in a field of one tile.
@@ -311,7 +503,7 @@ function build(): MapDef {
   const yard = (cx: number, cy: number, rx: number, ry: number, sd: number) =>
     g.blob(cx, cy, rx, ry, 'x', sd, 0.55);
   yard(11, 16, 4, 2.4, 201);   // the farm, below the barn
-  yard(27.5, 33.5, 2.4, 1.8, 203); // courier parcel yard
+  yard(24.5, 32.5, 2.4, 1.8, 203); // courier parcel yard
   yard(36.5, 27, 3.2, 1.8, 205);   // store delivery yard
   yard(80, 44, 3.4, 2.4, 207);     // inn yard
   yard(16, 66, 3.4, 1.8, 209);     // market-garden working ground
@@ -332,23 +524,43 @@ function build(): MapDef {
     for (let i = 0; i < b.door[1]; i++) g.set(dx + i, dy, 'd');
     // Walk outward until a route is met, paving as we go. Guarantees the eye
     // can trace every entrance back to a road.
+    //
+    // A dirt lane counts as a route. It did not before, which is why the two
+    // buildings whose only neighbour was a lane — house_e and the bakery —
+    // ended up standing in bare grass with nothing leading to them.
     const dirs: Array<[number, number]> = [[0, 1], [0, -1], [1, 0], [-1, 0]];
     let best: [number, number] | null = null;
     let bestD = 99;
     for (const [ox, oy] of dirs) {
       for (let k = 1; k <= 7; k++) {
         const c = g.get(dx + ox * k, dy + oy * k);
-        if (c === 'p' || c === 'c') { if (k < bestD) { bestD = k; best = [ox, oy]; } break; }
-        if (!SOFT.includes(c) && c !== 'd') break;
+        if (c === 'p' || c === 'c' || c === 'd') { if (k < bestD) { bestD = k; best = [ox, oy]; } break; }
+        if (!SOFT.includes(c)) break;
       }
     }
     if (best) {
+      // The stub widens as it leaves the door: a threshold is a funnel, not a
+      // corridor. One tile of overspill each side at the outer end.
       for (let k = 0; k <= bestD; k++) {
-        for (let s = 0; s < b.door[1]; s++) {
+        const flare = k >= Math.max(1, bestD - 1) ? 1 : 0;
+        for (let s = -flare; s < b.door[1] + flare; s++) {
           const px = dx + best[0] * k + (best[0] === 0 ? s : 0);
           const py = dy + best[1] * k + (best[1] === 0 ? 0 : s);
-          if (SOFT.includes(g.get(px, py)) || g.get(px, py) === 'd') g.set(px, py, 'p');
+          const c = g.get(px, py);
+          if (SOFT.includes(c) || c === 'd') g.set(px, py, 'p');
         }
+      }
+    }
+  }
+
+  // The bakery is the most eye-catching object in the frame and had neither a
+  // path to it nor a readable way in. It gets a proper stepped entrance: a
+  // band of the pale stone across the doorway, sitting in the market's cobble.
+  {
+    const b = bld('store');
+    for (let x = doorX(b) - 2; x <= doorX(b) + 2; x++) {
+      for (let y = doorY(b); y <= doorY(b) + 1; y++) {
+        if (Math.abs(x - doorX(b)) + (y - doorY(b)) <= 3) g.set(x, y, 'p');
       }
     }
   }
@@ -397,15 +609,72 @@ function build(): MapDef {
     }
   }
 
+  // ══ 10b. the worn centre lane ════════════════════════════════════════════
+  // A real road is not one tone across its width: boots and cartwheels rub a
+  // paler track down the middle and leave the shoulders rough. Erode the route
+  // mask once — anything still standing after erosion is by definition the
+  // core of a road wide enough to have a middle — and lay the pale, dusty
+  // surface through it. Narrow lanes erode to nothing and correctly get none.
+  {
+    const snap = g.rows();
+    const walkAt = (x: number, y: number) => WALK.includes(snap[y]?.[x] ?? ' ');
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        if (!onRoute[y][x]) continue;
+        // Dirt lanes only. A dust track rubbed through a laid cobble square
+        // reads as a patch of missing floor, which is what it looked like the
+        // first time this ran across the fountain court.
+        if (snap[y][x] !== 'd') continue;
+        let core = true;
+        for (let j = -1; j <= 1 && core; j++) for (let i = -1; i <= 1; i++) {
+          if (!walkAt(x + i, y + j)) { core = false; break; }
+        }
+        if (!core) continue;
+        // Broken, not continuous — a worn track fades in and out along its run.
+        if (rnd(x * 5 + 91, y * 3 + 17) < 0.30) continue;
+        g.set(x, y, 'W');
+      }
+    }
+  }
+
+  // ══ 10c. the ragged edge ═════════════════════════════════════════════════
+  // The hard cut from paving straight to grass was the second-worst thing in
+  // the frame. The outer ring of every walkable surface swaps to a variant of
+  // the same blob that carries the verge scatter, so tufts and loose pebbles
+  // grow up through the edge of the stone and the boundary dissolves instead
+  // of stopping. Same autotile family, so the silhouette does not change.
+  {
+    const snap = g.rows();
+    const EDGE: Record<string, string> = { p: 'E', d: 'Q', c: 'K', W: 'Q' };
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const to = EDGE[snap[y][x]];
+        if (!to) continue;
+        const soft = SOFT.includes(snap[y - 1][x]) || SOFT.includes(snap[y + 1][x])
+          || SOFT.includes(snap[y][x - 1]) || SOFT.includes(snap[y][x + 1]);
+        if (!soft) continue;
+        if (rnd(x * 13 + 41, y * 29 + 7) < 0.28) continue;   // ragged, not an outline
+        g.set(x, y, to);
+      }
+    }
+  }
+
   // ══ 11. object layer: mass planting ══════════════════════════════════════
   const o = new GridPainter(W, H, ' ');
 
   // Woodland proper.
+  //
+  // Pines are the tallest and darkest thing in this palette, so their share
+  // rises towards the border: the outermost rows are almost pure conifer and
+  // the wood pales into broadleaf as it comes down to the town. That gradient
+  // is what makes the edge of the map read as depth rather than as a crop.
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       if (g.get(x, y) !== 'X') continue;
+      const edge = Math.min(x, y, W - 1 - x, H - 1 - y);
+      const conifer = edge <= 2 ? 0.78 : edge <= 5 ? 0.52 : (y < 26 || x > 74) ? 0.24 : 0.10;
       const r = rnd(x * 3 + 1, y * 5 + 2);
-      if (r < 0.52) o.set(x, y, (y < 26 || x > 74) && r < 0.20 ? 'P' : 'T');
+      if (r < 0.52 + (edge <= 4 ? 0.16 : 0)) o.set(x, y, rnd(x * 7 + 3, y * 11 + 5) < conifer ? 'P' : 'T');
       else if (r < 0.66) o.set(x, y, 'b');
       else if (r < 0.72) o.set(x, y, 'r');
       else if (r < 0.76) o.set(x, y, 'u');
@@ -464,6 +733,11 @@ function build(): MapDef {
   grove(52, 68, 4, 3, 'T', 0.26, 315);
   grove(8, 25, 3, 4, 'T', 0.26, 317);
   grove(63, 37, 3, 4, 'T', 0.24, 319);
+  // The Market Green's backdrop: blossom behind the stalls, and a stand of oak
+  // filling the strip that used to sit blank between the bakery and Vale Road.
+  grove(29.5, 27.5, 4, 2.5, 'B', 0.30, 331);
+  grove(41, 29.5, 2.5, 3.5, 'T', 0.28, 333);
+  grove(38.5, 41, 2.5, 2, 'B', 0.24, 335);
 
   // Kitchen gardens: hedged plots with rows in them.
   const plot = (x0: number, y0: number, w: number, h: number) => {
@@ -485,8 +759,9 @@ function build(): MapDef {
   const hedgeV = (y0: number, y1: number, x: number) => {
     for (let y = y0; y <= y1; y++) o.set(x, y, 'h');
   };
-  hedge(34, 38, 38);
   hedge(51, 56, 39);
+  hedge(28, 32, 30);      // the Market Green's back wall, open at its east end
+  hedgeV(27, 31, 41);     // screening the bakery's yard from Vale Road
   hedge(33, 37, 52);
   hedge(48, 54, 53);
   hedgeV(27, 31, 46);
@@ -513,7 +788,28 @@ function build(): MapDef {
       // reeds, wet rocks and river stones. That planting is what stops the
       // water reading as a flat blue rectangle with a tan border.
       const c = g.get(x, y);
-      if ('pdcx~=NSgfo<>'.includes(c)) o.set(x, y, ' ');
+      if ('pdcxWEQK~=NSgfo<>'.includes(c)) o.set(x, y, ' ');
+    }
+  }
+
+  // ── encroachment ────────────────────────────────────────────────────────
+  // Having cleared the routes, put a little back — but only on the outer ring,
+  // and only things with no collision. A bush or a sapling leaning over the
+  // kerb is what makes a path look walked rather than laid, and it is the one
+  // trick the reference uses everywhere that we were not using at all.
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      if (!'EQK'.includes(g.get(x, y))) continue;
+      // Keep doorways, the fountain court and the market's working floor clear.
+      let blocked = false;
+      for (const b of BUILDINGS) {
+        if (!b.door) continue;
+        if (Math.abs(x - doorX(b)) <= 2 && Math.abs(y - doorY(b)) <= 2) { blocked = true; break; }
+      }
+      if (blocked) continue;
+      const r = rnd(x * 23 + 5, y * 41 + 3);
+      if (r < 0.13) o.set(x, y, 'b');
+      else if (r < 0.19) o.set(x, y, 'y');
     }
   }
 
@@ -570,8 +866,12 @@ function build(): MapDef {
     [34.5, 40.5, 'o'], [35, 51.5, 'o'], [53.5, 40, 'o'], [53, 52, 'o'],
     [38.5, 37.5, 'B'], [48.5, 38.5, 'o'], [50.5, 52.5, 'B'], [36.5, 47.5, 'o'],
     // bell green + store
-    [45.5, 26.5, 'o'], [56, 27.5, 'o'], [56.5, 34, 'B'], [31.5, 32.5, 'o'],
-    [41, 30.5, 'o'], [31, 26.5, 'o'],
+    [45.5, 26.5, 'o'], [56, 27.5, 'o'], [56.5, 34, 'B'], [32.5, 30.5, 'o'],
+    [41, 30.5, 'o'], [30, 26.5, 'o'],
+    // Market Green: trees standing in the paving, not politely beside it, and
+    // a blossom on the bakery's corner so the frame has a light value up high.
+    [33.5, 36.4, 'B'], [26.5, 30.5, 'o'], [36.5, 40.5, 'o'], [25.5, 40.5, 'B'],
+    [39.5, 36.5, 'o'], [40.5, 27.5, 'o'], [30.5, 40.4, 'o'],
     // Courier Row
     [8.5, 32.5, 'o'], [19.5, 30.5, 'o'], [28.5, 38.5, 'o'], [11.5, 47.5, 'o'],
     [23.5, 43, 'B'], [7.5, 36.5, 'o'],
@@ -591,10 +891,10 @@ function build(): MapDef {
     [62.5, 24.5, 'o'], [77.5, 27, 'B'],
   ];
   for (const [x, y, kind] of TOWN_TREES) {
-    const key = kind === 'B'
-      ? (rnd(x * 100, y * 100) < 0.5 ? 'prop/town/tree_blossom_0' : 'prop/town/tree_blossom_1')
-      : `prop/town/tree_oak_${Math.floor(rnd(x * 13, y * 29) * 4)}`;
-    P(key, x, y, { solid: [20, 10] });
+    // The variant is chosen inside P() from the family's full range; naming
+    // the _0 frame here would previously have put seventeen copies of
+    // tree_oak_2 on the map, which is exactly the count the critic made.
+    P(kind === 'B' ? 'prop/town/tree_blossom_0' : 'prop/town/tree_oak_0', x, y, { solid: [20, 10] });
     // Clear the mass-planted object grid where a feature tree now stands.
     for (let j = -1; j <= 0; j++) for (let i = -1; i <= 1; i++) o.set(Math.round(x) + i, Math.round(y) + j, ' ');
   }
@@ -613,7 +913,19 @@ function build(): MapDef {
     P('prop/town/stone_lantern', x, y, { solid: [10, 8] });
     lights.push({ x, y: y - 1, radius: 30, color: 0xffd08a, intensity: 0.26, flicker: 0.7 });
   }
+  // The noticeboard pocket. It was a two-tile ledge with the board parked on
+  // it and nothing else — the second-quietest spot in the frame. It is now a
+  // recess you can stand a group in: the board, a bench facing it, a lantern
+  // to read by after dark, and somebody's basket left on the step.
   P('prop/town/notice_board', 38.4, 43.6, { solid: [30, 12], interact: 'notice_board' }, 'notice_board');
+  P('prop/town/bench_1', 37.6, 41.4, { solid: [30, 10], interact: 'prop.bench' });
+  P('prop/town/stone_lantern', 35.4, 42.6, { solid: [10, 8] });
+  lights.push({ x: 35.4, y: 41.8, radius: 34, color: 0xffd08a, intensity: 0.30, flicker: 0.7 });
+  lights.push({ x: 38.4, y: 42.8, radius: 30, color: 0xffc45e, intensity: 0.22, flicker: 0.1 });
+  P('prop/town/basket_0', 39.4, 42.4, {});
+  P('prop/town/barrel_1', 35.6, 44.4, { solid: [20, 8] });
+  P('prop/town/planter_1', 36.4, 40.4, { solid: [18, 8] });
+  P('prop/town/bird_perched_0', 38.4, 41.8, { anim: 'bird_perched_idle', depthBias: 30000 });
   P('prop/town/signpost_0', 45.4, 39.4, { solid: [12, 8], interact: 'sign.plaza' });
   P('prop/town/signpost_1', 41.6, 52.4, { solid: [12, 8], interact: 'sign.woods' });
   P('prop/town/signpost_2', 55.4, 43.4, { solid: [12, 8], interact: 'sign.bridge' });
@@ -641,16 +953,33 @@ function build(): MapDef {
   }
 
   // ── General store frontage ──────────────────────────────────────────────
+  //
+  // The bakery is the loudest object on the map and a blind review could not
+  // find its way in: no path led to it, and the wide teal awning that used to
+  // hang here was pinned straight across the shopfront, covering the doorway
+  // the building sprite already draws. The awning has gone to the market
+  // stalls where it belongs; the door now has a stepped apron, a lantern on
+  // each side and the produce cleared out of the middle of it.
   {
     const b = bld('store');
-    P('prop/build/awning_wide_teal', b.tx + 2.5, b.ty + b.h - 1.3, { depthBias: 12000 });
-    P('prop/town/vegetable_row_0', b.tx + 0.5, doorY(b), { solid: [28, 8] });
-    P('prop/town/vegetable_row_2', b.tx + 5.5, doorY(b), { solid: [28, 8] });
-    P('prop/town/crate_1', b.tx + 5.6, doorY(b) - 0.4, {});
-    P('prop/town/crate_2', b.tx + 6.4, doorY(b) - 0.1, {});
-    P('prop/town/basket_1', b.tx + 0.6, doorY(b) - 0.5, { interact: 'store_apples' });
-    P('prop/town/milk_churn', b.tx + 6.6, doorY(b) - 0.8, {});
-    lamp(b.tx - 1, doorY(b) - 1, 40, 0.36);
+    const dx = doorX(b);
+    const dy = doorY(b);
+    P('prop/town/vegetable_row_0', b.tx + 0.5, dy, { solid: [28, 8] });
+    P('prop/town/vegetable_row_2', b.tx + 5.8, dy, { solid: [28, 8] });
+    P('prop/town/crate_1', b.tx + 6.2, dy - 0.4, {});
+    P('prop/town/basket_1', b.tx + 0.6, dy - 0.5, { interact: 'store_apples' });
+    P('prop/town/milk_churn', b.tx + 6.6, dy - 0.8, {});
+    // The entrance, flanked. Two stone lanterns on the step and a bakery-warm
+    // pool spilling out of the open door — the brightest doorway in the town,
+    // because it is the one the player is meant to find first.
+    P('prop/town/stone_lantern', dx - 1.4, dy + 0.4, { solid: [10, 8] });
+    P('prop/town/stone_lantern', dx + 1.4, dy + 0.4, { solid: [10, 8] });
+    lights.push({ x: dx - 1.4, y: dy - 0.4, radius: 30, color: 0xffd08a, intensity: 0.26, flicker: 0.6 });
+    lights.push({ x: dx + 1.4, y: dy - 0.4, radius: 30, color: 0xffd08a, intensity: 0.26, flicker: 0.6 });
+    lights.push({ x: dx, y: dy - 0.6, radius: 56, color: 0xffb26b, intensity: 0.34, flicker: 0.1 });
+    P('prop/town/planter_1', dx - 2.6, dy + 0.6, { solid: [18, 8] });
+    P('prop/town/planter_0', dx + 2.6, dy + 0.6, { solid: [14, 8] });
+    lamp(b.tx - 1.4, dy - 1, 44, 0.40);
     // Delivery yard behind.
     P('prop/town/cart', 37.5, 27.4, { solid: [42, 14] });
     P('prop/town/crate_0', 34.6, 27.2, {});
@@ -659,7 +988,54 @@ function build(): MapDef {
     P('prop/town/woodpile_0', 33.5, 28.4, { solid: [28, 10], interact: 'woodpile' });
     P('prop/town/chicken_0', 35.2, 26.4, { anim: 'chicken_peck' });
     P('prop/town/chicken_2', 36.8, 26.1, { anim: 'chicken_peck', interact: 'prop.chicken' });
-    P('prop/town/laundry_line_0', 36, 25.4, { over: true, sway: 0.5, interact: 'laundry' });
+    laundry(36, 25.4, { interact: 'laundry' });
+  }
+
+  // ── THE MARKET GREEN ────────────────────────────────────────────────────
+  //
+  // The town's working square: the bakery's forecourt on one side, the stall
+  // row on the other, the well in the middle, and four routes meeting in it.
+  // Everything here is deliberately a little rougher than the fountain square
+  // — this is where carts unload and where the frame gets the focal point it
+  // was missing between the blossom line and the rooftops.
+  {
+    // The well, the landmark. It moves up from the market gardens, which keep
+    // their water in the wellhouse and gain a pump instead: one town, one well,
+    // and it belongs where people are.
+    P('prop/town/well', 31.6, 35.2, { solid: [26, 12], interact: 'prop.well' }, 'well');
+    lights.push({ x: 31.6, y: 34.4, radius: 40, color: 0xbfe4ff, intensity: 0.16, flicker: 0.08 });
+    P('prop/town/water_trough', 33.6, 34.4, { solid: [28, 8], interact: 'prop.trough' });
+    // The stall row down the green's west side, one behind the other, which is
+    // how a market actually forms — along the side the carts come in on.
+    P('prop/build/stall_frame', 27.8, 33.4, { solid: [60, 14], interact: 'prop.festStall' });
+    P('prop/build/awning_wide_teal', 27.8, 31.5, { depthBias: 12000 });
+    P('prop/town/crate_1', 26.4, 34.4, {});
+    P('prop/town/basket_2', 29.4, 34.3, {});
+    P('prop/build/stall_frame', 27.8, 38.6, { solid: [60, 14] });
+    P('prop/build/awning_wide_red', 27.8, 36.7, { depthBias: 12000 });
+    P('prop/town/basket_0', 26.4, 39.5, { interact: 'garden_basket' });
+    P('prop/town/sack_0', 29.4, 39.4, {});
+    P('prop/town/vegetable_row_1', 31.5, 32.4, { solid: [28, 8] });
+    // Seating, planting and the things people leave behind them.
+    P('prop/town/bench_0', 31.4, 38.4, { solid: [30, 10], interact: 'prop.bench' });
+    P('prop/town/bench_1', 34.6, 37.6, { solid: [30, 10] });
+    P('prop/town/flowerbed_1', 30.5, 31.4, { solid: [28, 8] });
+    P('prop/town/flowerbed_0', 35.5, 34.2, { solid: [28, 8] });
+    P('prop/town/planter_0', 33.4, 38.6, { solid: [14, 8] });
+    P('prop/town/cart', 34.4, 31.6, { solid: [42, 14], interact: 'prop.cart' });
+    P('prop/town/barrel_0', 29.6, 36.4, { solid: [14, 8] });
+    P('prop/town/barrel_1', 30.6, 37.0, { solid: [20, 8] });
+    P('prop/town/stool', 32.6, 37.4, {});
+    P('prop/town/hay_bale', 25.6, 36.4, { solid: [22, 10], interact: 'prop.hayBale' });
+    P('prop/town/chicken_1', 29.8, 34.8, { anim: 'chicken_peck' });
+    P('prop/town/chicken_3', 33.1, 36.4, { anim: 'chicken_peck' });
+    P('prop/town/cat_sleeping_1', 35.4, 38.4, { anim: 'cat_sleeping_idle', interact: 'cat' });
+    P('prop/town/butterfly_2', 32.5, 39.4, { anim: 'butterfly_fly', depthBias: 400, offset: [0, -12] });
+    P('prop/town/bird_perched_1', 31.6, 34.0, { anim: 'bird_perched_idle', depthBias: 6 });
+    P('prop/town/signpost_1', 36.4, 39.6, { solid: [12, 8], interact: 'sign.plaza' });
+    for (const [x, y] of [[25.4, 33.4], [36.4, 36.2], [30.4, 39.6], [34.6, 30.4]] as const) lamp(x, y, 44, 0.42);
+    P('prop/town/stone_lantern', 33.4, 32.6, { solid: [10, 8], interact: 'prop.stoneLantern' });
+    lights.push({ x: 33.4, y: 31.8, radius: 32, color: 0xffd08a, intensity: 0.26, flicker: 0.7 });
   }
 
   // ── Bell tower green ────────────────────────────────────────────────────
@@ -742,7 +1118,7 @@ function build(): MapDef {
     P('prop/town/beehive', 17.6, 21.4, { solid: [14, 8] });
     P('prop/town/log_0', 6.5, 22.5, { solid: [26, 8] });
     P('prop/town/tree_stump', 8, 24, { solid: [16, 8], interact: 'prop.stump' });
-    P('prop/town/laundry_line_2', 15, 18.4, { over: true, sway: 0.5 });
+    laundry(15, 18.4);
     lamp(13, 19.6, 38, 0.32);
   }
 
@@ -753,16 +1129,16 @@ function build(): MapDef {
     for (const [x, y, k] of [
       [11.4, 35.6, 'prop/town/parcel_0'], [12.2, 36.2, 'prop/town/parcel_2'],
       [15.6, 35.5, 'prop/town/parcel_1'], [16.4, 36.1, 'prop/town/parcel_3'],
-      [27.4, 33.4, 'prop/town/parcel_0'], [28.2, 34, 'prop/town/parcel_1'],
-      [26.6, 34.2, 'prop/town/parcel_3'],
+      [24.4, 32.4, 'prop/town/parcel_0'], [25.2, 33.0, 'prop/town/parcel_1'],
+      [23.6, 33.2, 'prop/town/parcel_3'],
     ] as const) P(k, x, y, { interact: x < 20 ? 'prop.courierParcels' : undefined });
-    P('prop/town/cart', 24, 36.6, { solid: [42, 14], interact: 'prop.cart' });
-    P('prop/town/crate_1', 22.6, 37.2, {});
-    P('prop/town/sack_0', 26.4, 36.8, {});
+    P('prop/town/cart', 22.5, 36.6, { solid: [42, 14], interact: 'prop.cart' });
+    P('prop/town/crate_1', 21.1, 37.2, {});
+    P('prop/town/sack_0', 24.4, 36.8, {});
     P('prop/town/notice_board', 18.6, 36.4, { solid: [30, 12], interact: 'prop.courierPinboard' }, 'courier_board');
-    P('prop/town/laundry_line_0', 20, 27.2, { over: true, sway: 0.5, interact: 'laundry' });
-    P('prop/town/laundry_line_1', 20, 31.2, { over: true, sway: 0.5 });
-    P('prop/town/laundry_line_2', 9, 27.4, { over: true, sway: 0.5 });
+    laundry(20, 27.2, { interact: 'laundry' });
+    laundry(20, 31.2);
+    laundry(9, 27.4);
     const sh = bld('shed_courier');
     P('prop/town/bird_perched_0', sh.tx + 0.6, sh.ty + 0.2, { anim: 'bird_perched_idle', depthBias: 20000, interact: 'pigeons' });
     P('prop/town/bird_perched_1', sh.tx + 2.2, sh.ty + 0.4, { anim: 'bird_perched_idle', depthBias: 20000 });
@@ -815,7 +1191,7 @@ function build(): MapDef {
     for (const [x, y] of [[19.4, 51.4], [11, 65.4], [23, 60]] as const) lamp(x, y, 40, 0.36);
     P('prop/town/butterfly_2', 14, 64, { anim: 'butterfly_fly', depthBias: 400, offset: [0, -12] });
     P('prop/town/butterfly_3', 17.5, 61.4, { anim: 'butterfly_fly', depthBias: 400, offset: [0, -14] });
-    P('prop/town/laundry_line_1', 11, 51.4, { over: true, sway: 0.5 });
+    laundry(11, 51.4);
   }
 
   // ── market gardens and the south-west ───────────────────────────────────
@@ -824,7 +1200,12 @@ function build(): MapDef {
   P('prop/town/sack_1', 15, 66.8, {});
   P('prop/town/sack_0', 17.6, 65.8, {});
   P('prop/town/basket_1', 14.4, 67.2, { interact: 'garden_basket' });
-  P('prop/town/well', 25.6, 71.6, { solid: [26, 12], interact: 'prop.well' }, 'well');
+  // The well used to stand out here with nothing around it; it is the market
+  // green's landmark now. The gardens keep the wellhouse and get the pump,
+  // which is what a working plot would have had in the first place.
+  P('prop/town/pump', 25.6, 71.4, { solid: [14, 8], interact: 'prop.pump' });
+  P('prop/town/water_trough', 26.8, 71.8, { solid: [28, 8], interact: 'prop.trough' });
+  P('prop/town/barrel_1', 24.4, 71.6, { solid: [20, 8] });
   P('prop/town/water_trough', 21.4, 66.6, { solid: [28, 8] });
   P('prop/town/hay_bale', 28.6, 66.4, { solid: [22, 10] });
   P('prop/town/log_1', 6.5, 60, { solid: [22, 8] });
@@ -923,7 +1304,7 @@ function build(): MapDef {
     P('prop/town/barrel_1', 83.4, 44.2, { solid: [20, 8] });
     P('prop/town/crate_1', 85.4, 44.4, {});
     P('prop/town/woodpile_0', 85.5, 48.4, { solid: [28, 10], interact: 'woodpile' });
-    P('prop/town/laundry_line_1', 80, 42.2, { over: true, sway: 0.5, interact: 'laundry' });
+    laundry(80, 42.2, { interact: 'laundry' });
     P('prop/town/cat_sleeping_0', 77.6, 43.8, { anim: 'cat_sleeping_idle', interact: 'cat' }, 'inn_cat');
     for (const [x, y] of [[81.6, 45.8], [82.8, 46.6], [80.4, 47]] as const) {
       P('prop/town/chicken_0', x, y, { anim: 'chicken_peck' });
@@ -1018,6 +1399,16 @@ function build(): MapDef {
       // Dirt carries a scatter as well as its blob: bare lanes are the largest
       // single-tone areas in the map and need grit and weeds on top of them.
       'd': { base: 'town/grass', blob: 'dirt', scatter: 'rut' },
+      // The worn centre lane: same road, paler and dustier down the middle
+      // where the traffic actually runs.
+      'W': { base: 'town/grass', blob: 'sand', scatter: 'grit' },
+      // Ragged edges. Identical blob family to the surface they trim, so the
+      // autotile silhouette is unchanged — only the scatter on top differs,
+      // which is what lets grass and pebbles grow up through the boundary
+      // instead of the paving stopping dead against the lawn.
+      'E': { base: 'town/grass', blob: 'path', scatter: 'encroach' },
+      'Q': { base: 'town/grass', blob: 'dirt', scatter: 'encroach' },
+      'K': { base: 'town/grass', blob: 'cobble', scatter: 'encroach' },
       'x': { base: 'town/grass', blob: 'turf_worn', scatter: 'grit' },
       's': { base: 'town/grass', blob: 'sand' },
       'g': { base: 'town/grass', blob: 'sand' },
@@ -1051,6 +1442,15 @@ function build(): MapDef {
         tiles: [['scatter/tuft_sm', 5], ['scatter/pebbles', 4], ['scatter/tuft_md', 2], ['', 5]],
       },
       grit: { density: 0.3, tiles: [['scatter/pebbles', 4], ['scatter/tuft_sm', 1], ['', 3]] },
+      // Denser than 'verge' on purpose: this rule only ever lands on the outer
+      // ring of a path, and it is doing the whole job of softening the join.
+      encroach: {
+        density: 0.72,
+        tiles: [
+          ['scatter/tuft_sm', 6], ['scatter/tuft_md', 4], ['scatter/pebbles', 5],
+          ['scatter/tuft_lg', 1], ['scatter/flower_white', 1], ['', 4],
+        ],
+      },
       rut: { density: 0.42, tiles: [['scatter/pebbles', 5], ['scatter/tuft_sm', 3], ['scatter/tuft_md', 1], ['', 6]] },
       rail_n: { density: 1, tiles: [['bridge/rail_n', 1]] },
       rail_s: { density: 1, tiles: [['bridge/rail_s', 1]] },
@@ -1069,12 +1469,17 @@ function build(): MapDef {
       'h': { key: 'prop/town/hedge_mid', solid: [16, 10] },
       '[': { key: 'prop/town/hedge_end_l', solid: [16, 10] },
       ']': { key: 'prop/town/hedge_end_r', solid: [16, 10] },
-      'v': { key: ['prop/town/vegetable_row_0', 'prop/town/vegetable_row_1', 'prop/town/vegetable_row_2'], solid: [28, 8] },
+      // Raised beds: they do stand up, so they keep a shadow — but a tight one.
+      // 'auto' would size a 32px-wide ellipse off the sprite width and put a
+      // soft blob under a box that is ten pixels tall.
+      'v': { key: ['prop/town/vegetable_row_0', 'prop/town/vegetable_row_1', 'prop/town/vegetable_row_2'], solid: [28, 8], shadow: 'small' },
       'r': { key: ['prop/town/rock_0', 'prop/town/rock_1', 'prop/town/rock_2', 'prop/town/rock_3'], solid: [16, 8] },
       'm': { key: ['prop/town/mossy_rock_0', 'prop/town/mossy_rock_1'], solid: [16, 8] },
       'u': { key: ['prop/town/tree_stump', 'prop/town/log_0', 'prop/town/log_1'], solid: [18, 8] },
       'e': { key: ['prop/town/reeds_0', 'prop/town/reeds_1', 'prop/town/reeds_2'], sway: 0.7 },
-      'j': { key: ['prop/town/river_rock_0', 'prop/town/river_rock_1', 'prop/town/river_rock_2'] },
+      // Rocks standing in the shallows. A contact shadow on open water reads as
+      // a hole in the river, so they are the one legend entry that opts out.
+      'j': { key: ['prop/town/river_rock_0', 'prop/town/river_rock_1', 'prop/town/river_rock_2'], shadow: 'none' },
     },
     props,
     npcs,

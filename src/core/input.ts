@@ -21,6 +21,13 @@ const BINDINGS: Record<Action, string[]> = {
 export class InputManager {
   private keys = new Map<string, Phaser.Input.Keyboard.Key>();
   private pressedThisFrame = new Set<Action>();
+  /**
+   * Actions injected from outside the frame loop (the debug API, on-screen
+   * buttons). Held here until the next update() folds them in — clearing them
+   * with the frame set would drop every injected press, since injection almost
+   * never happens to land inside the same frame that reads it.
+   */
+  private injected = new Set<Action>();
   private pad?: Phaser.Input.Gamepad.Gamepad;
   /** Scripted input, used by the automated play harness. */
   scripted: { axis: { x: number; y: number }; actions: Set<Action> } | null = null;
@@ -43,6 +50,10 @@ export class InputManager {
   /** Called once per frame by the owning scene, before any system reads input. */
   update(): void {
     this.pressedThisFrame.clear();
+    if (this.injected.size) {
+      for (const a of this.injected) this.pressedThisFrame.add(a);
+      this.injected.clear();
+    }
     if (!this.enabled) return;
     for (const [action, names] of Object.entries(BINDINGS) as Array<[Action, string[]]>) {
       for (const n of names) {
@@ -97,8 +108,8 @@ export class InputManager {
     return !!k && Phaser.Input.Keyboard.JustDown(k);
   }
 
-  /** Inject an action for one frame (automated QA + on-screen buttons). */
+  /** Queue an action to fire on the next frame (automated QA, on-screen buttons). */
   inject(a: Action): void {
-    this.pressedThisFrame.add(a);
+    this.injected.add(a);
   }
 }

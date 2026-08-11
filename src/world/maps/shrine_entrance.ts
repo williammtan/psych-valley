@@ -171,7 +171,7 @@ function build(): MapDef {
     music: 'shrine',
     indoor: false,
     tint: 0x0d1030,
-    darkness: 0.5,
+    darkness: 0.44,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

@@ -126,10 +126,19 @@ function installHarness(): void {
     }
   });
 
-  /** Record N frames; resolves with the samples. */
-  F.run = (n: number) => new Promise((res) => {
+  /**
+   * Record N frames; resolves with the samples. Bails out if the frame loop
+   * stops advancing, so a crashed game fails one test instead of hanging the
+   * whole probe.
+   */
+  F.run = (n: number) => new Promise((res, rej) => {
     F.want = n;
     F.resolve = () => res(F.samples);
+    const deadline = setTimeout(() => {
+      if (F.want > 0) { F.want = 0; F.resolve = null; rej(new Error(`frame loop stalled after ${F.samples.length}/${n} frames`)); }
+    }, n * 40 + 3000);
+    const done = F.resolve;
+    F.resolve = () => { clearTimeout(deadline); done(); };
   });
 
   /* ── arena construction ───────────────────────────────────────────────── */
@@ -197,6 +206,7 @@ function installHarness(): void {
     p.mode = 'free';
     p.modeUntil = 0;
     p.dashReadyAt = 0;
+    p.attackReadyAt = 0;
     p.invulnUntil = 0;
     p.attackBufferedAt = -9999;
     p.dashBufferedAt = -9999;
@@ -602,8 +612,9 @@ async function attack(ctx: Ctx): Promise<Row[]> {
     F.place(F.px(o.x + Math.floor(o.w / 2)), F.py(o.y + Math.floor(o.h / 2)), 's');
     for (let i = 1; i < 180; i++) F.at(i, "F.act('attack')");
     const s = await F.run(185);
-    let starts = 0;
-    for (let i = 1; i < s.length; i++) if (s[i].mode === 'attack' && s[i - 1].mode !== 'attack') starts++;
+    // Counted from the attack event, not from mode transitions: back-to-back
+    // swings never show a 'free' frame in between, so transitions undercount.
+    const starts = F.events.filter((e: any) => e.name === 'player:attack').length;
     F.clean();
     return { starts, frames: s.length };
   }) as any;
@@ -617,10 +628,8 @@ async function attack(ctx: Ctx): Promise<Row[]> {
       F.reset(); F.clean(); F.scripted(true); at();
       F.at(1, "F.act('attack')");
       F.at(1 + k, "F.act('attack')");
-      const s = await F.run(64);
-      let n = 0;
-      for (let i = 1; i < s.length; i++) if (s[i].mode === 'attack' && s[i - 1].mode !== 'attack') n++;
-      out.push({ k, n });
+      await F.run(64);
+      out.push({ k, n: F.events.filter((e: any) => e.name === 'player:attack').length });
     }
     F.reset(); F.clean(); F.scripted(true); at();
     F.at(1, "F.act('attack')");
@@ -696,7 +705,12 @@ async function hitstop(ctx: Ctx): Promise<Row[]> {
     let end = hitF; while (end >= 0 && end < s.length && s[end].ts < 1) end++;
     const en0 = s[0].en[0];
     const damaged = s.some((r2: any) => r2.en[0] && r2.en[0].hp < en0.hp);
-    const last = s[s.length - 1].en[0];
+    // Knockback is the recoil only: once 'hurt' ends the enemy walks under its
+    // own power again, and counting that would inflate the number.
+    const h0 = s.findIndex((r2: any) => r2.en[0] && r2.en[0].m === 'hurt');
+    let h1 = h0; while (h1 >= 0 && h1 < s.length && s[h1].en[0] && s[h1].en[0].m === 'hurt') h1++;
+    const kbFrom = h0 > 0 ? s[h0 - 1].en[0] : en0;
+    const kbTo = h1 > 0 && h1 <= s.length ? s[Math.min(h1, s.length - 1)].en[0] : null;
     const frozen = hitF >= 0 ? Math.abs(s[Math.min(end, s.length - 1)].x - s[hitF].x) : NaN;
     F.clean();
     return {
@@ -704,7 +718,7 @@ async function hitstop(ctx: Ctx): Promise<Row[]> {
       stopFrames: hitF < 0 ? 0 : end - hitF,
       shakeFrames: s.filter((x: any) => x.shake).length,
       damaged, frozen,
-      knock: last ? Math.hypot(last.x - en0.x, last.y - en0.y) : NaN,
+      knock: kbTo ? Math.hypot(kbTo.x - kbFrom.x, kbTo.y - kbFrom.y) : NaN,
     };
   }) as any;
   return [
@@ -770,14 +784,16 @@ async function dash(ctx: Ctx): Promise<Row[]> {
     const px = F.px(cx - 1), py = F.py(cy);
     F.reset(); F.clean(); F.scripted(true);
     F.place(px, py, 'e');
-    F.scene.enemies.spawn('bramble', cx + 1, cy, { passive: true });
+    // One tile out, so the dash passes clean through and finishes past the body
+    // rather than parked inside it.
+    F.scene.enemies.spawn('bramble', cx, cy, { passive: true });
     F.at(2, "F.act('dash')");
     const s = (await F.run(50)).slice();
     const hpDash = Math.min(...s.map((r2: any) => r2.hp));
 
     F.reset(); F.clean(); F.scripted(true);
     F.place(px, py, 'e');
-    F.scene.enemies.spawn('bramble', cx + 1, cy, { passive: true });
+    F.scene.enemies.spawn('bramble', cx, cy, { passive: true });
     F.at(1, 'F.move(1,0)');
     const s2 = (await F.run(50)).slice();
     F.move(0, 0); F.clean();
@@ -852,9 +868,9 @@ async function telegraphs(ctx: Ctx): Promise<Row[]> {
 
   return r.map((e) => ({
     enemy: e.kind,
-    'tell→commit (ms)': e.wind > 0 ? fmt(e.wind * ctx.frameMs, 0) : 'n/a',
-    'tell→hit (ms)': e.total > 0 ? fmt(e.total * ctx.frameMs, 0) : 'never landed',
-    'fair at 300ms reaction': e.total > 0 ? (e.total * ctx.frameMs >= 400 ? 'yes' : 'NO') : '—',
+    'tell→commit (ms)': e.kind === 'mimicling' ? 'no tell by design' : (e.wind > 0 ? fmt(e.wind * ctx.frameMs, 0) : 'n/a'),
+    'tell→hit (ms)': e.kind === 'mimicling' ? `copy lag ${fmt(e.total * ctx.frameMs, 0)}` : (e.total > 0 ? fmt(e.total * ctx.frameMs, 0) : 'never landed'),
+    'fair at 300ms reaction': e.kind === 'mimicling' ? '—' : (e.total > 0 ? (e.total * ctx.frameMs >= 400 ? 'yes' : 'NO') : '—'),
   }));
 }
 
@@ -907,15 +923,28 @@ async function snag(ctx: Ctx): Promise<Row[]> {
     }
     let seed = 12345;
     const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const isOpen = (x: number, y: number) => !solid[y][x] && !F.scene.dynamicSolids[y][x];
+    /** Straight line between two tiles with nothing solid on it. */
+    const clear = (a: number[], b: number[]) => {
+      const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 3);
+      for (let i = 0; i <= n; i++) {
+        const x = Math.round(a[0] + ((b[0] - a[0]) * i) / n);
+        const y = Math.round(a[1] + ((b[1] - a[1]) * i) / n);
+        if (!isOpen(x, y)) return false;
+      }
+      return true;
+    };
 
     let snags = 0, held = 0, moving = 0, dist = 0, frames = 0;
     const spans: number[] = [];
     let here = open[Math.floor(rnd() * open.length)];
     F.place(F.px(here[0]), F.py(here[1]), 's');
     for (let leg = 0; leg < 16; leg++) {
+      // Only walkable legs: a destination behind a building measures the map,
+      // not the controller.
       const near = open.filter((t) => {
         const d = Math.hypot(t[0] - here[0], t[1] - here[1]);
-        return d > 6 && d < 12;
+        return d > 6 && d < 12 && clear(here, t);
       });
       if (!near.length) { here = open[Math.floor(rnd() * open.length)]; F.place(F.px(here[0]), F.py(here[1]), 's'); continue; }
       const to = near[Math.floor(rnd() * near.length)];
@@ -972,12 +1001,24 @@ async function stuck(ctx: Ctx): Promise<Row[]> {
       }
       return false;
     };
+    // Only positions a player could plausibly end up in: a solid tile with open
+    // ground within a couple of tiles (a closing gate, a teleport landing on a
+    // prop). The middle of a four-tile tree border is not a reachable state.
+    const recoverable = (x: number, y: number) => {
+      for (let j = -2; j <= 2; j++) {
+        for (let i = -2; i <= 2; i++) {
+          const r2 = solid[y + j];
+          if (r2 && !r2[x + i] && !F.scene.dynamicSolids[y + j][x + i]) return true;
+        }
+      }
+      return false;
+    };
     let tried = 0, fixed = 0;
     const failed: number[][] = [];
     const p = F.scene.player;
-    for (let y = 2; y < solid.length - 2 && tried < 60; y += 3) {
-      for (let x = 2; x < solid[0].length - 2 && tried < 60; x += 5) {
-        if (!solid[y][x]) continue;
+    for (let y = 3; y < solid.length - 3 && tried < 60; y += 3) {
+      for (let x = 3; x < solid[0].length - 3 && tried < 60; x += 5) {
+        if (!solid[y][x] || !recoverable(x, y)) continue;
         tried++;
         p.setPosition(x * 16 + 8, y * 16 + 16);
         p.grid = F.scene.collisionGrid();
@@ -1014,8 +1055,9 @@ async function fxCadence(ctx: Ctx): Promise<Row[]> {
     F.place(F.px(o.x + 1), F.py(o.y + Math.floor(o.h / 2)), 'e');
     for (let i = 1; i < 120; i++) F.at(i, "F.act('attack')");
     const s2 = (await F.run(125)).slice();
+    // One hitbox activation per swing, whatever the mode timeline looks like.
     let swings = 0;
-    for (let i = 1; i < s2.length; i++) if (s2[i].mode === 'attack' && s2[i - 1].mode !== 'attack') swings++;
+    for (let i = 1; i < s2.length; i++) if (s2[i].hb && !s2[i - 1].hb) swings++;
     const slashes = F.events.filter((e: any) => e.name === 'player:attack').length;
     F.clean();
     return { steps: steps.length, gaps, swings, slashes };

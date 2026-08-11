@@ -42,8 +42,8 @@ import { CueFollower, Lure } from '@/systems/Abilities';
 import { PuzzleRoom, type Gate, type PressurePlate } from '@/systems/Puzzle';
 import { TALK, playExchange } from '@/data/dialogue';
 import {
-  HintDirector, RoomRig, completeRoom, doorGate, goLookAt, lookBetween, readEnv,
-  setRuneTile, showGoal, stepToward, tc, tm,
+  HintDirector, RoomRig, clearHarness, completeRoom, doorGate, driveCue, goLookAt,
+  installHarness, lookBetween, readEnv, setRuneTile, showGoal, stepToward, tc, tm,
 } from './shrine_kit';
 import type { Enemy } from '@/entities/Enemy';
 import type { WorldScene } from '@/scenes/WorldScene';
@@ -140,7 +140,12 @@ function armRoom(w: WorldScene): void {
   s.lure.y = R1.jar.y * TILE + TILE - 14;
   w.cues.clear();
 
+  // GameFlow clears every enemy in the room when the player goes down, and the
+  // creature is an enemy. Without this the room comes back with nothing in it
+  // to stand on the plate, which is the worst possible failure state: silent,
+  // and only reachable by dying.
   const home = tc(R1.creature.x, R1.creature.y);
+  if (!w.enemies.list.includes(s.creature)) s.creature = spawnCreature(w);
   s.pos = { x: home.x, y: home.y };
   s.creature.x = home.x;
   s.creature.y = home.y;
@@ -255,6 +260,36 @@ registerArea('shrine_association', {
     }) as (p: never) => void);
 
     armRoom(w);
+
+    installHarness(w, {
+      /** Exactly what pressing the button at the jar does. */
+      take() {
+        if (state.taken) return;
+        state.taken = true;
+        state.lure.pickUp();
+        state.hints.progress();
+      },
+      /** Exactly what pressing the button while carrying does. */
+      drop() {
+        if (!state.lure.held) return;
+        const p = tc(w.player.tileX, w.player.tileY);
+        state.lure.release(p.x, p.y - 6);
+        state.hints.progress();
+      },
+      snapshot() {
+        const tile = (x: number, y: number) => ({ x: Math.floor(x / TILE), y: Math.floor((y - 1) / TILE) });
+        return {
+          taken: state.taken,
+          held: state.lure.held,
+          down: state.lure.released,
+          moth: tile(state.lure.x, state.lure.y + 6),
+          creature: tile(state.creature.x, state.creature.y),
+          plate: { x: R1.plate.x, y: R1.plate.y, pressed: state.plate.pressed },
+          gateOpen: state.gate.open,
+          solved: state.solved,
+        };
+      },
+    });
   },
 
   onUpdate(w, dt) {
@@ -271,7 +306,7 @@ registerArea('shrine_association', {
     // it this frame is discarded, which is what "too heavy to move" means.
     s.creature.x = s.pos.x;
     s.creature.y = s.pos.y;
-    if (!s.follower.update(dt, w.cues, grid)) {
+    if (!driveCue(w, s.creature, s.follower, 'moth', 30, dt, grid)) {
       stepToward(s.creature, s.patrol.x, s.patrol.y + 8, 17, dt, grid);
     }
     s.pos = { x: s.creature.x, y: s.creature.y };
@@ -314,6 +349,7 @@ registerArea('shrine_association', {
     s?.room.destroy();
     s?.patrol.destroy();
     s?.lure.destroy();
+    clearHarness();
     s = null;
   },
 });
