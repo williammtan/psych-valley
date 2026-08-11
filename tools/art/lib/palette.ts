@@ -40,12 +40,12 @@ export const OUTLINE_WARM = '#3d2a2a';
 export const SHADOW_CAST = '#241d3355'; // drop shadow under entities
 
 // ── Terrain: town ─────────────────────────────────────────────────────────
-export const GRASS: Ramp = ['#23422e', '#315c3a', '#437a49', '#5c9a57', '#7fbc6a'];
-export const GRASS_DRY: Ramp = ['#4a5228', '#6b7038', '#8d9049', '#b0b064', '#d0cd88'];
-export const DIRT: Ramp = ['#402c22', '#5b4130', '#785640', '#957054', '#b28d6e'];
-export const PATH_STONE: Ramp = ['#4a3a2c', '#6a5541', '#8a7157', '#a68d6f', '#c2ab8b'];
-export const COBBLE: Ramp = ['#3f3a3c', '#5c5457', '#7a7071', '#98908c', '#b8b1a8'];
-export const SAND: Ramp = ['#7a6142', '#9c7d55', '#bc9c70', '#d6bb90', '#eddab4'];
+export const GRASS: Ramp = ['#173d20', '#1e5629', '#2a7d38', '#3f9e49', '#5ebd60'];
+export const GRASS_DRY: Ramp = ['#22521f', '#2f7228', '#459436', '#5fb349', '#80cd66'];
+export const DIRT: Ramp = ['#5a3a22', '#7d5330', '#a1703f', '#c08f56', '#dcb078'];
+export const PATH_STONE: Ramp = ['#6b563c', '#8e7553', '#b09675', '#cbb495', '#e2d0b4'];
+export const COBBLE: Ramp = ['#5c5450', '#7d7369', '#9d9284', '#bab0a0', '#d6cdbc'];
+export const SAND: Ramp = ['#977147', '#bd9560', '#dbb47e', '#efd2a4', '#fbe9cc'];
 
 // ── Water ─────────────────────────────────────────────────────────────────
 export const WATER: Ramp = ['#153048', '#1d4a66', '#2a6a8c', '#3d8fac', '#6fbcc9'];

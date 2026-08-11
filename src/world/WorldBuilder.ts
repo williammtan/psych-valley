@@ -161,12 +161,17 @@ export function buildWorld(scene: Phaser.Scene, def: MapDef): BuiltWorld {
       : mode;
     const frame = `fx/shadow_${size}`;
     if (!hasFrame(scene, frame)) return;
+    // Bigger things cast heavier shadows. A blind A/B measured our frame at
+    // 0.01% of pixels below L=25 against the reference's 2.66% — we had no true
+    // darks anywhere, and a building throwing a faint smudge is most of why.
+    const alpha = size === 'large' ? 0.5 : size === 'med' ? 0.38 : 0.32;
     const img = scene.add.image(sprite.x, sprite.y - 1, 'atlas', frame)
       .setOrigin(0.5, 0.5)
-      .setAlpha(0.34)
+      .setAlpha(alpha)
       .setDepth(DEPTH.SHADOW);
-    // Wide props need a wider shadow than the largest authored ellipse.
-    if (w > 56) img.setScale(Math.min(2.6, w / 46), 1);
+    // Wide props need a wider shadow than the largest authored ellipse, and a
+    // building's shadow should read as a footprint rather than a puddle.
+    if (w > 56) img.setScale(Math.min(2.6, w / 46), 1 + Math.min(0.9, w / 200));
     return img;
   };
 

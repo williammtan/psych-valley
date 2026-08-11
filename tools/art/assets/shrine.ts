@@ -323,49 +323,82 @@ function glyphPlate(
 
 // ── WALLS ──────────────────────────────────────────────────────────────────
 
-/** The top surface of a wall: enormous quiet slabs, almost void. */
+/**
+ * Out-of-bounds. Not a wall top — the absence of room.
+ *
+ * This used to be a lit masonry surface at L 21 sitting next to a floor whose
+ * darkest pixel was L 26, which is why every screenshot of this dungeon read as
+ * one continuous dark field with some slightly-different dark shapes in it. It
+ * is now genuinely black: three barely-separable steps of SHRINE_VOID, enough
+ * to satisfy the no-flat-colour rule and nothing more. Every bit of legibility
+ * the shrine has comes from the hard binary between this and the lit floor.
+ */
 function capBody(s: Surface, variant: number): void {
   const seed = 9000 + variant * 311;
-  grain(s, 0, 0, TILE, TILE, CAP, seed, [1, 2, 2], 4.6);
-  const jy = (variant * 3) % 8;
-  for (let band = -1; band <= 1; band++) {
-    const y0 = jy + band * 8;
-    if (y0 >= 0 && y0 < TILE) {
-      s.hline(0, y0, TILE, CAP[0], 0.9);
-      s.hline(0, y0 + 1, TILE, CAP[3], 0.22); // barely-there top lip
-    }
-    const sx = ((band + variant) & 1) * 8 + 2;
-    for (let y = Math.max(0, y0 + 1); y < Math.min(TILE, y0 + 8); y++) s.px(sx, y, CAP[0], 0.85);
-  }
-  speckle(s, rng(seed + 5), 0, 0, TILE, TILE, CAP[0], 5, 0.4);
-  speckle(s, rng(seed + 9), 0, 0, TILE, TILE, CAP[3], 3, 0.3);
+  grain(s, 0, 0, TILE, TILE, CAP, seed, [0, 1, 2], 5.2);
+  // A single course line per tile, at the very bottom of the ramp. At L 3 this
+  // is invisible until the room's own light spills a few pixels onto it, and
+  // then it reads as depth rather than as another surface.
+  const jy = (variant * 5) % 10;
+  if (jy < TILE) s.hline(0, jy, TILE, CAP[0], 0.85);
+  speckle(s, rng(seed + 9), 0, 0, TILE, TILE, CAP[3], 3, 0.5);
 }
 
 /**
- * The coping on the edge of a wall that faces the room. `side` is which edge
- * of the tile the room is on. North- and west-facing surfaces catch the light;
- * east- and south-facing ones stay in shadow (light is upper-left, always).
+ * A full wall band on the edge of a tile that faces the room.
+ *
+ * `side` is which edge of the tile the room is on. North- and west-facing
+ * surfaces catch the light; east- and south-facing ones stay in shadow (light
+ * is upper-left, always).
+ *
+ * The band is 12 px deep and carries the same four elements the north wall's
+ * dedicated tile does, because a room whose north edge is architecture and
+ * whose other three edges are hairlines does not read as a room:
+ *
+ *   d0        hard shadow the wall throws onto the floor
+ *   d1..d2    the lit coping nose — the "this is a step up" cue
+ *   d3..d9    the carved face, in two courses with joints, falling into shadow
+ *   d10..d11  the base line and the fall into void
+ *   d12..     out-of-bounds
  */
 function coping(s: Surface, side: 'n' | 's' | 'e' | 'w', from = 0, to = TILE): void {
   const lit = side === 'n' || side === 'w';
   const seq = lit
-    ? [P.OUTLINE, ST[4], ST[3], ST[1], CAP[3]]
-    : [P.OUTLINE, ST[2], ST[1], ST[0], CAP[2]];
+    ? [INK, ST[4], ST[3], ST[2], ST[3], ST[3], ST[2], ST[2], ST[1], ST[1], ST[0], P.OUTLINE]
+    : [INK, ST[3], ST[2], ST[1], ST[2], ST[2], ST[1], ST[1], ST[0], ST[0], P.OUTLINE, CAP[3]];
+  const at = (d: number, t: number): [number, number] => [
+    side === 'w' ? d : side === 'e' ? TILE - 1 - d : t,
+    side === 'n' ? d : side === 's' ? TILE - 1 - d : t,
+  ];
   for (let d = 0; d < seq.length; d++) {
     for (let t = from; t < to; t++) {
-      const x = side === 'w' ? d : side === 'e' ? TILE - 1 - d : t;
-      const y = side === 'n' ? d : side === 's' ? TILE - 1 - d : t;
-      s.px(x, y, seq[d], d === 0 ? 0.85 : 1);
+      const [x, y] = at(d, t);
+      s.px(x, y, seq[d], d === 0 ? 0.92 : 1);
     }
   }
-  // Joint ticks across the coping. Two pixels of masonry is all it takes to
-  // stop a side wall reading as a black gap with a highlight painted on it.
-  for (let t = from + 2; t < to; t += 6) {
-    for (let d = 1; d < 4; d++) {
-      const x = side === 'w' ? d : side === 'e' ? TILE - 1 - d : t;
-      const y = side === 'n' ? d : side === 's' ? TILE - 1 - d : t;
-      s.px(x, y, P.OUTLINE, 0.45);
+  // Two ashlar courses across the face, with vertical joints staggered between
+  // them. Without the courses the band is a smooth gradient and reads as a
+  // painted vignette rather than as cut stone.
+  for (const d of [6, 9]) {
+    for (let t = from; t < to; t++) {
+      const [x, y] = at(d, t);
+      s.px(x, y, P.OUTLINE, 0.5);
     }
+  }
+  for (let t = from + ((side === 'n' || side === 's') ? 3 : 2); t < to; t += 7) {
+    for (let d = 3; d < 10; d++) {
+      const [x, y] = at(d + (t & 1 ? 0 : 0), t);
+      s.px(x, y, P.OUTLINE, d < 6 ? 0.45 : 0.3);
+      const [xl, yl] = at(d, t + 1);
+      s.px(xl, yl, ST[4], 0.16);
+    }
+  }
+  // A bite out of the coping nose every few tiles' worth of run — hand-cut.
+  for (let t = from + 5; t < to; t += 11) {
+    const [x, y] = at(1, t);
+    s.px(x, y, ST[1], 0.7);
+    const [x2, y2] = at(2, t);
+    s.px(x2, y2, ST[0], 0.5);
   }
 }
 
@@ -430,8 +463,10 @@ function wallFace(v: number): Surface {
     crack(s, 5 + r.int(0, 5), 3, 11, 'v', r, P.OUTLINE, ST[4]);
     speckle(s, r, 0, 3, TILE, 11, ST[0], 7, 0.5);
   } else if (v === 2) {
-    // rune inlay, long dead — engraved and barely warm
-    glyphPlate(s, 3, 8, 8, 9, false);
+    // an armillary cut into the stone. NOT a rune: the four glyphs are memory
+    // puzzle state and a wall that wears one is a wall the player will read as
+    // a clue for the rest of the dungeon.
+    armillaryPlate(s, 8, 8, 5);
   } else if (v === 3) {
     // observatory conduit: brass pipe bracketed to the stone
     for (let y = 0; y < TILE; y++) {
@@ -479,24 +514,27 @@ function floorTile(v: number): Surface {
   s.vline(0, 0, TILE, FL[0], 0.55);
   s.vline(1, 0, TILE, FL[3], 0.16);
 
-  // The geometric inlay: a lozenge on two variants in six, so it turns up
-  // every few slabs once the runtime scatters variants across a room. On the
-  // other four the slab stays empty — a motif in *every* tile is wallpaper,
-  // and wallpaper is exactly what a floor must not be.
-  if (v === 4 || v === 5) {
-    const cx = 8, cy = 8, rad = v === 4 ? 5 : 4;
+  // The geometric inlay: a lozenge on ONE variant in six, and cut from the
+  // floor's own ramp rather than from the violet trim.
+  //
+  // At two-in-six in a saturated violet it turned into wallpaper — every
+  // screenshot of the dungeon showed a diamond lattice running edge to edge,
+  // which is both the loudest thing on the ground and the exact opposite of
+  // what a floor is for. One in six, in FL[3], is a slab that has an inlay;
+  // two in six in TR[2] is a patterned carpet.
+  if (v === 5) {
+    const cx = 8, cy = 8, rad = 5;
     for (let i = 0; i <= rad; i++) {
       const j = rad - i;
       for (const [px, py] of [[cx + i, cy + j], [cx - i, cy + j], [cx + i, cy - j], [cx - i, cy - j]]) {
-        s.px(px, py, TR[2], 0.45);
-        s.px(px, py + 1, FL[0], 0.3);
+        s.px(px, py, FL[3], 0.4);
+        s.px(px, py + 1, FL[0], 0.35);
       }
     }
-    s.px(cx, cy, TR[3], 0.5);
   }
 
   speckle(s, r, 0, 0, TILE, TILE, FL[1], 5, 0.4);
-  speckle(s, r, 0, 0, TILE, TILE, FL[3], 3, 0.22);
+  speckle(s, r, 0, 0, TILE, TILE, FL[3], 3, 0.2);
   return s;
 }
 
@@ -512,14 +550,17 @@ function floorCracked(v: number): Surface {
 function floorRubble(v: number): Surface {
   const s = floorTile((v + 2) % 6);
   const r = rng(9600 + v * 41);
+  // Grit, kept inside the floor's own value envelope. Chips at SHRINE_STONE[3]
+  // put the *brightest* pixel in the room underfoot, which raises the bar every
+  // interactive object has to clear to be seen — the floor is not allowed to
+  // compete with the things standing on it.
   for (let i = 0; i < 3 + v; i++) {
     const x = r.int(1, TILE - 5), y = r.int(2, TILE - 4);
     const w = r.int(2, 4), h = r.int(2, 3);
-    s.ellipse(x, y + 1, w + 1, h, P.OUTLINE, 0.3);
-    s.rect(x, y, w, h, ST[r.pick([1, 2, 2])]);
-    s.hline(x, y, w, ST[3]);
+    s.ellipse(x, y + 1, w + 1, h, P.OUTLINE, 0.35);
+    s.rect(x, y, w, h, ST[r.pick([0, 1, 1])]);
+    s.hline(x, y, w, ST[2]);
     s.hline(x, y + h - 1, w, ST[0]);
-    s.px(x + w - 1, y, ST[1]);
   }
   return s;
 }
@@ -544,6 +585,60 @@ function floorGrate(v: number): Surface {
   }
   if (v === 1) halo(s, 8, 8, 7, P.ECHO_CYAN[2], 0.18, 2.6);
   s.rectOutline(1, 1, 14, 14, FL[3], 0.22);
+  return s;
+}
+
+/**
+ * A SEQUENCE SLAB — the memory room's puzzle state, set into the floor.
+ *
+ * The old version of this tile was the flagstone with a slightly darker disc
+ * and a cold trace on it: it measured 1.12:1 against the floor beside it, a
+ * difference of four luminance levels, and in a screenshot you genuinely could
+ * not find the four plates the whole puzzle is played on.
+ *
+ * It is now built like every other operable thing in the shrine — dressed
+ * marble in a socket — and it is the loudest object on the ground by a wide
+ * margin, because it has to be findable from across a dark room before it is
+ * ever read as a symbol.
+ *
+ *   socket ring   SHRINE_INK, opaque — darker than any floor pixel
+ *   plate         SHRINE_MARBLE, filling the tile — the 3:1 mass
+ *   rim           MARBLE[4] on the upper-left arc — brighter than any floor px
+ *   glyph         engraved dark when dead; cyan with a hot core when live
+ */
+function runePlateTile(g: Glyph, lit: boolean): Surface {
+  const s = floorTile(g % 4);
+  // The socket: a hard shadow the plate sits down inside.
+  s.ellipse(0, 0, TILE, TILE, INK, 0.55);
+  s.ellipse(0, 1, TILE, TILE - 1, INK);
+  // The plate itself. Two ramp steps plus a lit upper-left crescent, the same
+  // way every other marble object in the dungeon is lit.
+  s.ellipse(1, 1, 14, 14, MB[1]);
+  s.ellipse(1, 1, 14, 13, MB[2]);
+  s.ellipse(2, 1, 12, 12, MB[3]);
+  s.ellipse(3, 2, 10, 9, MB[2]);
+  s.ellipseOutline(1, 1, 14, 14, MB[4], 0.95);
+  // and the shadowed lower-right quadrant of the bezel
+  for (let y = 8; y < 15; y++) for (let x = 8; x < 15; x++) {
+    const d = Math.hypot(x - 7.5, y - 7.5);
+    if (d > 6.1 && d < 7.4) s.px(x, y, MB[0], 0.85);
+  }
+  // Brass collar: four studs, so the plate reads as fitted rather than painted.
+  for (const [sx, sy] of [[7, 1], [7, 13], [1, 7], [13, 7]] as const) {
+    s.rect(sx, sy, 2, 2, lit ? BL[3] : BL[1]);
+    s.px(sx, sy, lit ? BL[4] : BL[2]);
+  }
+  if (lit) {
+    halo(s, 8, 8, 8.5, P.ECHO_CYAN[3], 0.5, 2.0);
+    s.ellipse(3, 3, 10, 10, P.ECHO_CYAN[1], 0.85);
+    s.ellipse(4, 4, 8, 8, P.ECHO_CYAN[2], 0.8);
+    drawGlyph(s, g, 8, 8, 11, P.ECHO_RUNE, 1);
+    drawGlyph(s, g, 8, 8, 11, P.ECHO_RUNE_CORE, 0.85, true);
+  } else {
+    drawGlyph(s, g, 9, 9, 11, MB[4], 0.5);          // the groove's lit far lip
+    drawGlyph(s, g, 8, 8, 11, INK, 0.92);           // the groove
+    drawGlyph(s, g, 8, 8, 11, P.ECHO_RUNE_DIM, 0.55, true);
+  }
   return s;
 }
 
@@ -675,39 +770,76 @@ function ledgeN(): Surface {
 
 // ── BLOB SETS ──────────────────────────────────────────────────────────────
 
-/** Still water: a mirror, not a river. Reflections are horizontal and calm. */
-function waterPainter(coverage: Surface, _mask: number, r: Rng): Surface {
-  const s = new Surface(TILE, TILE);
-  const n1 = valueNoise(6100);
-  // Sample the noise at a per-tile offset. Without this every tile in the set
-  // carries an identical texture and a filled pool shows a hard grid.
-  const ox = r.int(0, 97), oy = r.int(0, 97);
-  for (let y = 0; y < TILE; y++) {
-    for (let x = 0; x < TILE; x++) {
-      if (coverage.alphaAt(x, y) === 0) continue;
-      const v = n1(x + ox, y + oy, 7);
-      s.px(x, y, v > 0.62 ? P.SHRINE_WATER[2] : v < 0.36 ? P.SHRINE_WATER[0] : P.SHRINE_WATER[1]);
+/**
+ * Still water: a mirror, not a river.
+ *
+ * WHY THE SHORELINE IS DRAWN THIS HARD
+ * ────────────────────────────────────
+ * A pool in a dark dungeon is the single most ambiguous object there is: the
+ * player has to know, from across the room and without testing it, whether it
+ * is walkable, blocking or lethal. The old version faded into the flagstone at
+ * a 0.6-alpha edge pixel and answered none of those questions, so:
+ *
+ *   - the SHORE gets a hard lip. Two rows of near-ink under the far bank, so
+ *     the ground visibly *stops* and drops rather than changing colour;
+ *   - the NEAR bank gets a foam line, the one bright mark on a black mirror;
+ *   - the SURFACE moves. Nothing walkable in this dungeon animates, so motion
+ *     is by itself the "this is liquid" signal, before any colour is read.
+ *
+ * `frame` drives the surface animation; the shoreline never moves, because a
+ * moving boundary reads as damage rather than as a coast.
+ */
+function waterPainter(frame: number) {
+  return (coverage: Surface, _mask: number, r: Rng): Surface => {
+    const s = new Surface(TILE, TILE);
+    const n1 = valueNoise(6100);
+    // Sample the noise at a per-tile offset. Without this every tile in the set
+    // carries an identical texture and a filled pool shows a hard grid.
+    const ox = r.int(0, 97), oy = r.int(0, 97);
+    const drift = frame * 1.7;
+    for (let y = 0; y < TILE; y++) {
+      for (let x = 0; x < TILE; x++) {
+        if (coverage.alphaAt(x, y) === 0) continue;
+        const v = n1(x + ox + drift, y + oy, 7);
+        s.px(x, y, v > 0.62 ? P.SHRINE_WATER[2] : v < 0.36 ? P.SHRINE_WATER[0] : P.SHRINE_WATER[1]);
+      }
     }
-  }
-  // One reflection per tile. Two or more and a pool starts reading as a grate.
-  {
-    const y = r.int(3, TILE - 4), x = r.int(1, 8), w = r.int(3, 5);
-    for (let k = 0; k < w; k++) {
-      if (coverage.alphaAt(x + k, y)) s.px(x + k, y, P.SHRINE_WATER[3], 0.34);
+    // Two travelling glints. They are the animation the player actually sees:
+    // the noise drift alone is too subtle to register at 1x.
+    for (const k of [0, 1]) {
+      const y = 3 + ((r.int(0, 9) + k * 6) % 10);
+      const x = ((r.int(0, 11) + frame * 3 + k * 7) % 12) + 1;
+      const w = 3 + ((frame + k) & 1);
+      for (let i = 0; i < w; i++) {
+        if (coverage.alphaAt(x + i, y)) s.px(x + i, y, P.SHRINE_WATER[3], 0.45);
+        if (coverage.alphaAt(x + i, y + 1)) s.px(x + i, y + 1, P.SHRINE_WATER[0], 0.3);
+      }
     }
-  }
-  if (r.chance(0.45)) {
-    const gx = r.int(3, 12), gy = r.int(3, 12);
-    if (coverage.alphaAt(gx, gy)) {
-      halo(s, gx, gy, 4.5, P.ECHO_CYAN[2], 0.22, 2.6);
-      s.px(gx, gy, P.ECHO_CYAN[4], 0.7);
+    if (r.chance(0.45)) {
+      const gx = r.int(3, 12), gy = r.int(3, 12);
+      if (coverage.alphaAt(gx, gy)) {
+        halo(s, gx, gy, 4.5, P.ECHO_CYAN[2], 0.22, 2.6);
+        s.px(gx, gy, P.ECHO_CYAN[4], 0.5 + (frame & 1) * 0.35);
+      }
     }
-  }
-  const { top, bottom, side } = edgePixels(coverage);
-  for (const [x, y] of top) { s.px(x, y, P.SHRINE_WATER[0]); s.px(x, y + 1, P.SHRINE_WATER[0], 0.5); }
-  for (const [x, y] of bottom) { s.px(x, y, P.ECHO_CYAN[2], 0.4); s.px(x, y - 1, P.SHRINE_WATER[3], 0.25); }
-  for (const [x, y] of side) s.px(x, y, P.SHRINE_WATER[0], 0.6);
-  return s;
+    const { top, bottom, side } = edgePixels(coverage);
+    // Far bank: a hard shadow lip. The land is above the water and casts onto it.
+    for (const [x, y] of top) {
+      s.px(x, y, P.SHRINE_SHORE_LIP);
+      s.px(x, y + 1, P.SHRINE_SHORE_LIP, 0.8);
+      s.px(x, y + 2, P.SHRINE_WATER[0], 0.6);
+    }
+    // Near bank: foam. The only bright pixels in the pool, and they mark the
+    // edge you can actually stand on.
+    for (const [x, y] of bottom) {
+      s.px(x, y - 1, P.SHRINE_WATER[0], 0.5);
+      s.px(x, y, ((x + frame) & 3) === 0 ? P.SHRINE_FOAM : P.SHRINE_WATER[4], 0.9);
+    }
+    for (const [x, y] of side) {
+      s.px(x, y, P.SHRINE_SHORE_LIP, 0.85);
+    }
+    return s;
+  };
 }
 
 /** Echo moss: violet growth with a few live specks in it. */
@@ -906,15 +1038,11 @@ function registerArchitecture(b: ArtBuild): void {
   for (let i = 0; i < 2; i++) b.addTile(`tile/shrine/floor_grate_${i}`, floorGrate(i));
   for (let i = 0; i < 3; i++) b.addTile(`tile/shrine/floor_water_${i}`, floorWater(i));
 
-  // Rune floors: the four puzzle symbols, lit and dead.
+  // Rune floors: the four puzzle symbols, lit and dead. The ONLY tiles in the
+  // shrine allowed to carry a glyph.
   for (let g = 0; g < 4; g++) {
     for (const lit of [true, false]) {
-      const s = floorTile(g % 4);
-      s.ellipse(1, 1, 14, 14, FL[1], 0.8);
-      s.ellipseOutline(1, 1, 14, 14, FL[0], 0.9);
-      s.ellipseOutline(2, 2, 12, 12, ST[1], 0.35);
-      glyphPlate(s, g as Glyph, 8, 8, 11, lit);
-      b.addTile(`tile/shrine/rune_floor${lit ? '' : '_dim'}_${g}`, s);
+      b.addTile(`tile/shrine/rune_floor${lit ? '' : '_dim'}_${g}`, runePlateTile(g as Glyph, lit));
     }
   }
 
@@ -931,7 +1059,17 @@ function registerArchitecture(b: ArtBuild): void {
   b.addTile('tile/shrine/ledge_n', ledgeN());
 
   // Blob sets --------------------------------------------------------------
-  registerBlobSet(b, 'blob/shrine_water', 6101, waterPainter, { wobble: 0.9, radius: 5 });
+  // Water ships as four whole blob sets and the runtime swaps between them, so
+  // the surface is in constant motion. No walkable tile in the shrine animates,
+  // which makes "is this liquid?" answerable without a single colour cue.
+  const waterFrames: number[][] = [];
+  for (let f = 0; f < 4; f++) {
+    waterFrames.push(
+      registerBlobSet(b, `blob/shrine_water_f${f}`, 6101, waterPainter(f), { wobble: 0.9, radius: 5 }),
+    );
+  }
+  b.blobs['blob/shrine_water'] = waterFrames[0];
+  b.blobFrames['blob/shrine_water'] = { frames: waterFrames, frameRate: 4 };
   registerBlobSet(b, 'blob/shrine_moss', 6201, mossPainter, { wobble: 1.7, radius: 4.6 });
   registerBlobSet(b, 'blob/shrine_pit', 6301, pitPainter, { wobble: 0.6, radius: 4.4 });
 
@@ -980,9 +1118,32 @@ function brassBand(s: Surface, x: number, y: number, w: number, h = 3): void {
 
 // ── DOORS & GATES ──────────────────────────────────────────────────────────
 // 32×40, anchored bottom-centre: two tiles wide, standing in a wall band.
-// The frame is shared by doors and gates so a room's openings read as a set.
+//
+// ONE FRAME, ONE SILHOUETTE, THREE STATES
+// ───────────────────────────────────────
+// The shrine used to ship three unrelated openings: a barred gate with a blue
+// rune, an arched gate with a purple rune, and a frameless purple portcullis.
+// Three doors is three vocabularies, and a player who has learned that a barred
+// gate means "locked" learns nothing from meeting a portcullis.
+//
+// Every opening in the dungeon is now the SAME object:
+//
+//   frame     jambs, lintel, cornice, keystone — identical in all states
+//   barrier   the same 20x32 rectangle in the same place, always
+//   state     carried entirely by COLOUR and ANIMATION on that barrier:
+//               shut    — dressed marble leaves, dead brass bar, cold boss
+//               sealed  — the same leaves, the bar blazing Echo violet
+//               barred  — the leaves replaced by bars of Echo light, same
+//                         rectangle, same brass rails, same footprint
+//               open    — the barrier gone, the void behind it, a lit sill
+//
+// So the silhouette answers "there is a way through here", and the colour
+// answers "and it is / is not open right now" — which is the division of labour
+// the ALTTP reference uses and the reason its doors never need a legend.
 
 const DOOR_W = 32, DOOR_H = 40;
+/** The barrier rectangle. Every closed state fills exactly this. */
+const BAR_X = 6, BAR_W = 20;
 
 function doorFrame(): Surface {
   const s = new Surface(DOOR_W, DOOR_H);
@@ -1025,21 +1186,27 @@ function doorwayVoid(s: Surface, topY: number): void {
   for (let x = 8; x < 24; x += 5) s.px(x, DOOR_H - 2, ST[1], 0.6);
 }
 
-function doorSlab(s: Surface, topY: number, glyphLit: boolean): void {
-  bevel(s, 6, topY, 20, DOOR_H - topY, ST, 1, false);
-  s.rect(6, topY, 20, 2, ST[0]);              // recessed under the lintel
-  s.vline(6, topY, DOOR_H - topY, ST[0]);
-  s.vline(25, topY, DOOR_H - topY, ST[0]);
+/**
+ * The barrier: two leaves of dressed stone with a brass band top and bottom.
+ * The ONE closed silhouette in the dungeon; `sealed` only changes its colour.
+ */
+function doorSlab(s: Surface, topY: number, sealed: boolean): void {
+  bevel(s, BAR_X, topY, BAR_W, DOOR_H - topY, ST, 2, false);
+  s.rect(BAR_X, topY, BAR_W, 2, ST[0]);              // recessed under the lintel
+  s.vline(BAR_X, topY, DOOR_H - topY, ST[1]);
+  s.vline(BAR_X + BAR_W - 1, topY, DOOR_H - topY, ST[0]);
   // two leaves with a centre seam
-  s.vline(15, topY + 2, DOOR_H - topY - 2, P.OUTLINE, 0.8);
-  s.vline(16, topY + 2, DOOR_H - topY - 2, ST[2], 0.6);
-  for (let y = topY + 4; y < DOOR_H - 2; y += 5) s.hline(7, y, 18, ST[0], 0.4);
+  s.vline(15, topY + 2, DOOR_H - topY - 2, P.OUTLINE, 0.85);
+  s.vline(16, topY + 2, DOOR_H - topY - 2, ST[3], 0.7);
+  for (let y = topY + 4; y < DOOR_H - 2; y += 5) s.hline(7, y, 18, ST[1], 0.45);
   brassBand(s, 7, topY + 6, 18);
   brassBand(s, 7, DOOR_H - 9, 18);
-  // the boss in the middle: a dead sigil on a closed door
-  s.ellipse(11, topY + 12, 10, 10, ST[2]);
-  s.ellipseOutline(11, topY + 12, 10, 10, ST[0]);
-  glyphPlate(s, 3, 16, topY + 17, 7, glyphLit);
+  // The boss in the middle. An armillary, not a rune — a door that wears one of
+  // the memory puzzle's four symbols teaches the player to read doors as clues.
+  s.ellipse(11, topY + 12, 10, 10, ST[3]);
+  s.ellipse(11, topY + 12, 10, 9, ST[2]);
+  s.ellipseOutline(11, topY + 12, 10, 10, P.OUTLINE, 0.9);
+  armillaryPlate(s, 16, topY + 17, 3, sealed ? P.ECHO_VIOLET[4] : TR[3]);
 }
 
 function doorBar(s: Surface, y: number, extend: number, sealBright: number): void {
@@ -1062,83 +1229,90 @@ function doorBar(s: Surface, y: number, extend: number, sealBright: number): voi
   }
 }
 
+/** The head the barrier retracts into, drawn identically in every open state. */
+function doorHead(s: Surface, bottom: number): void {
+  s.rect(BAR_X, 8, BAR_W, bottom - 8, ST[1]);
+  s.hline(BAR_X, 8, BAR_W, ST[0]);
+  s.hline(BAR_X, bottom - 1, BAR_W, ST[3]);
+  s.hline(BAR_X, bottom, BAR_W, P.OUTLINE, 0.9);
+}
+
+const doorShadow = { cx: DOOR_W / 2, y: DOOR_H, w: 26, h: 5 };
+
 function door(state: 'closed' | 'open' | 'locked'): Surface {
   const s = doorFrame();
   if (state === 'open') {
     doorwayVoid(s, 12);
-    s.rect(6, 8, 20, 4, ST[1]);               // the slab, retracted into the head
-    s.hline(6, 8, 20, ST[3]);
-    s.hline(6, 11, 20, P.OUTLINE, 0.9);
+    doorHead(s, 12);
   } else {
-    doorSlab(s, 8, false);
-    if (state === 'locked') doorBar(s, 20, 1, 0.55);
+    doorSlab(s, 8, state === 'locked');
+    doorBar(s, 20, 1, state === 'locked' ? 1 : 0);
   }
-  contact(s, DOOR_W / 2, DOOR_H, 26, 4, 0.3);
-  return s;
+  return operable(s, doorShadow);
 }
 
 function doorFrames(): Surface[] {
   const out: Surface[] = [];
-  // 0 barred → 1 seal flares, bar splits → 2 slab lifting → 3 open
+  // 0 shut → 1 the seal flares and the bar splits → 2 leaves lifting → 3 open.
+  // The frame never moves; only the barrier does.
   for (let f = 0; f < 4; f++) {
     const s = doorFrame();
-    if (f === 0) { doorSlab(s, 8, false); doorBar(s, 20, 1, 0.55); }
+    if (f === 0) { doorSlab(s, 8, false); doorBar(s, 20, 1, 0.2); }
     else if (f === 1) { doorSlab(s, 8, true); doorBar(s, 20, 0.45, 1); }
     else if (f === 2) {
       doorwayVoid(s, 26);
-      s.rect(6, 8, 20, 18, ST[1]);
-      s.hline(6, 8, 20, ST[0]);
-      s.hline(6, 25, 20, ST[3]);
-      s.hline(6, 26, 20, P.OUTLINE, 0.9);
+      doorHead(s, 26);
       brassBand(s, 7, 18, 18);
       doorBar(s, 20, 0, 0.35);
     } else {
       doorwayVoid(s, 12);
-      s.rect(6, 8, 20, 4, ST[1]);
-      s.hline(6, 8, 20, ST[3]);
-      s.hline(6, 11, 20, P.OUTLINE, 0.9);
+      doorHead(s, 12);
     }
-    contact(s, DOOR_W / 2, DOOR_H, 26, 4, 0.3);
-    out.push(s);
+    out.push(operable(s, doorShadow));
   }
   return out;
 }
 
-/** A portcullis of Echo light. Closed bars are violet: violet means blocked. */
+/**
+ * The same opening, barred with Echo light instead of stone.
+ *
+ * It fills the SAME rectangle as the slab, hangs from the SAME head and lands
+ * in the SAME sill, so at a glance it is the dungeon's one door in a different
+ * state rather than a fourth kind of object. Violet means blocked, everywhere.
+ */
 function gate(extend: number): Surface {
   const s = doorFrame();
   doorwayVoid(s, 12);
-  // track and floor sockets
-  s.rect(6, 8, 20, 4, ST[1]);
-  s.hline(6, 8, 20, ST[3]);
-  s.hline(6, 11, 20, P.OUTLINE, 0.9);
+  doorHead(s, 12);
+  // floor sockets the bars drop into — visible whether or not they are down
   for (let k = 0; k < 4; k++) {
-    const x = 8 + k * 5;
+    const x = BAR_X + 2 + k * 5;
     s.rect(x, DOOR_H - 3, 3, 2, P.ECHO_DEEP[0]);
     s.px(x, DOOR_H - 3, ST[0]);
   }
   const len = Math.round((DOOR_H - 14) * extend);
   if (len > 0) {
     for (let k = 0; k < 4; k++) {
-      const x = 8 + k * 5;
-      halo(s, x + 1, 12 + len / 2, len * 0.5 + 4, P.ECHO_VIOLET[3], 0.2, 2.6);
+      const x = BAR_X + 2 + k * 5;
+      halo(s, x + 1, 12 + len / 2, len * 0.5 + 5, P.ECHO_VIOLET[3], 0.24, 2.6);
     }
+    // the brass rail the bars hang from — the slab's top band, in the same place
+    brassBand(s, 7, 12, 18);
     for (let k = 0; k < 4; k++) {
-      const x = 8 + k * 5;
-      s.rect(x, 12, 3, len, P.ECHO_VIOLET[2]);
-      s.vline(x, 12, len, P.ECHO_VIOLET[1]);
-      s.vline(x + 1, 12, len, P.ECHO_FLAME[4]);       // hot core
-      s.vline(x + 2, 12, len, P.ECHO_VIOLET[3]);
+      const x = BAR_X + 2 + k * 5;
+      s.rect(x, 14, 3, len, P.ECHO_VIOLET[2]);
+      s.vline(x, 14, len, P.ECHO_VIOLET[1]);
+      s.vline(x + 1, 14, len, P.ECHO_FLAME[4]);       // hot core
+      s.vline(x + 2, 14, len, P.ECHO_VIOLET[3]);
       // tip
-      s.px(x, 12 + len, P.ECHO_VIOLET[1]);
-      s.px(x + 1, 12 + len, P.ECHO_VIOLET[4]);
-      s.px(x + 2, 12 + len, P.ECHO_VIOLET[1]);
-      s.px(x + 1, 13 + len, P.ECHO_VIOLET[2]);
-      brassBand(s, x - 1, 12, 5, 3);
+      s.px(x, 14 + len, P.ECHO_VIOLET[1]);
+      s.px(x + 1, 14 + len, P.ECHO_VIOLET[4]);
+      s.px(x + 2, 14 + len, P.ECHO_VIOLET[1]);
+      s.px(x + 1, 15 + len, P.ECHO_VIOLET[2]);
     }
+    if (extend > 0.9) brassBand(s, 7, DOOR_H - 6, 18);
   }
-  contact(s, DOOR_W / 2, DOOR_H, 26, 4, 0.3);
-  return s;
+  return operable(s, doorShadow);
 }
 
 // ── PRESSURE PLATE ─────────────────────────────────────────────────────────
@@ -1151,50 +1325,45 @@ function gate(extend: number): Surface {
  * centre lit hard enough to spill onto the floor around it.
  */
 function plate(down: boolean): Surface {
-  const s = new Surface(20, 18);
-  const cx = 10;
+  const s = new Surface(22, 20);
+  const cx = 11;
   if (!down) {
-    contact(s, cx, 17, 20, 5, 0.45);
     // The socket it stands proud of, drawn as a hard dark ring: without this
     // the plate has no edge against the floor and disappears.
-    s.ellipse(0, 4, 20, 13, P.OUTLINE, 0.75);
+    s.ellipse(1, 5, 20, 13, P.OUTLINE, 0.75);
     // side face — three rows of it, so the slab is visibly *raised*
-    s.ellipse(2, 8, 16, 8, ST[1]);
-    s.hline(4, 14, 12, P.OUTLINE, 0.85);
-    // top face, at SHRINE_STONE[3..4]: a full two steps above the floor, which
-    // is the only reason a pressure plate reads at a glance in a dark room
-    // Top face: mostly SHRINE_STONE[4], the lightest stone in the game, with
-    // a [3] crescent on the lower right for the light direction. Two earlier
-    // versions of this plate had a dark centre and simply disappeared into the
-    // flagstone; the plate has to be the brightest unlit thing in the room.
-    s.ellipse(1, 2, 18, 12, P.OUTLINE, 0.9);
-    s.ellipse(2, 3, 16, 10, ST[3]);
-    s.ellipse(2, 3, 15, 9, ST[4]);
+    s.ellipse(3, 9, 16, 8, ST[1]);
+    s.hline(5, 15, 12, P.OUTLINE, 0.85);
+    // Top face: dressed marble, which is what every operable object in the
+    // shrine is made of. Two earlier versions of this plate were carved stone
+    // one shade off the flagstone and simply disappeared into it.
+    s.ellipse(2, 3, 18, 12, P.OUTLINE, 0.9);
+    s.ellipse(3, 4, 16, 10, ST[3]);
+    s.ellipse(3, 4, 15, 9, ST[4]);
     // dead inlay: a shallow groove, not a dark disc
-    s.ellipseOutline(5, 5, 10, 7, ST[1], 0.75);
-    s.ellipse(6, 6, 8, 5, ST[2]);
-    s.ellipseOutline(6, 6, 8, 5, TR[3], 0.7);
-    s.ellipse(8, 7, 4, 3, P.ECHO_CYAN[1]);
-    s.px(9, 8, P.ECHO_CYAN[2]); s.px(10, 8, P.ECHO_CYAN[2]);
+    s.ellipseOutline(6, 6, 10, 7, ST[1], 0.75);
+    s.ellipse(7, 7, 8, 5, ST[2]);
+    s.ellipseOutline(7, 7, 8, 5, BR[3], 0.8);
+    s.ellipse(9, 8, 4, 3, P.ECHO_CYAN[1]);
+    s.px(10, 9, P.ECHO_CYAN[2]); s.px(11, 9, P.ECHO_CYAN[2]);
   } else {
-    contact(s, cx, 17, 18, 3, 0.25);
     // socket: far inside wall dark, near inside wall catching the light — the
     // exact inverse of the raised bevel above, which is what sells "pressed"
-    s.ellipse(0, 4, 20, 13, P.OUTLINE, 0.9);
-    s.ellipse(1, 5, 18, 11, ST[0]);
-    s.hline(4, 5, 12, P.OUTLINE);
-    s.hline(4, 6, 12, P.OUTLINE, 0.7);
-    s.hline(4, 14, 12, ST[3], 0.8);
-    s.hline(4, 15, 12, ST[2], 0.5);
-    halo(s, cx, 10, 11, P.ECHO_CYAN[2], 0.45, 2.0);
-    s.ellipse(3, 7, 14, 8, ST[2]);
-    s.ellipseOutline(3, 7, 14, 8, ST[3], 0.55);
-    s.ellipse(5, 8, 10, 6, P.ECHO_CYAN[2]);
-    s.ellipse(6, 9, 8, 4, P.ECHO_CYAN[3]);
-    s.ellipse(7, 10, 6, 2, P.ECHO_RUNE);
-    s.px(9, 10, P.ECHO_RUNE_CORE); s.px(10, 10, P.ECHO_RUNE_CORE);
+    s.ellipse(1, 5, 20, 13, P.OUTLINE, 0.9);
+    s.ellipse(2, 6, 18, 11, ST[0]);
+    s.hline(5, 6, 12, P.OUTLINE);
+    s.hline(5, 7, 12, P.OUTLINE, 0.7);
+    s.hline(5, 15, 12, ST[4], 0.85);
+    s.hline(5, 16, 12, ST[3], 0.6);
+    halo(s, cx, 11, 11, P.ECHO_CYAN[2], 0.45, 2.0);
+    s.ellipse(4, 8, 14, 8, ST[3]);
+    s.ellipseOutline(4, 8, 14, 8, ST[4], 0.6);
+    s.ellipse(6, 9, 10, 6, P.ECHO_CYAN[2]);
+    s.ellipse(7, 10, 8, 4, P.ECHO_CYAN[3]);
+    s.ellipse(8, 11, 6, 2, P.ECHO_RUNE);
+    s.px(10, 11, P.ECHO_RUNE_CORE); s.px(11, 11, P.ECHO_RUNE_CORE);
   }
-  return s;
+  return operable(s, { cx, y: 19, w: down ? 18 : 20, h: down ? 4 : 5 });
 }
 
 // ── SWITCHES & LEVERS ──────────────────────────────────────────────────────

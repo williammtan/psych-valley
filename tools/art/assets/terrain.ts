@@ -72,10 +72,12 @@ function grassTile(ramp: readonly string[], seed: number, variant: number): Surf
       values.push(n1(x, y, 4) * 0.55 + n2(x, y, 8) * 0.45);
     }
   }
-  // 13% shadow, 74% base, 13% light. Grass is mostly ONE colour; the mottling
-  // exists to break up the flat, not to be a pattern in its own right. At 4x
-  // zoom anything more even reads as static.
-  const bands = rankQuantise(values, [13, 74, 13]);
+  // 7% shadow, 86% base, 7% light. A blind A/B measured our grass at 93
+  // distinct colours per patch with the dominant colour holding 42.6%, against
+  // the reference's 17 colours and 95.5%. Its conclusion: we were spending our
+  // contrast budget on speckle while the reference spent it on shape. One
+  // colour now holds the field and the marks sit on top of it.
+  const bands = rankQuantise(values, [7, 86, 7]);
   const shades = [ramp[1], ramp[2], ramp[3]];
   for (let i = 0; i < values.length; i++) {
     s.px(i % TILE, Math.floor(i / TILE), shades[bands[i]]);
@@ -85,7 +87,7 @@ function grassTile(ramp: readonly string[], seed: number, variant: number): Surf
   // two pixels tall so they read as individual blades at 4x zoom. Kept away
   // from the tile edge so they never straddle a seam.
   const r = rng(seed + variant * 313);
-  if (r.chance(0.75)) {
+  if (r.chance(0.55)) {
     const cx = r.int(3, TILE - 4);
     const cy = r.int(4, TILE - 4);
     const n = r.int(2, 3);
@@ -97,7 +99,7 @@ function grassTile(ramp: readonly string[], seed: number, variant: number): Surf
     }
   }
   // One or two dark divots for grit; anything more turns into noise.
-  speckle(s, rng(seed + variant * 77 + 5), 3, 3, TILE - 6, TILE - 6, ramp[0], 2, 0.35);
+  speckle(s, rng(seed + variant * 77 + 5), 3, 3, TILE - 6, TILE - 6, ramp[0], 1, 0.3);
   return s;
 }
 
@@ -403,11 +405,11 @@ export function registerTerrain(b: ArtBuild): void {
     }
     // The boundary reads as grass thinning out, not as a cut edge.
     const { top, bottom, side } = edgePixels(coverage);
-    for (const [x, y] of top) s.px(x, y, P.GRASS_DRY[3], 0.55);
-    for (const [x, y] of bottom) s.px(x, y, P.GRASS_DRY[1], 0.7);
-    for (const [x, y] of side) s.px(x, y, P.GRASS_DRY[2], 0.5);
+    for (const [x, y] of top) s.px(x, y, P.GRASS_DRY[4], 0.6);
+    for (const [x, y] of bottom) s.px(x, y, P.GRASS[0], 0.75);
+    for (const [x, y] of side) s.px(x, y, P.GRASS[1], 0.5);
     return s;
-  }, { wobble: 2.1, radius: 5.5 });
+  }, { wobble: 1.4, radius: 6 });
 
   registerBlobSet(b, 'blob/turf_worn', 1901, (coverage, _mask, r) => {
     const s = new Surface(TILE, TILE);
