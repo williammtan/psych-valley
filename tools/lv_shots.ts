@@ -28,7 +28,10 @@ const SCREENS: Array<[string, number, number]> = [
   ['workshop', 16, 57],      // Sera's Workshop
   ['gardens', 18, 68],       // market gardens
   ['bridge', 62, 44],        // the bridge
-  ['inn', 79, 40],           // The Lantern Inn
+  // NB: keep this OFF the inn's door row (y=41) — `teleport` puts the player's
+  // feet on the target tile, and standing in a door zone transitions the map.
+  // Every screen after it then captured the inn's interior instead.
+  ['inn', 79, 38],           // The Lantern Inn
   ['inn_yard', 80, 47],      // inn garden
   ['pool', 65, 55],          // the slow pool + jetties
   ['ford', 68, 27],          // the ford
@@ -89,7 +92,23 @@ await page.evaluate(() => (window as any).__psyche?.hideHud(true));
 await page.waitForTimeout(2600);   // let the location banner expire
 
 mkdirSync(OUT, { recursive: true });
+/**
+ * A teleport lands the player's feet on the target tile, so a window centred
+ * near a threshold walks straight through the door and every screen after it
+ * captures an interior. Re-assert the map before each capture and say so
+ * loudly, rather than silently shipping eighteen shots of somebody's pub.
+ */
+async function ensureTown(name: string): Promise<void> {
+  const where = await page.evaluate(() => (window as any).__psyche?.state()?.map);
+  if (where === 'lumen_vale') return;
+  console.log(`  ⚠ ${name}: fell into '${where}' — returning to lumen_vale`);
+  await page.evaluate(() => (window as any).__psyche?.goto('lumen_vale', 'default'));
+  await page.waitForTimeout(2600);   // let the location banner expire again
+  await page.evaluate(() => (window as any).__psyche?.hideHud(true));
+}
+
 for (const [name, x, y] of list) {
+  await ensureTown(name);
   // Two teleports with a wait between: the camera follows on an exponential
   // lerp and swiftshader runs well under 60fps, so a single call leaves the
   // view part-way through the jump.
@@ -97,6 +116,8 @@ for (const [name, x, y] of list) {
   await page.waitForTimeout(700);
   await page.evaluate(([tx, ty]) => (window as any).__psyche?.teleport(tx, ty), [x, y]);
   await page.waitForTimeout(900);
+  const map = await page.evaluate(() => (window as any).__psyche?.state()?.map);
+  if (map !== 'lumen_vale') { console.log(`  ⚠ ${name} landed in '${map}' — shot skipped`); continue; }
   await page.screenshot({ path: join(OUT, `${name}.png`) });
   console.log(`  shots/lv/${name}.png  (${x},${y})`);
 }

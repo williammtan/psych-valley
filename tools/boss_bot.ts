@@ -65,15 +65,23 @@ window.__bossDriver = (() => {
 
   function player() { return P().state().player; }
 
+  /**
+   * Walk somewhere.
+   *
+   * ALWAYS yields at least once. An early \`break\` with no await would let the
+   * caller's loop spin synchronously, which starves the game's requestAnimation
+   * Frame entirely — the page stops producing frames and looks like a hang.
+   */
   async function goTo(tx, ty, timeout) {
     const t0 = performance.now();
-    while (performance.now() - t0 < (timeout || 2500)) {
+    for (;;) {
       const p = player();
       const dx = tx - p.x, dy = ty - p.y;
       const d = Math.hypot(dx, dy);
-      if (d < 8) break;
+      if (d < 8) { halt(); await wait(40); return; }
       move(dx / d, dy / d);
       await wait(30);
+      if (performance.now() - t0 >= (timeout || 2500)) break;
     }
     halt();
   }
@@ -123,6 +131,30 @@ window.__bossDriver = (() => {
     return best;
   }
 
+  /**
+   * The closest point to \`near\` that is still at least \`clear\` away from
+   * everything in \`avoid\`.
+   *
+   * This is what actually separates the informed bot from a coward: knowing the
+   * rule is "outside the burning quadrant" lets you stand safe AND next to the
+   * Echo, ready for the stagger. Fleeing to the far corner is safe too, and much
+   * slower.
+   */
+  function safeSpotNear(avoid, clear, near) {
+    const a = B().arena.arena;
+    let best = null, bestScore = 1e9;
+    for (let x = a.x0 + 12; x <= a.x1 - 12; x += 12) {
+      for (let y = a.y0 + 12; y <= a.y1 - 6; y += 12) {
+        let d = 1e9;
+        for (const o of avoid) d = Math.min(d, Math.hypot(o.x - x, o.y - y));
+        if (d < clear) continue;
+        const score = Math.hypot(near.x - x, near.y - y);
+        if (score < bestScore) { bestScore = score; best = { x: x, y: y }; }
+      }
+    }
+    return best || bestSpot(avoid);
+  }
+
   // ── the bots ─────────────────────────────────────────────────────────────
   //
   // NAIVE   never varies and never reads the room. It attacks from the same
@@ -162,6 +194,9 @@ window.__bossDriver = (() => {
     let sideIdx = 0;
 
     while (performance.now() - t0 < limitMs) {
+      // Belt and braces: no path through this loop may ever run without
+      // yielding, or the game never gets a frame.
+      await wait(0);
       const st = P().state();
       if (st.hp < lastHp) M.heartsLost += lastHp - st.hp;
       if (st.hp <= 0 && !wasDown) { M.deaths++; wasDown = true; }
@@ -205,14 +240,25 @@ window.__bossDriver = (() => {
           M.swings++;
           await strikeAt(s.x, s.y, 1000);
         } else {
-          const avoid = mode === 'informed'
-            ? s.braziers.filter((x) => x.lit)
-            : s.indicators;
-          if (avoid.length) {
-            const spot = bestSpot(avoid);
-            await goTo(spot.x, spot.y, 420);
+          if (mode === 'informed') {
+            // Knows the rule, so stays out of the fire-lit quadrant and no
+            // further — waiting next to the Echo for it to over-commit.
+            const lit = s.braziers.filter((x) => x.lit);
+            if (lit.length) {
+              const spot = safeSpotNear(lit, 96, { x: s.x, y: s.y + 20 });
+              await goTo(spot.x, spot.y, 420);
+            } else {
+              await goTo(s.x, s.y + 34, 300);
+            }
           } else {
-            await wait(70);
+            // Cannot tell a real mark from an echo of one, so treats them all
+            // as real and spends the whole wave running from ghosts.
+            if (s.indicators.length) {
+              const spot = bestSpot(s.indicators);
+              await goTo(spot.x, spot.y, 420);
+            } else {
+              await wait(70);
+            }
           }
         }
       } else {

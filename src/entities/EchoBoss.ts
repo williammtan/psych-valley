@@ -70,7 +70,13 @@ const P1 = {
   GUARD_MS: 7000,
   /** Free damage for hitting a guard that is in the wrong place. */
   PUNISH_DAMAGE: 3,
-  PUNISH_STAGGER_MS: 950,
+  PUNISH_STAGGER_MS: 1300,
+  /**
+   * A block is not just "no damage" — it counters. The Echo swipes the ground
+   * it was already guarding, telegraphed, so backing off after being read is
+   * free and walking straight back into the same approach is not.
+   */
+  COUNTER_FUSE_MS: 420,
   /** After it blocks, it has to re-learn from scratch — and it is open. */
   RECOVER_MS: 1250,
   /** Dash in, do not swing: it commits its counter to empty air. */
@@ -773,8 +779,23 @@ export class EchoBoss {
         player.vx = Math.cos(a) * 190;
         player.vy = Math.sin(a) * 190;
         emit('boss:blocked', { signature: sig });
-        // Blocking costs it the read: it drops its guard and has to watch you
-        // again from scratch. This is what stops a repeat-attacker softlocking.
+
+        // ...and it swipes the ground it was guarding. Telegraphed, so a player
+        // who reads the block and backs off takes nothing; one who bounces off
+        // and walks straight back into the same approach eats it.
+        const [gx, gy] = SIDE_VEC[sig[0] as Side];
+        this.indicators.push(new Indicator(
+          this.scene,
+          this.x + gx * 30,
+          this.y - 14 + gy * 22,
+          true,
+          now + P1.COUNTER_FUSE_MS,
+          1.4,
+        ));
+
+        // Blocking still costs it the read: it drops its guard and has to watch
+        // you again from scratch. That is what stops a repeat-attacker
+        // softlocking — mashing stays possible, it is just very slow.
         this.forget();
         this.recoverUntil = now + P1.RECOVER_MS;
         return;

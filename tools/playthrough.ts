@@ -78,7 +78,13 @@ interface BeatResult {
 
 async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevServer; base: string }> {
   const server = await createServer({
-    root: ROOT, server: { port: 20000 + Math.floor(Math.random() * 20000), strictPort: false, host: '127.0.0.1' }, logLevel: 'error',
+    root: ROOT,    // HMR and file watching are OFF for every harness run.
+    //
+    // Several agents edit the source while captures are in flight. With HMR on,
+    // Vite silently full-reloads the page mid-run, which resets the game to a
+    // fresh save — so a screenshot shows the wrong place and a playtest reports
+    // a failure that does not exist. Every harness must pin the build it booted.
+    server: { port: 20000 + Math.floor(Math.random() * 20000), strictPort: false, host: '127.0.0.1', hmr: false, watch: null }, logLevel: 'error',
   });
   await server.listen();
   const addr = server.httpServer!.address();
@@ -136,7 +142,11 @@ async function runBeat(page: Page, base: string, beat: Beat, quick: boolean): Pr
     if (!known.includes(beat.checkpoint)) {
       problems.push(`unknown checkpoint '${beat.checkpoint}'`);
     } else {
-      await page.evaluate((c) => (window as any).__psyche.jump(c), beat.checkpoint);
+      // A beat whose map doesn't exist yet must not end the run — the point of
+      // a whole-game pass is to see every remaining beat, not to stop at the
+      // first hole.
+      await page.evaluate((c) => (window as any).__psyche.jump(c), beat.checkpoint)
+        .catch((e) => problems.push(`jump failed: ${String(e).split('\n')[0].slice(0, 140)}`));
       await page.waitForTimeout(700);
     }
   }
@@ -173,7 +183,7 @@ async function runBeat(page: Page, base: string, beat: Beat, quick: boolean): Pr
     }
   }
 
-  const fps = quick ? undefined : await measureFps(page);
+  const fps = quick ? undefined : await measureFps(page).catch(() => 0);
   if (fps !== undefined && fps < 50) problems.push(`low frame rate: ${fps} fps`);
 
   mkdirSync(OUT, { recursive: true });

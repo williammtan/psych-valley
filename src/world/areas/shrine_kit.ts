@@ -268,6 +268,26 @@ export function stepToward(
   return false;
 }
 
+// ── QA harness ──────────────────────────────────────────────────────────────
+
+/**
+ * Each room hangs its own controls on `window.__shrine`, the same way the
+ * Lantern Trial does with `window.__trial`.
+ *
+ * The rule this follows: the harness drives the *same functions the player's
+ * button press drives*, never a private shortcut to the answer. `tools/
+ * shrine_playtest.ts` solves every room through this and would fail if the
+ * room's real interactions were broken, which is the only thing that makes an
+ * automated playtest worth having.
+ */
+export function installHarness(w: WorldScene, api: Record<string, unknown>): void {
+  (window as unknown as { __shrine: Record<string, unknown> }).__shrine = { room: w.mapId, ...api };
+}
+
+export function clearHarness(): void {
+  delete (window as unknown as { __shrine?: unknown }).__shrine;
+}
+
 // ── room completion ─────────────────────────────────────────────────────────
 
 /**

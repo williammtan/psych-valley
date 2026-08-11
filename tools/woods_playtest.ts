@@ -123,8 +123,14 @@ window.__wt = {
       const p = window.__psyche;
       const px = tx * 16 + 8, py = ty * 16 + 16;
       const t0 = performance.now();
+      window.__wt.lastTrace = [];
+      let frames = 0;
       const tick = () => {
         const pl = p.scene.player;
+        frames++;
+        if (frames % 20 === 0) {
+          window.__wt.lastTrace.push(Math.round(performance.now() - t0) + ':' + Math.round(pl.x) + ',' + Math.round(pl.y) + ',' + pl.mode);
+        }
         const dx = px - pl.x, dy = py - pl.y;
         const d = Math.hypot(dx, dy);
         if (d < 4) { p.move(0, 0); resolve(true); return; }
@@ -134,6 +140,23 @@ window.__wt = {
       };
       tick();
     });
+  },
+  lastTrace: [],
+  overlapProbe() {
+    const sc = window.__psyche.scene; const pl = sc.player; const g = sc.collisionGrid();
+    const out = [];
+    for (const dy of [0, 2, 8]) {
+      const x = pl.x, y = pl.y + dy;
+      const left = x - 5, right = x + 5, top = y - 8, bottom = y;
+      const tx0 = Math.floor(left / 16), tx1 = Math.floor((right - 0.001) / 16);
+      const ty0 = Math.floor(top / 16), ty1 = Math.floor((bottom - 0.001) / 16);
+      const hits = [];
+      for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+        if (!g[ty] || g[ty][tx]) hits.push(tx + ',' + ty);
+      }
+      out.push(dy + ': span ' + tx0 + '-' + tx1 + ' x ' + ty0 + '-' + ty1 + ' hits[' + hits.join(' ') + ']');
+    }
+    return out;
   },
   busy() { return window.__psyche.scene.cutscene.active; },
   /** Why is the player not moving? Answers the only question that matters. */
@@ -164,6 +187,8 @@ window.__wt = {
       staticSolidBelow: sc.world.solid[ty + 1] ? sc.world.solid[ty + 1][tx] : 'oob',
       dynSolidBelow: sc.dynamicSolids[ty + 1] ? sc.dynamicSolids[ty + 1][tx] : 'oob',
       route: (window.__wt.corners(window.__wt.route(21, 31)) || 'none'),
+      trace: window.__wt.lastTrace.slice(-3),
+      overlap: window.__wt.overlapProbe(),
       enemies: sc.enemies.aliveCount,
       hp: window.__psyche.state().hp,
       around: rows,
