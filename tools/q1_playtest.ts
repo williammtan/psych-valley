@@ -40,26 +40,26 @@ async function probe(page: Page): Promise<{
   flags: string[]; abilities: string[]; objective: string | null; cutscene: boolean;
   quests: Array<{ id: string; active: boolean; complete: boolean }>;
   fear: number; pipState: string; pipX: number; pipY: number;
-  calmRings: number; insights: string[]; hasBell: boolean;
+  calmRings: number; insights: string[]; hasBell: boolean; clues: number;
 }> {
   return page.evaluate(() => {
     const p = (window as any).__psyche;
+    const q = (window as any).__q1;
     const st = p.state();
-    const S = (window as any).__state;
-    const pip = (window as any).__pip;
     return {
       flags: st.flags,
       abilities: st.abilities,
       objective: st.objective,
       cutscene: st.cutscene,
       quests: st.quests,
-      fear: pip ? pip.fear : -1,
-      pipState: pip ? pip.state : '?',
-      pipX: pip ? pip.x : -1,
-      pipY: pip ? pip.y : -1,
-      calmRings: S ? (S.counters.q1_calm_rings ?? 0) : -1,
-      insights: S ? Object.keys(S.insights).filter((k: string) => S.insights[k].unlocked) : [],
+      fear: q?.pip ? q.pip.fear : -1,
+      pipState: q?.pip ? q.pip.state : '?',
+      pipX: q?.pip ? q.pip.x : -1,
+      pipY: q?.pip ? q.pip.y : -1,
+      calmRings: q ? q.calmRings : -1,
+      insights: q ? q.insights : [],
       hasBell: st.flags.includes('have_hand_bell'),
+      clues: q ? q.clues : -1,
     };
   });
 }
@@ -84,24 +84,40 @@ async function at(page: Page, tx: number, ty: number): Promise<void> {
   await page.waitForTimeout(160);
 }
 
+/**
+ * Queue an action for the next frame.
+ *
+ * `__psyche.press()` injects straight into the frame's pressed set, which the
+ * next `InputManager.update()` clears before any system reads it — from outside
+ * the frame loop that is a coin flip. The scripted-action queue is drained
+ * inside `update()`, so it always lands.
+ */
+async function press(page: Page, action: 'interact' | 'attack' | 'observe'): Promise<void> {
+  await page.evaluate((a) => {
+    const k = (window as any).__psyche.scene.keys;
+    if (!k.scripted) k.scripted = { axis: { x: 0, y: 0 }, actions: new Set() };
+    k.scripted.actions.add(a);
+  }, action);
+}
+
 /** Advance dialogue until the world hands control back. */
-async function clearDialogue(page: Page, max = 60): Promise<void> {
+async function clearDialogue(page: Page, max = 80): Promise<void> {
   for (let i = 0; i < max; i++) {
     const busy = await page.evaluate(() => {
       const p = (window as any).__psyche;
-      const ui = (window as any).__ui;
-      return p.state().cutscene || !!ui?.dialogue?.isOpen || !!ui?.insight?.isOpen;
+      return p.state().cutscene || !!(window as any).__q1?.busy;
     });
     if (!busy) return;
+    // The dialogue box and the insight card listen for real key events.
     await page.keyboard.press('Space');
-    await page.waitForTimeout(230);
+    await page.waitForTimeout(240);
   }
 }
 
 /** Press interact, then clear whatever it opened. */
 async function interact(page: Page): Promise<void> {
-  await page.evaluate(() => (window as any).__psyche.press('interact'));
-  await page.waitForTimeout(320);
+  await press(page, 'interact');
+  await page.waitForTimeout(340);
   await clearDialogue(page);
 }
 
@@ -118,21 +134,22 @@ async function face(page: Page, dir: 'n' | 's' | 'e' | 'w'): Promise<void> {
  */
 async function safeRing(page: Page): Promise<void> {
   await waitForQuietWindow(page);
-  await page.evaluate(() => (window as any).__psyche.press('interact'));
-  await page.waitForTimeout(2600);
+  await press(page, 'interact');
+  await page.waitForTimeout(2700);
   await clearDialogue(page);
   await page.waitForTimeout(400);
 }
 
 /**
- * Wait until the tower bell is far enough away that a ring can survive its
- * two seconds — the read a player makes by ear.
+ * Wait until the next unavoidable noise is far enough off that a ring can
+ * survive its two seconds. This is the read a player makes from the telegraphs,
+ * and the harness has to make it too or the run is a dice roll.
  */
 async function waitForQuietWindow(page: Page): Promise<void> {
-  for (let i = 0; i < 40; i++) {
-    const ms = await page.evaluate(() => (window as any).__q1?.msToTower ?? 9999);
-    if (ms > 5200) return;
-    await page.waitForTimeout(400);
+  for (let i = 0; i < 60; i++) {
+    const ms = await page.evaluate(() => (window as any).__q1?.msToNoise ?? 9999);
+    if (ms > 3200) return;
+    await page.waitForTimeout(350);
   }
 }
 
@@ -140,8 +157,13 @@ async function waitForQuietWindow(page: Page): Promise<void> {
 
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
+  // HMR off: several people edit this repo at once, and a hot reload halfway
+  // through a run destroys the page context and fails the whole quest for
+  // reasons that have nothing to do with the quest.
   const server: ViteDevServer = await createServer({
-    root: ROOT, server: { port: 0, strictPort: false, host: '127.0.0.1' }, logLevel: 'error',
+    root: ROOT,
+    server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
+    logLevel: 'error',
   });
   await server.listen();
   const port = (server.httpServer!.address() as { port: number }).port;
@@ -184,6 +206,12 @@ async function main(): Promise<void> {
     await clearDialogue(page);
     await page.waitForTimeout(700);
 
+    // He runs for it; give the panic run time to end before judging his posture.
+    for (let i = 0; i < 20; i++) {
+      const p = await probe(page);
+      if (p.pipState === 'hiding' || p.pipState === 'scared') break;
+      await page.waitForTimeout(250);
+    }
     s = await probe(page);
     check('the town bell starts quest one', s.flags.includes('q1_started'));
     check('Pip bolted', s.flags.includes('pip_bolted'));
@@ -217,8 +245,8 @@ async function main(): Promise<void> {
     s = await probe(page);
     check('clue: the unused basket', s.flags.includes('clue_catbed'));
 
-    // Mira's account: bell, then the pipe. Four nights.
-    await at(page, 13, 8);
+    // Mira's account: bell, then the pipe. Four nights. Leaning over the bar.
+    await at(page, 13, 7);
     await face(page, 'n');
     await interact(page);
     await clearDialogue(page);
@@ -230,7 +258,7 @@ async function main(): Promise<void> {
 
     // ── THE BELL ────────────────────────────────────────────────────────────
     console.log('\nTHE PUZZLE');
-    await at(page, 12, 8);
+    await at(page, 12.8, 7);
     await face(page, 'n');
     await interact(page);
     s = await probe(page);
@@ -269,10 +297,10 @@ async function main(): Promise<void> {
     const beforeSpoil = (await probe(page)).fear;
     await at(page, 22, 11);
     await waitForQuietWindow(page);
-    await page.evaluate(() => (window as any).__psyche.press('interact'));
+    await press(page, 'interact');
     await page.waitForTimeout(500);
     // Something loud, immediately after the bell: the player's own sword.
-    await page.evaluate(() => (window as any).__psyche.press('attack'));
+    await press(page, 'attack');
     await page.waitForTimeout(1400);
     await clearDialogue(page);
     s = await probe(page);
@@ -330,7 +358,7 @@ async function main(): Promise<void> {
     await at(page, 22, 11);
     await page.waitForTimeout(400);
     const calmBefore = await probe(page);
-    await page.evaluate(() => (window as any).__psyche.press('interact'));
+    await press(page, 'interact');
     await page.waitForTimeout(1200);
     s = await probe(page);
     check('a calm Pip no longer flees the bell', s.fear <= calmBefore.fear + 1 && s.pipState !== 'hiding',

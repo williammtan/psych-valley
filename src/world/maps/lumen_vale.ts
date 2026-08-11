@@ -538,14 +538,15 @@ function build(): MapDef {
   }
 
   // Trade signs and awnings: what the building is, readable from the road.
-  const sign = (id: string, dx: number, dy: number, key: string) => {
+  const sign = (id: string, dx: number, dy: number, key: string, look?: string) => {
     const b = bld(id);
-    P(key, b.tx + b.w / 2 - 0.5 + dx, b.ty + b.h - 1 + b.gap / 16 + dy, { depthBias: 30000 });
+    P(key, b.tx + b.w / 2 - 0.5 + dx, b.ty + b.h - 1 + b.gap / 16 + dy,
+      { depthBias: 30000, interact: look });
   };
-  sign('store', 2.6, -1.4, 'prop/build/sign_bakery');
-  sign('courier', 2.7, -0.6, 'prop/build/sign_courier');
-  sign('workshop', 2.6, -1.2, 'prop/build/sign_herbalist');
-  sign('inn', -3.4, -1.6, 'prop/build/sign_inn');
+  sign('store', 2.6, -1.4, 'prop/build/sign_bakery', 'sign.bakery');
+  sign('courier', 2.7, -0.6, 'prop/build/sign_courier', 'sign.courier');
+  sign('workshop', 2.6, -1.2, 'prop/build/sign_herbalist', 'sign.workshop');
+  sign('inn', -3.4, -1.6, 'prop/build/sign_inn', 'sign.inn');
   sign('house_c', -3.2, -1.2, 'prop/build/sign_fishmonger');
 
   // Warm windows: the light layer is the thing this engine has that the
@@ -601,7 +602,7 @@ function build(): MapDef {
   // ══ 15. set dressing, district by district ══════════════════════════════
 
   // ── Town Square: fountain court ─────────────────────────────────────────
-  P('prop/town/fountain', 44, 46, { solid: [44, 44], anim: 'fountain_idle', interact: 'fountain' }, 'fountain');
+  P('prop/town/fountain', 44, 46, { solid: [44, 44], anim: 'fountain_idle', interact: 'prop.fountain' }, 'fountain');
   lights.push({ x: 44, y: 45, radius: 78, color: 0xbfe4ff, intensity: 0.20, flicker: 0.1 });
   // Benches set radially around it, so the court reads as a place to sit.
   P('prop/town/bench_0', 44, 42.6, { solid: [30, 10] });
@@ -613,9 +614,9 @@ function build(): MapDef {
     lights.push({ x, y: y - 1, radius: 30, color: 0xffd08a, intensity: 0.26, flicker: 0.7 });
   }
   P('prop/town/notice_board', 38.4, 43.6, { solid: [30, 12], interact: 'notice_board' }, 'notice_board');
-  P('prop/town/signpost_0', 45.4, 39.4, { solid: [12, 8], interact: 'signpost_square' });
-  P('prop/town/signpost_1', 41.6, 52.4, { solid: [12, 8], interact: 'signpost_south' });
-  P('prop/town/signpost_2', 55.4, 43.4, { solid: [12, 8], interact: 'signpost_bridge' });
+  P('prop/town/signpost_0', 45.4, 39.4, { solid: [12, 8], interact: 'sign.plaza' });
+  P('prop/town/signpost_1', 41.6, 52.4, { solid: [12, 8], interact: 'sign.woods' });
+  P('prop/town/signpost_2', 55.4, 43.4, { solid: [12, 8], interact: 'sign.bridge' });
   for (const [x, y] of [[38, 40], [50, 40], [38, 51], [50, 51]] as const) lamp(x, y);
   // Planters only where they have a wall or a kerb to sit against.
   P('prop/town/planter_0', 39.4, 46, { solid: [14, 8] });
@@ -624,16 +625,16 @@ function build(): MapDef {
   P('prop/town/flowerbed_0', 35.5, 44, { solid: [28, 8] });
   P('prop/town/flowerbed_2', 52.5, 47.5, { solid: [28, 8] });
   // A market on the square's east shoulder — implied activity, no NPC needed.
-  P('prop/build/stall_frame', 52.5, 42.5, { solid: [60, 14], interact: 'market_stall' });
+  P('prop/build/stall_frame', 52.5, 42.5, { solid: [60, 14], interact: 'prop.festStall' });
   P('prop/build/awning_wide_red', 52.5, 40.6, { depthBias: 12000 });
   P('prop/town/crate_1', 51, 43.6, {});
   P('prop/town/basket_1', 54, 43.6, {});
   P('prop/town/basket_2', 50.2, 44.4, {});
   P('prop/town/sack_0', 54.6, 44.5, {});
-  P('prop/town/cart', 47.5, 52.4, { solid: [42, 14], interact: 'square_cart' });
+  P('prop/town/cart', 47.5, 52.4, { solid: [42, 14], interact: 'prop.cart' });
   P('prop/town/crate_0', 46.1, 53, {});
   P('prop/town/barrel_0', 49.4, 52.8, {});
-  P('prop/town/birdbath', 43, 41.4, { solid: [16, 8] });
+  P('prop/town/birdbath', 43, 41.4, { solid: [16, 8], interact: 'prop.birdbath' });
   P('prop/town/bird_perched_0', 43, 40.6, { anim: 'bird_perched_idle', depthBias: 6 });
   for (const [x, y] of [[42.4, 44.4], [46.2, 48.2], [36.6, 45.6]] as const) {
     P('prop/town/butterfly_0', x, y, { anim: 'butterfly_fly', depthBias: 400, offset: [0, -10] });
@@ -657,16 +658,16 @@ function build(): MapDef {
     P('prop/town/sack_1', 39.4, 27.6, {});
     P('prop/town/woodpile_0', 33.5, 28.4, { solid: [28, 10], interact: 'woodpile' });
     P('prop/town/chicken_0', 35.2, 26.4, { anim: 'chicken_peck' });
-    P('prop/town/chicken_2', 36.8, 26.1, { anim: 'chicken_peck' });
+    P('prop/town/chicken_2', 36.8, 26.1, { anim: 'chicken_peck', interact: 'prop.chicken' });
     P('prop/town/laundry_line_0', 36, 25.4, { over: true, sway: 0.5, interact: 'laundry' });
   }
 
   // ── Bell tower green ────────────────────────────────────────────────────
-  P('prop/town/shrine_small', 46.4, 30, { solid: [16, 8], interact: 'shrine_small' });
+  P('prop/town/shrine_small', 46.4, 30, { solid: [16, 8], interact: 'prop.roadShrine' });
   P('prop/town/bench_0', 47, 33.6, { solid: [30, 10] });
   P('prop/town/bench_1', 54.4, 32.4, { solid: [30, 10] });
   for (const [x, y] of [[47, 27], [55, 28], [47, 35.4], [55, 35]] as const) lamp(x, y, 44, 0.40);
-  P('prop/town/stone_lantern', 51, 36.4, { solid: [10, 8] });
+  P('prop/town/stone_lantern', 51, 36.4, { solid: [10, 8], interact: 'prop.stoneLantern' });
   P('prop/town/stone_lantern', 49, 36.4, { solid: [10, 8] });
   lights.push({ x: 50, y: 36, radius: 34, color: 0xffd08a, intensity: 0.24, flicker: 0.6 });
   P('prop/town/flowerbed_1', 46.5, 36.4, { solid: [28, 8] });
@@ -684,21 +685,21 @@ function build(): MapDef {
   P('prop/fest/bunting_0', 38, 19.6, { over: true, sway: 0.5 });
   P('prop/fest/bunting_1', 41, 19.6, { over: true, sway: 0.5 });
   P('prop/fest/bunting_2', 47, 19.6, { over: true, sway: 0.5 });
-  P('prop/build/stall_frame', 34, 15.5, { solid: [60, 14], interact: 'plaza_stall' });
+  P('prop/build/stall_frame', 34, 15.5, { solid: [60, 14], interact: 'prop.festStall' });
   P('prop/build/stall_frame', 53, 15.5, { solid: [60, 14] });
   P('prop/build/awning_wide_blue', 53, 13.6, { depthBias: 12000 });
-  P('prop/fest/crate_stack_fest', 47, 17.6, { solid: [28, 10], interact: 'plaza_crates' });
+  P('prop/fest/crate_stack_fest', 47, 17.6, { solid: [28, 10], interact: 'prop.festJudging' });
   P('prop/fest/crate_stack_fest', 40.6, 17.4, { solid: [28, 10] });
   P('prop/fest/barrel_fest', 48.4, 18.2, { solid: [18, 8] });
   P('prop/fest/drink_barrel', 39.4, 18.2, { solid: [22, 8] });
-  P('prop/town/hay_bale', 51.5, 21.4, { solid: [22, 10] });
+  P('prop/town/hay_bale', 51.5, 21.4, { solid: [22, 10], interact: 'prop.hayBale' });
   P('prop/town/hay_bale', 53, 22.2, { solid: [22, 10] });
   P('prop/town/picnic_table', 37.5, 21.5, { solid: [36, 12] });
   P('prop/town/picnic_table', 49.5, 12.5, { solid: [36, 12] });
   P('prop/fest/ground_lantern_0', 40, 13.4, {});
   P('prop/fest/ground_lantern_1', 47, 13.4, {});
-  P('prop/fest/ground_lantern_2', 43.5, 19.6, {});
-  P('prop/town/notice_board', 46.6, 22, { solid: [30, 12], interact: 'plaza_board' }, 'plaza_board');
+  P('prop/fest/ground_lantern_2', 43.5, 19.6, { interact: 'prop.festLights' });
+  P('prop/town/notice_board', 46.6, 22, { solid: [30, 12], interact: 'courier_roster' }, 'plaza_board');
   for (const [x, y] of [[38, 8.6], [49, 8.6], [34, 22], [53, 22]] as const) lamp(x, y, 44, 0.38);
   P('prop/town/flowerbed_0', 33, 11, { solid: [28, 8] });
   P('prop/town/flowerbed_2', 54.5, 20, { solid: [28, 8] });
@@ -709,7 +710,7 @@ function build(): MapDef {
   P('prop/town/crate_0', 44.2, 12.6, {});
   P('prop/town/sack_0', 39.6, 13.4, {});
   P('prop/town/sack_1', 45.4, 13.2, {});
-  P('prop/fest/judging_table', 45.6, 16.4, { solid: [42, 10], interact: 'plaza_stall' });
+  P('prop/fest/judging_table', 45.6, 16.4, { solid: [42, 10], interact: 'prop.festStall' });
   P('prop/fest/bread_basket', 45.2, 16.1, {});
   P('prop/town/barrel_0', 41.4, 16.4, { solid: [14, 8] });
   P('prop/town/barrel_1', 40.4, 16.9, { solid: [20, 8] });
@@ -726,21 +727,21 @@ function build(): MapDef {
   // ── the north farm ──────────────────────────────────────────────────────
   {
     const b = bld('barn');
-    P('prop/town/water_trough', b.tx + 6.5, b.ty + 4, { solid: [28, 8], interact: 'farm_trough' });
+    P('prop/town/water_trough', b.tx + 6.5, b.ty + 4, { solid: [28, 8], interact: 'prop.trough' });
     P('prop/town/hay_bale', b.tx - 0.6, b.ty + 4.6, { solid: [22, 10] });
     P('prop/town/hay_bale', b.tx + 0.6, b.ty + 5.4, { solid: [22, 10] });
-    P('prop/town/wheelbarrow', 13.4, 16.4, { solid: [22, 10] });
-    P('prop/town/milk_churn', 9, 16.2, {});
+    P('prop/town/wheelbarrow', 13.4, 16.4, { solid: [22, 10], interact: 'prop.wheelbarrow' });
+    P('prop/town/milk_churn', 9, 16.2, { interact: 'prop.churn' });
     P('prop/town/milk_churn', 9.8, 16.7, {});
     P('prop/town/woodpile_1', 7, 15.4, { solid: [20, 10] });
-    P('prop/town/scarecrow', 9, 10.5, { solid: [10, 8], interact: 'scarecrow' });
+    P('prop/town/scarecrow', 9, 10.5, { solid: [10, 8], interact: 'prop.scarecrow' });
     for (const [x, y] of [[11.4, 16.9], [12.6, 15.6], [10.2, 17.4], [14, 15]] as const) {
       P('prop/town/chicken_0', x, y, { anim: 'chicken_peck' });
     }
-    P('prop/town/beehive', 16.6, 20.6, { solid: [14, 8], interact: 'beehive' });
+    P('prop/town/beehive', 16.6, 20.6, { solid: [14, 8], interact: 'prop.beehive' });
     P('prop/town/beehive', 17.6, 21.4, { solid: [14, 8] });
     P('prop/town/log_0', 6.5, 22.5, { solid: [26, 8] });
-    P('prop/town/tree_stump', 8, 24, { solid: [16, 8] });
+    P('prop/town/tree_stump', 8, 24, { solid: [16, 8], interact: 'prop.stump' });
     P('prop/town/laundry_line_2', 15, 18.4, { over: true, sway: 0.5 });
     lamp(13, 19.6, 38, 0.32);
   }
@@ -754,11 +755,11 @@ function build(): MapDef {
       [15.6, 35.5, 'prop/town/parcel_1'], [16.4, 36.1, 'prop/town/parcel_3'],
       [27.4, 33.4, 'prop/town/parcel_0'], [28.2, 34, 'prop/town/parcel_1'],
       [26.6, 34.2, 'prop/town/parcel_3'],
-    ] as const) P(k, x, y, { interact: x < 20 ? 'parcels' : undefined });
-    P('prop/town/cart', 24, 36.6, { solid: [42, 14], interact: 'courier_cart' });
+    ] as const) P(k, x, y, { interact: x < 20 ? 'prop.courierParcels' : undefined });
+    P('prop/town/cart', 24, 36.6, { solid: [42, 14], interact: 'prop.cart' });
     P('prop/town/crate_1', 22.6, 37.2, {});
     P('prop/town/sack_0', 26.4, 36.8, {});
-    P('prop/town/notice_board', 18.6, 36.4, { solid: [30, 12], interact: 'courier_board' }, 'courier_board');
+    P('prop/town/notice_board', 18.6, 36.4, { solid: [30, 12], interact: 'prop.courierPinboard' }, 'courier_board');
     P('prop/town/laundry_line_0', 20, 27.2, { over: true, sway: 0.5, interact: 'laundry' });
     P('prop/town/laundry_line_1', 20, 31.2, { over: true, sway: 0.5 });
     P('prop/town/laundry_line_2', 9, 27.4, { over: true, sway: 0.5 });
@@ -768,10 +769,10 @@ function build(): MapDef {
     P('prop/town/bird_perched_0', sh.tx + 1.4, sh.ty + 3.6, { anim: 'bird_perched_idle' });
     P('prop/town/basket_0', sh.tx + 3.4, sh.ty + 3.2, {});
     for (const [x, y] of [[16.6, 33.4], [16.6, 42.6], [9, 36.6], [26, 28]] as const) lamp(x, y, 40, 0.38);
-    P('prop/town/window_box', 6.5, 43.2, { depthBias: 12000 });
+    P('prop/town/window_box', 6.5, 43.2, { depthBias: 12000, interact: 'prop.windowBox' });
     P('prop/town/window_box', 24, 33.2, { depthBias: 12000 });
     P('prop/town/planter_0', 14.6, 35, { solid: [14, 8] });
-    P('prop/town/pump', 19.4, 44.4, { solid: [14, 8], interact: 'pump' });
+    P('prop/town/pump', 19.4, 44.4, { solid: [14, 8], interact: 'prop.pump' });
     P('prop/town/barrel_1', 20.6, 45, {});
     P('prop/town/cat_sleeping_0', 12.6, 37.6, { anim: 'cat_sleeping_idle', interact: 'cat' }, 'cat');
     P('prop/town/woodpile_0', 5.5, 46.4, { solid: [28, 10], interact: 'woodpile' });
@@ -823,11 +824,11 @@ function build(): MapDef {
   P('prop/town/sack_1', 15, 66.8, {});
   P('prop/town/sack_0', 17.6, 65.8, {});
   P('prop/town/basket_1', 14.4, 67.2, { interact: 'garden_basket' });
-  P('prop/town/well', 25.6, 71.6, { solid: [26, 12], interact: 'well' }, 'well');
+  P('prop/town/well', 25.6, 71.6, { solid: [26, 12], interact: 'prop.well' }, 'well');
   P('prop/town/water_trough', 21.4, 66.6, { solid: [28, 8] });
   P('prop/town/hay_bale', 28.6, 66.4, { solid: [22, 10] });
   P('prop/town/log_1', 6.5, 60, { solid: [22, 8] });
-  P('prop/town/duck_0', 8.5, 58.6, { anim: 'duck_waddle' });
+  P('prop/town/duck_0', 8.5, 58.6, { anim: 'duck_waddle', interact: 'prop.duck' });
   for (const [x, y] of [[9.5, 61.6], [10.6, 60.8]] as const) P('prop/town/chicken_1', x, y, { anim: 'chicken_peck' });
   lamp(24, 70, 40, 0.36);
 
@@ -842,12 +843,12 @@ function build(): MapDef {
     P('prop/town/flowerbed_0', d.tx + 3.5, doorY(d), { solid: [28, 8] });
     P('prop/town/planter_0', d.tx - 0.4, doorY(d) - 0.4, { solid: [14, 8] });
     P('prop/town/barrel_0', d.tx + 5.4, d.ty + 4.4, { solid: [14, 8] });
-    P('prop/town/cat_sleeping_1', d.tx + 4.4, doorY(d) - 0.3, { anim: 'cat_sleeping_idle', interact: 'cat_south' });
+    P('prop/town/cat_sleeping_1', d.tx + 4.4, doorY(d) - 0.3, { anim: 'cat_sleeping_idle', interact: 'cat' });
     P('prop/town/picnic_table', 46.5, 62.5, { solid: [36, 12] });
     P('prop/town/table_round', 38, 61.5, { solid: [22, 10] });
     P('prop/town/stool', 36.9, 61.9, {});
     for (const [x, y] of [[38, 56.6], [48, 56.6], [38.6, 68], [45.4, 68]] as const) lamp(x, y, 42, 0.38);
-    P('prop/town/signpost_2', 44.4, 66.4, { solid: [12, 8], interact: 'signpost_gate' });
+    P('prop/town/signpost_2', 44.4, 66.4, { solid: [12, 8], interact: 'sign.southGate' });
     P('prop/town/flowerbed_2', 44.5, 59.4, { solid: [28, 8] });
   }
 
@@ -857,7 +858,7 @@ function build(): MapDef {
     P('prop/town/crate_0', b.tx - 1.4, b.ty - 0.4, {});
     P('prop/town/crate_2', b.tx - 0.6, b.ty + 0.2, {});
     P('prop/town/barrel_0', b.tx + 6.5, b.ty - 0.3, {});
-    P('prop/town/signpost_0', b.tx + 6.4, b.ty - 1.4, { solid: [12, 8], interact: 'gate_sign' });
+    P('prop/town/signpost_0', b.tx + 6.4, b.ty - 1.4, { solid: [12, 8], interact: 'sign.townEdge' });
     P('prop/town/hay_bale', 47.5, 69.6, { solid: [22, 10] });
     P('prop/town/log_0', 36.5, 69.6, { solid: [26, 8] });
     lights.push({ x: 40, y: 72, radius: 40, color: 0xffb937, intensity: 0.40, flicker: 0.6 });
@@ -867,7 +868,7 @@ function build(): MapDef {
   // ── the river: bridge, jetties, ford, wildlife ──────────────────────────
   // Posts every few tiles: without them a long deck is one flat plank field.
   for (let x = BR_X0; x <= BR_X1; x += 4) {
-    P('prop/town/bridge_post', x, 42, { depthBias: 200, interact: x === BR_X0 ? 'bridge_rail' : undefined });
+    P('prop/town/bridge_post', x, 42, { depthBias: 200, interact: x === BR_X0 ? 'prop.bridgeBoards' : undefined });
     P('prop/town/bridge_post', x, 45.6, { depthBias: 8000 });
   }
   P('prop/town/bridge_post', BR_X1, 42, { depthBias: 200 });
@@ -882,7 +883,7 @@ function build(): MapDef {
     else if (r < 0.74) P('prop/town/river_rock_0', Math.round(cx + half - 0.5), y, { depthBias: -20 });
     else if (r < 0.86) P('prop/town/duck_0', cx + (r - 0.8) * 6, y, { anim: 'duck_waddle', depthBias: -40 });
   }
-  P('prop/town/jetty', 59.5, 55, { solid: [28, 8], interact: 'jetty' }, 'jetty');
+  P('prop/town/jetty', 59.5, 55, { solid: [28, 8], interact: 'prop.jetty' }, 'jetty');
   P('prop/town/jetty', 71.5, 58, { solid: [28, 8] });
   for (const [x, y] of [[62, 52], [66, 55], [63.5, 57], [67, 51]] as const) {
     P('prop/town/lilypad_0', x, y, { depthBias: -60 });
@@ -895,7 +896,7 @@ function build(): MapDef {
   P('prop/town/reeds_0', 58.5, 51, { sway: 0.6 });
   P('prop/town/reeds_1', 58.6, 59, { sway: 0.6 });
   P('prop/town/reeds_2', 70.6, 52.5, { sway: 0.6 });
-  P('prop/town/bench_0', 58.4, 48.6, { solid: [30, 10], interact: 'river_bench' });
+  P('prop/town/bench_0', 58.4, 48.6, { solid: [30, 10], interact: 'prop.bench' });
   P('prop/town/stone_lantern', 57, 47.4, { solid: [10, 8] });
   lights.push({ x: 57, y: 46.6, radius: 30, color: 0xffd08a, intensity: 0.26, flicker: 0.7 });
   lamp(56.6, 41.6, 44, 0.42);
@@ -904,7 +905,7 @@ function build(): MapDef {
   P('prop/town/river_rock_1', 66, 27.5, { depthBias: -20 });
   P('prop/town/river_rock_0', 69, 26.6, { depthBias: -20 });
   P('prop/town/river_rock_2', 71, 28.4, { depthBias: -20 });
-  P('prop/town/signpost_1', 62.6, 25.4, { solid: [12, 8], interact: 'ford_sign' });
+  P('prop/town/signpost_1', 62.6, 25.4, { solid: [12, 8], interact: 'sign.bridge' });
 
   // ── the Lantern Inn and its garden ──────────────────────────────────────
   {
@@ -913,7 +914,7 @@ function build(): MapDef {
     lamp(b.tx + b.w, doorY(b) - 1, 52, 0.48);
     P('prop/town/flowerbed_0', b.tx + 0.5, doorY(b), { solid: [28, 8] });
     P('prop/town/flowerbed_1', b.tx + 6.5, doorY(b), { solid: [28, 8] });
-    P('prop/town/picnic_table', 79, 44.6, { solid: [36, 12], interact: 'inn_table' });
+    P('prop/town/picnic_table', 79, 44.6, { solid: [36, 12], interact: 'prop.picnicTable' });
     P('prop/fest/mug', 78.6, 44.2, {});
     P('prop/town/picnic_table', 82.4, 47.4, { solid: [36, 12] });
     P('prop/town/bench_1', 76, 46.6, { solid: [30, 10] });
@@ -923,7 +924,7 @@ function build(): MapDef {
     P('prop/town/crate_1', 85.4, 44.4, {});
     P('prop/town/woodpile_0', 85.5, 48.4, { solid: [28, 10], interact: 'woodpile' });
     P('prop/town/laundry_line_1', 80, 42.2, { over: true, sway: 0.5, interact: 'laundry' });
-    P('prop/town/cat_sleeping_0', 77.6, 43.8, { anim: 'cat_sleeping_idle', interact: 'inn_cat' }, 'inn_cat');
+    P('prop/town/cat_sleeping_0', 77.6, 43.8, { anim: 'cat_sleeping_idle', interact: 'cat' }, 'inn_cat');
     for (const [x, y] of [[81.6, 45.8], [82.8, 46.6], [80.4, 47]] as const) {
       P('prop/town/chicken_0', x, y, { anim: 'chicken_peck' });
     }
@@ -946,7 +947,7 @@ function build(): MapDef {
   P('prop/town/tree_stump', 75, 63.4, { solid: [16, 8] });
   P('prop/town/woodpile_1', 74.5, 61, { solid: [20, 10], interact: 'woodpile' });
   P('prop/town/bench_0', 79.6, 22.6, { solid: [30, 10], interact: 'overlook' });
-  P('prop/town/shrine_small', 78, 20.6, { solid: [16, 8], interact: 'roadside_shrine' });
+  P('prop/town/shrine_small', 78, 20.6, { solid: [16, 8], interact: 'prop.roadShrine' });
   P('prop/town/stone_lantern', 76.6, 21.6, { solid: [10, 8] });
   lights.push({ x: 76.6, y: 20.8, radius: 34, color: 0xffd08a, intensity: 0.34, flicker: 0.8 });
   P('prop/town/mossy_rock_0', 81, 25.5, { solid: [16, 8] });

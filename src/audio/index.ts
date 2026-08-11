@@ -200,6 +200,11 @@ class WebAudio implements AudioApi {
   musicStarts(): number {
     return this.player?.starts ?? 0;
   }
+
+  /** `null` until an AudioContext has been created at all. */
+  contextState(): string | null {
+    return this.ctx ? this.ctx.state : null;
+  }
 }
 
 const api = new WebAudio();
@@ -338,6 +343,7 @@ export interface AudioDebug {
   listMusic(): string[];
   currentTrack(): string | null;
   musicStarts(): number;
+  contextState(): string | null;
   ready(): boolean;
   renderSfx(name: string, seconds?: number): Promise<SoundAnalysis>;
   renderMusic(name: string, seconds?: number): Promise<SoundAnalysis>;
@@ -360,6 +366,7 @@ if (typeof window !== 'undefined') {
     listMusic: () => trackNames(),
     currentTrack: () => api.currentTrack(),
     musicStarts: () => api.musicStarts(),
+    contextState: () => api.contextState(),
     ready: () => api.ready,
     renderSfx,
     renderMusic,

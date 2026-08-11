@@ -266,9 +266,84 @@ interface Check { name: string; ok: boolean; detail: string }
  * Exercises the real, non-offline path: the autoplay gesture, `?mute=1`, and
  * the rule that walking between two maps on the same track must not restart it.
  */
-async function liveChecks(page: Page): Promise<Check[]> {
+async function liveChecks(page: Page, browser: Browser): Promise<Check[]> {
   const out: Check[] = [];
   const base = page.url().split('?')[0];
+
+  // Chrome remembers that a user has interacted with an origin and relaxes
+  // autoplay on later visits, so the gesture test needs a profile that has
+  // never seen this site.
+  const fresh = await browser.newContext();
+  const gp = await fresh.newPage();
+  const warnings: string[] = [];
+  gp.on('console', (m) => {
+    if (m.type() === 'warning' || m.type() === 'error') warnings.push(m.text());
+  });
+  await gp.goto(base, { waitUntil: 'domcontentloaded' });
+  await gp.waitForTimeout(2500);
+  await waitForAudio(gp);
+
+  // Booting must not create an AudioContext by itself — that is what triggers
+  // Chrome's autoplay warning and, on iOS, a silent-but-live context.
+  const atBoot = await ev<{ state: string | null; ready: boolean }>(gp, () => {
+    const a = (window as any).__audio;
+    return { state: a.contextState(), ready: a.ready() };
+  });
+  out.push({
+    name: 'no AudioContext exists until the game asks for sound',
+    ok: atBoot.state === null && atBoot.ready === false,
+    detail: `state=${atBoot.state} ready=${atBoot.ready}`,
+  });
+
+  // Headless Chrome does not enforce the autoplay policy, so assert the
+  // invariant rather than the policy: whatever the context state, a track asked
+  // for before the gesture must not be lost, and must not double-start.
+  const before = await ev<{ state: string | null; starts: number }>(gp, () => {
+    const a = (window as any).__audio;
+    a.playMusic('town');
+    return { state: a.contextState(), starts: a.musicStarts() };
+  });
+  out.push({
+    name: 'music asked for before a gesture is deferred, not dropped',
+    ok: before.state === 'running' ? before.starts === 1 : before.starts === 0,
+    detail: `context ${before.state}, starts ${before.starts}`,
+  });
+
+  await gp.mouse.click(400, 300);
+  await gp.keyboard.press('z');
+  await gp.waitForTimeout(900);
+  const after = await ev<{ ready: boolean; started: string | null; s1: number; s2: number; now: string | null; s3: number }>(gp, async () => {
+    const a = (window as any).__audio;
+    a.playMusic('town');
+    await new Promise((r) => setTimeout(r, 500));
+    const started = a.currentTrack();
+    const s1 = a.musicStarts();
+    a.playMusic('town');            // same map's track again
+    await new Promise((r) => setTimeout(r, 300));
+    const s2 = a.musicStarts();
+    for (const n of a.listSfx()) a.sfx(n, { volume: 0.2 });
+    await new Promise((r) => setTimeout(r, 400));
+    a.playMusic('woods');
+    await new Promise((r) => setTimeout(r, 400));
+    return { ready: a.ready(), started, s1, s2, now: a.currentTrack(), s3: a.musicStarts() };
+  });
+  out.push({
+    name: 'music requested before the gesture starts on it',
+    ok: after.ready === true && after.started === 'town',
+    detail: `ready=${after.ready} track=${after.started}`,
+  });
+  out.push({
+    name: 're-entering a map on the same track does not restart it',
+    ok: after.s1 === after.s2 && after.s1 > 0,
+    detail: `starts ${after.s1} → ${after.s2}, then 'woods' → ${after.s3} (${after.now})`,
+  });
+  const sfxWarnings = warnings.filter((w) => w.includes('[audio]'));
+  out.push({
+    name: 'no audio warnings when firing every sound live',
+    ok: sfxWarnings.length === 0,
+    detail: sfxWarnings.length ? sfxWarnings.slice(0, 3).join(' | ') : 'clean',
+  });
+  await fresh.close();
 
   // `?mute=1` — the screenshot and playthrough harnesses pass it every run.
   await page.goto(`${base}?mute=1`, { waitUntil: 'domcontentloaded' });
@@ -291,60 +366,6 @@ async function liveChecks(page: Page): Promise<Check[]> {
     detail: `ready=${muted.ready} musicStarts=${muted.starts}`,
   });
 
-  // Unmuted: nothing before a gesture, everything after one.
-  const warnings: string[] = [];
-  const onConsole = (m: { type(): string; text(): string }): void => {
-    if (m.type() === 'warning' || m.type() === 'error') warnings.push(m.text());
-  };
-  page.on('console', onConsole as never);
-  await page.goto(base, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2500);
-  await waitForAudio(page);
-
-  const before = await ev<boolean>(page, () => {
-    (window as any).__audio.playMusic('town');
-    return (window as any).__audio.ready();
-  });
-  out.push({
-    name: 'silent until the player touches something',
-    ok: before === false,
-    detail: `ready before gesture = ${before}`,
-  });
-
-  await page.mouse.click(400, 300);
-  await page.keyboard.press('z');
-  await page.waitForTimeout(800);
-  const after = await ev<{ ready: boolean; started: string | null; s1: number; s2: number; now: string | null; s3: number }>(page, async () => {
-    const a = (window as any).__audio;
-    const started = a.currentTrack();
-    const s1 = a.musicStarts();
-    a.playMusic('town');            // same map's track again
-    await new Promise((r) => setTimeout(r, 300));
-    const s2 = a.musicStarts();
-    for (const n of a.listSfx()) a.sfx(n, { volume: 0.2 });
-    await new Promise((r) => setTimeout(r, 400));
-    a.playMusic('woods');
-    await new Promise((r) => setTimeout(r, 400));
-    return { ready: a.ready(), started, s1, s2, now: a.currentTrack(), s3: a.musicStarts() };
-  });
-  page.off('console', onConsole as never);
-
-  out.push({
-    name: 'music requested before the gesture starts on it',
-    ok: after.ready === true && after.started === 'town',
-    detail: `ready=${after.ready} track=${after.started}`,
-  });
-  out.push({
-    name: 're-entering a map on the same track does not restart it',
-    ok: after.s1 === after.s2 && after.s1 > 0,
-    detail: `starts ${after.s1} → ${after.s2}, then 'woods' → ${after.s3} (${after.now})`,
-  });
-  const sfxWarnings = warnings.filter((w) => w.includes('[audio]'));
-  out.push({
-    name: 'no audio warnings when firing every sound live',
-    ok: sfxWarnings.length === 0,
-    detail: sfxWarnings.length ? sfxWarnings.slice(0, 3).join(' | ') : 'clean',
-  });
   return out;
 }
 
@@ -544,7 +565,7 @@ async function main(): Promise<void> {
     });
 
     // ── live behaviour ─────────────────────────────────────────────────────
-    const live = await liveChecks(page);
+    const live = await liveChecks(page, browser);
     checks.push(...live);
 
     console.log('\n\nCHECKS\n');

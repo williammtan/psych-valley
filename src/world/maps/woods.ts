@@ -468,9 +468,12 @@ export function buildWoods(): MapDef {
   // ── 10. authored props ────────────────────────────────────────────────────
   const props: PropPlacement[] = [
     // — the gate: the last of the town's carpentry
-    { key: 'prop/woods/signpost_woods', x: 24, y: 8, spec: { solid: [14, 8], interact: 'woods_signpost' }, id: 'signpost' },
+    // Interaction ids are authored-dialogue exchange ids: the map declares
+    // what a thing IS, and `src/data/dialogue` decides what it says.
+    { key: 'prop/woods/signpost_woods', x: 24, y: 8, spec: { solid: [14, 8], interact: 'sign.woods' }, id: 'signpost' },
+    { key: 'prop/woods/mossy_stone_2', x: 18, y: 13, spec: { interact: 'prop.woodsMilestone' } },
     // the first Echo-touched thing in the zone: Mote notices it, and so should you
-    { key: 'prop/woods/standing_stone_0', x: 26, y: 10, spec: { solid: [14, 10], interact: 'woods_first_stone' }, id: 'first_stone' },
+    { key: 'prop/woods/standing_stone_0', x: 26, y: 10, spec: { solid: [14, 10], interact: 'carving.one' }, id: 'first_stone' },
 
     // — First Clearing: an arena you can read on entry
     { key: 'prop/woods/log_fallen_0', x: 15, y: 24, spec: { solid: [34, 8] } },
@@ -480,11 +483,11 @@ export function buildWoods(): MapDef {
     { key: 'prop/woods/mushroom_2', x: 12, y: 23, spec: {} },
 
     // — The Narrows
-    { key: 'prop/woods/mist', x: 20, y: 29, spec: { anim: 'woods_mist', over: true } },
-    { key: 'prop/woods/mist', x: 24, y: 35, spec: { anim: 'woods_mist', over: true } },
+    { key: 'prop/woods/mist_0', x: 20, y: 29, spec: { anim: 'woods_mist', over: true } },
+    { key: 'prop/woods/mist_0', x: 24, y: 35, spec: { anim: 'woods_mist', over: true } },
 
     // — ◆ toadstool ring
-    { key: 'prop/woods/toadstool_ring', x: 35, y: 31, spec: { interact: 'woods_toadstools' }, id: 'toadstools' },
+    { key: 'prop/woods/toadstool_ring', x: 35, y: 31, spec: { interact: 'woods.toadstools' }, id: 'toadstools' },
     { key: 'prop/woods/mushroom_3', x: 33, y: 29, spec: {} },
     { key: 'prop/woods/mushroom_3', x: 37, y: 33, spec: {} },
     { key: 'prop/woods/mushroom_0', x: 37, y: 29, spec: {} },
@@ -493,8 +496,8 @@ export function buildWoods(): MapDef {
     // — The Hollow: the boulder is the whole tactic of the encounter
     { key: 'prop/woods/boulder_0', x: 22, y: 42, spec: { solid: [26, 12] } },
     { key: 'prop/woods/log_fallen_2', x: 16, y: 47, spec: { solid: [40, 8] } },
-    { key: 'prop/woods/tree_hollow', x: 30, y: 39, spec: { solid: [16, 8] } },
-    { key: 'prop/woods/mist', x: 18, y: 45, spec: { anim: 'woods_mist', over: true } },
+    { key: 'prop/woods/tree_hollow', x: 30, y: 39, spec: { solid: [16, 8], interact: 'woods.hollow' }, id: 'hollow_oak' },
+    { key: 'prop/woods/mist_0', x: 18, y: 45, spec: { anim: 'woods_mist', over: true } },
     { key: 'prop/woods/branch_pile', x: 27, y: 46, spec: {} },
 
     // — the plateau: the prize, and the thing guarding it
@@ -510,7 +513,7 @@ export function buildWoods(): MapDef {
     { key: 'prop/woods/mushroom_3', x: 7, y: 63, spec: {} },
     { key: 'prop/woods/rock_0', x: 8, y: 62, spec: {} },
     { key: 'prop/woods/mossy_stone_0', x: 12, y: 62, spec: {} },
-    { key: 'prop/woods/mist', x: 17, y: 66, spec: { anim: 'woods_mist', over: true } },
+    { key: 'prop/woods/mist_0', x: 17, y: 66, spec: { anim: 'woods_mist', over: true } },
     { key: 'prop/woods/old_cart_broken', x: 20, y: 62, spec: { solid: [40, 10] } },
 
     // — The Broken Terrace
@@ -522,7 +525,7 @@ export function buildWoods(): MapDef {
 
     // — ◆ the carved stone
     { key: 'prop/woods/standing_stone_1', x: 34, y: 73, spec: { solid: [12, 8] } },
-    { key: 'prop/woods/standing_stone_2', x: 36, y: 75, spec: { solid: [16, 10], interact: 'woods_carving' }, id: 'carving' },
+    { key: 'prop/woods/standing_stone_2', x: 36, y: 75, spec: { solid: [16, 10], interact: 'carving.thirtysix' }, id: 'carving' },
     { key: 'prop/woods/standing_stone_0', x: 38, y: 73, spec: { solid: [12, 8] } },
     { key: 'prop/woods/mushroom_3', x: 34, y: 76, spec: {} },
 
@@ -530,12 +533,13 @@ export function buildWoods(): MapDef {
     { key: 'prop/woods/boulder_1', x: 9, y: 84, spec: { interact: 'woods_boulder' }, id: 'ford_boulder' },
     { key: 'prop/woods/mossy_stone_1', x: 19, y: 83, spec: {} },
     { key: 'prop/woods/mossy_stone_2', x: 24, y: 87, spec: {} },
-    { key: 'prop/woods/log_fallen_2', x: 26, y: 83, spec: { solid: [40, 8] } },
-    { key: 'prop/woods/mist', x: 14, y: 85, spec: { anim: 'woods_mist', over: true } },
-    { key: 'prop/woods/mist', x: 30, y: 85, spec: { anim: 'woods_mist', over: true } },
+    { key: 'prop/woods/log_fallen_2', x: 26, y: 83, spec: { solid: [40, 8], interact: 'woods.bridge' } },
+    { key: 'prop/woods/mist_0', x: 14, y: 85, spec: { anim: 'woods_mist', over: true } },
+    { key: 'prop/woods/mist_0', x: 30, y: 85, spec: { anim: 'woods_mist', over: true } },
 
     // — ◆ the old campsite on the island
-    { key: 'prop/woods/campfire_out', x: 8, y: 90, spec: { interact: 'woods_campsite' }, id: 'campsite' },
+    { key: 'prop/woods/campfire_out', x: 8, y: 90, spec: { interact: 'prop.woodsGate' }, id: 'campsite' },
+    { key: 'prop/woods/old_cart_broken', x: 10, y: 92, spec: { solid: [36, 10], interact: 'woods.deeper' } },
     { key: 'prop/woods/branch_pile', x: 10, y: 91, spec: {} },
     { key: 'prop/woods/bones_1', x: 6, y: 91, spec: {} },
     { key: 'prop/woods/mushroom_3', x: 11, y: 89, spec: {} },
@@ -559,10 +563,11 @@ export function buildWoods(): MapDef {
     // — shrine approach
     { key: 'prop/shrine_ext/column_broken_0', x: 17, y: 111, spec: { solid: [16, 10] } },
     { key: 'prop/shrine_ext/column_broken_1', x: 25, y: 111, spec: { solid: [16, 10] } },
+    { key: 'prop/woods/signpost_woods', x: 17, y: 107, spec: { solid: [14, 8], interact: 'sign.shrineRoad' } },
     { key: 'prop/shrine_ext/rubble_0', x: 19, y: 109, spec: {} },
     { key: 'prop/shrine_ext/rubble_1', x: 24, y: 110, spec: {} },
     { key: 'prop/shrine_ext/arch', x: 21, y: 113, spec: { solid: [16, 8] }, id: 'shrine_arch' },
-    { key: 'prop/woods/mist', x: 21, y: 112, spec: { anim: 'woods_mist', over: true } },
+    { key: 'prop/woods/mist_0', x: 21, y: 112, spec: { anim: 'woods_mist', over: true } },
   ];
 
   // Cuttable bushes screening the gully. Authored here so the map still reads
@@ -572,7 +577,7 @@ export function buildWoods(): MapDef {
     props.push({ key: `prop/woods/cuttable_bush_${x - 3}`, x, y: 61, spec: {}, id: `gully_bush_${x}` });
   }
   for (const [x, y] of LANTERNS) {
-    props.push({ key: 'prop/woods/lantern_post', x, y, spec: { anim: 'lantern_post' } });
+    props.push({ key: 'prop/woods/lantern_post_0', x, y, spec: { anim: 'lantern_post' } });
   }
 
   // ── 11. lights ────────────────────────────────────────────────────────────
@@ -599,6 +604,7 @@ export function buildWoods(): MapDef {
   const zones: Zone[] = [
     { kind: 'door', id: 'to_town', x: 19, y: 0, w: 6, h: 2, to: 'lumen_vale', spawn: 'south', facing: 'n' },
     { kind: 'trigger', id: 'woods_arrive', x: 17, y: 9, w: 10, h: 2 },
+    { kind: 'trigger', id: 'woods_narrows', x: 17, y: 33, w: 8, h: 2 },
     { kind: 'trigger', id: 'woods_dell', x: 12, y: 63, w: 14, h: 2 },
     { kind: 'trigger', id: 'to_shrine', x: 17, y: 110, w: 10, h: 2 },
     { kind: 'camera', id: 'bounds', x: 0, y: 0, w: W, h: H },

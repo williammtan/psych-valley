@@ -269,6 +269,61 @@ const clatter: SfxFn = (c) => {
   });
 };
 
+/**
+ * Mira's kettle coming to the boil, and then the whistle.
+ *
+ * These sit between the bells and the pipes on purpose. The inn's conditioning
+ * puzzle needs a startling noise that is *nobody's fault* — the player has to
+ * learn to time the hand bell around it — so the kettle is sharp enough to make
+ * a cat bolt but domestic enough that it never reads as a threat. The rising
+ * telegraph is the fair-play half: it says "in two seconds, don't ring".
+ */
+const kettleRising: SfxFn = (c) => {
+  const { r, t } = c;
+  noise(r, t, {
+    attack: 1.5, decay: 0.4, sustain: 0.75, hold: 0.4, release: 0.35,
+    filterType: 'bandpass', filterFreq: 620 * c.rate, q: 1.1, sweepTo: 2100 * c.rate,
+    gain: c.vol * 0.13, pan: c.pan,
+  });
+  // Water starting to move.
+  noise(r, t + 0.2, {
+    attack: 0.9, decay: 0.4, sustain: 0.6, hold: 0.5, release: 0.4,
+    filterType: 'lowpass', filterFreq: 900 * c.rate, q: 2,
+    gain: c.vol * 0.07, pan: c.pan, am: { rate: 7.5, depth: 0.02 },
+  });
+  tone(r, t + 0.5, {
+    freq: 1180 * c.rate * vary(0.03), type: 'sine', slideFrom: 0.72, slideTime: 1.6,
+    attack: 0.8, decay: 0.3, sustain: 0.55, hold: 0.3, release: 0.4,
+    gain: c.vol * 0.05, pan: c.pan,
+  });
+};
+
+const kettle: SfxFn = (c) => {
+  const { r, t } = c;
+  const f = 1560 * c.rate * vary(0.03);
+  // Two nearly-tuned apertures beating against each other — that warble is the
+  // whole character of a stovetop whistle.
+  [1, 1.006, 2.01].forEach((ratio, i) => {
+    tone(r, t, {
+      freq: f * ratio, type: i === 2 ? 'sine' : 'triangle',
+      slideFrom: 0.9, slideTime: 0.18,
+      attack: 0.09, decay: 0.12, sustain: 0.8, hold: 0.75, release: 0.25,
+      gain: c.vol * (i === 2 ? 0.05 : 0.13), pan: c.pan + (i === 1 ? 0.15 : -0.1),
+      reverb: 0.18,
+    });
+  });
+  noise(r, t, {
+    attack: 0.07, decay: 0.15, sustain: 0.6, hold: 0.7, release: 0.3,
+    filterType: 'bandpass', filterFreq: f * 1.02, q: 7,
+    gain: c.vol * 0.1, pan: c.pan,
+  });
+  noise(r, t, {
+    attack: 0.12, decay: 0.2, sustain: 0.5, hold: 0.6, release: 0.3,
+    filterType: 'highpass', filterFreq: 3800 * c.rate,
+    gain: c.vol * 0.05, pan: c.pan,
+  });
+};
+
 // ── the Lantern Trial ───────────────────────────────────────────────────────
 
 /**
@@ -1102,6 +1157,8 @@ export const SFX: Record<string, SfxFn> = {
   cat_mew: catMew,
   bell_tower_far: bellTowerFar,
   clatter,
+  kettle,
+  kettle_rising: kettleRising,
   // Names other systems reached for. Aliased to the same function object, so
   // they are the same sound and not a near-miss copy of it.
   bell_tower: bellTown,
@@ -1179,6 +1236,8 @@ export const SFX_LENGTH: Record<string, number> = {
   cat_mew: 1.0,
   purr: 2.2,
   clatter: 1.4,
+  kettle: 2.4,
+  kettle_rising: 3.6,
   pipe_crash: 2.2,
   cat_meow: 1.2,
   cat_hiss: 1.2,
@@ -1216,8 +1275,8 @@ export const SFX_LENGTH: Record<string, number> = {
  *              and must stay under everything else.
  */
 export const LEVEL: Record<string, number> = {
-  bell_town: 0.26, bell_tower: 0.26, bell_small: 0.32, bell_tower_far: 0.26,
-  pipe_crash: 0.55, clatter: 1.0,
+  bell_town: 0.26, bell_tower: 0.26, bell_small: 0.32, bell_tower_far: 0.13,
+  pipe_crash: 0.55, clatter: 1.0, kettle: 0.62, kettle_rising: 1.0,
   cat_meow: 1.1, cat_hiss: 1.1, cat_purr: 0.85, purr: 0.85, cat_mew: 1.8,
   // Levelled by RMS, not by peak, so all three land at the same loudness.
   lantern_tone_a: 0.34, lantern_tone_b: 0.36, lantern_tone_c: 0.56, lantern_tone_ref: 0.34,

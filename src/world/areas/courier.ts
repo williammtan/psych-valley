@@ -32,7 +32,7 @@ import { State } from '@/core/state';
 import { emit, on } from '@/core/events';
 import { registerArea } from '../registry';
 import { openMemoryThreads, type ThreadBoard, type ThreadCard } from '@/ui/MemoryThreads';
-import { TALK, play, describe, type ResolvedBeat } from '@/data/dialogue';
+import { TALK, play, describe, ambient, firstMeeting, shouldPlayFirstMeeting, type ResolvedBeat } from '@/data/dialogue';
 import type { CutsceneContext } from '@/systems/Cutscene';
 import type { WorldScene } from '@/scenes/WorldScene';
 
@@ -82,6 +82,7 @@ const CLUES: ClueDef[] = [
     parcel: WRAP.cream.word, tint: WRAP.cream.tint, address: 'ink has run',
     claim: { day: 'yesterday', slot: 0 },
     note: "Hesta's slip, third down the spike: the ink has run at one corner.",
+    context: 'It has not rained since the eleventh.',
     at: 'stamp_desk', exchange: 'q2.clueReceipt', alias: 'clue_receipt',
   },
   {
@@ -89,34 +90,39 @@ const CLUES: ClueDef[] = [
     parcel: WRAP.cream.word, tint: WRAP.cream.tint, address: 'ink still dry',
     claim: { day: 'today', slot: 0 },
     note: 'The other flour slip is crisp, and the pencil has not moved a hair.',
+    context: 'Every slip carried on the eleventh came back marked by the rain.',
     at: 'lost_shelf',
   },
   {
     id: 'c_cord', kind: 'context', delivery: 'dov_11',
     parcel: WRAP.blue.word, tint: WRAP.blue.tint, address: 'waxed cord tie',
     claim: { day: 'yesterday', slot: 1 },
-    note: "Dov's box, tied with waxed cord. The office ran out of waxed cord on Monday.",
+    note: "Dov's box, tied with waxed cord.",
+    context: 'The last of the waxed cord went out on the eleventh.',
     at: 'counter', exchange: 'q2.clueBlueBox', alias: 'clue_blue_box',
   },
   {
     id: 'c_tape', kind: 'context', delivery: 'dov_12',
     parcel: WRAP.blue.word, tint: WRAP.blue.tint, address: 'new tape',
     claim: { day: 'today', slot: 1 },
-    note: 'The second blue box is taped. That roll was opened after the cord ran out.',
+    note: 'The second blue box is taped.',
+    context: 'That roll was opened on the morning of the twelfth.',
     at: 'parcel_stack',
   },
   {
     id: 'c_clean', kind: 'context', delivery: 'wren_11',
     parcel: WRAP.teal.word, tint: WRAP.teal.tint, address: 'string clean',
     claim: { day: 'yesterday', slot: 2 },
-    note: "One salve parcel's string is clean. Nothing that touched Wren's door today is.",
+    note: "One salve parcel's string is clean.",
+    context: "Wren's door has been wet green paint since yesterday evening.",
     at: 'pigeonholes',
   },
   {
     id: 'c_paint', kind: 'context', delivery: 'wren_12',
     parcel: WRAP.teal.word, tint: WRAP.teal.tint, address: 'green on tie',
     claim: { day: 'today', slot: 2 },
-    note: "Green paint on the other salve's string, still tacky. That door was brown until yesterday evening.",
+    note: "Green paint on the other salve's string, still tacky.",
+    context: "Wren's door was brown until yesterday evening.",
     at: 'scales', exchange: 'q2.cluePaint', alias: 'clue_paint',
   },
 
@@ -184,9 +190,23 @@ function board(): ThreadBoard {
     cards: found.map((c) => ({
       id: c.id, kind: c.kind, delivery: c.delivery, parcel: c.parcel,
       tint: c.tint, address: c.address, claim: c.claim, note: c.note,
+      ...(c.context ? { context: c.context } : {}),
     })),
     truth: TRUTH,
+    messages: {
+      // Oren answering for his own memory, from src/data/dialogue.
+      memory: firstLine('q2.threadsWrongMemory'),
+      ready: 'ENTER — that is both days',
+    },
   };
+}
+
+/** The first spoken line of an authored exchange, for use as board copy. */
+function firstLine(id: string): string | undefined {
+  const ex = TALK.q2[id.replace(/^q2\./, '')];
+  if (!ex) return undefined;
+  const beat = play(ex).find((b) => b.kind === 'line');
+  return beat && beat.kind === 'line' ? beat.text : undefined;
 }
 
 // ── dialogue playback ───────────────────────────────────────────────────────
@@ -254,7 +274,7 @@ async function openBoard(w: WorldScene): Promise<void> {
   const b = board();
   if (!b.cards.length) {
     await w.cutscene.talk(async (c) => {
-      await c.say('player', 'String, pins and nothing to pin. Look around first.');
+      await c.say('narrator', 'String, pins, and two empty rows.');
     });
     return;
   }
@@ -302,7 +322,6 @@ async function reveal(w: WorldScene): Promise<void> {
 
 registerArea('courier', {
   onEnter(w) {
-    State.meet('oren');
     orenMemoryIndex = 0;
 
     // Contextual clues are Recall's own evidence: they register themselves as
@@ -362,6 +381,7 @@ registerArea('courier', {
     // Flags go up front: a player who walks out mid-scene is still on the quest.
     const hadPanic = State.has('oren_panic');
     State.setAll(['q2_started', 'met_oren', 'oren_panic']);
+    State.meet('oren');
     State.startQuest('q2_oren');
     void w.cutscene.run(async (c) => {
       c.face('oren', 's');
@@ -405,17 +425,24 @@ registerArea('courier', {
       return true;
     }
 
-    for (const who of ['villager_b', 'villager_d']) {
-      if (id !== `npc:${who}`) continue;
+    // Everybody else in the queue. Whoever carries a recollection gives it up
+    // once; the rest are here to be waiting, which is most of what a queue is.
+    if (id.startsWith('npc:')) {
+      const who = id.slice(4);
       const clue = CLUES.find((k) => k.at === who);
-      if (!clue) continue;
       void w.cutscene.talk(async (c) => {
-        if (State.has(CLUE_FLAG(clue.id))) {
-          await c.say(who, 'That is what I remember. I cannot make it any truer by saying it twice.');
+        if (shouldPlayFirstMeeting(who)) {
+          const meet = firstMeeting(who);
+          if (meet) await playBeats(c, play(meet));
+          State.meet(who);
+        }
+        if (clue && !State.has(CLUE_FLAG(clue.id))) {
+          await c.say(who, clue.note.replace(/^[A-Z]+: /, ''));
+          discover(w, clue.id, clue.alias);
           return;
         }
-        await c.say(who, clue.note.replace(/^[A-Z]+: /, ''));
-        discover(w, clue.id, clue.alias);
+        const line = ambient(who);
+        if (line) await c.say(line.speaker, line.text);
       });
       return true;
     }

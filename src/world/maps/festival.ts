@@ -360,23 +360,23 @@ function build(): MapDef {
     },
     props: P.props,
     npcs: [
-      // The seven who take part in the trial, arranged as an arc that opens
-      // toward the stage. The player's answering spot is the gap at its mouth —
-      // standing IN the group, not in front of it, is what makes round three
-      // work, so this arrangement is gameplay, not decoration.
-      { id: 'tavi', x: 19.4, y: 24.4, facing: 'n' },
-      { id: 'nia', x: 29.6, y: 25.6, facing: 'n' },
-      { id: 'villager_a', x: 17.6, y: 26.2, facing: 'n' },
-      { id: 'villager_b', x: 19.2, y: 28.0, facing: 'n' },
-      { id: 'villager_c', x: 21.2, y: 25.0, facing: 'n' },
-      { id: 'villager_d', x: 25.8, y: 25.0, facing: 'n' },
-      { id: 'villager_e', x: 27.4, y: 28.0, facing: 'n' },
+      // The eight who take part in the trial, arranged as a horseshoe with its
+      // open end at the player's answering spot. Standing INSIDE the group
+      // rather than in front of it is what makes round three work, so this
+      // arrangement is gameplay, not decoration.
+      { id: 'villager_c', x: 20.0, y: 23.6, facing: 'n' },
+      { id: 'villager_d', x: 26.0, y: 23.6, facing: 'n' },
+      { id: 'tavi', x: 18.6, y: 25.4, facing: 'n' },
+      { id: 'nia', x: 28.2, y: 25.4, facing: 'n' },
+      { id: 'villager_a', x: 17.2, y: 27.2, facing: 'n' },
+      { id: 'villager_f', x: 25.6, y: 26.6, facing: 'n' },
+      { id: 'villager_b', x: 19.6, y: 28.4, facing: 'n' },
+      { id: 'villager_e', x: 27.4, y: 28.4, facing: 'n' },
       // Host, observer, and the two who are here for the food.
-      { id: 'elia', x: 27.8, y: 22.4, facing: 'w' },
+      { id: 'elia', x: 30.6, y: 22.2, facing: 'w' },
       { id: 'sera', x: 15.8, y: 23.0, facing: 'e' },
       { id: 'mira', x: 6.2, y: 15.4, facing: 's' },
       { id: 'oren', x: 12.0, y: 19.4, facing: 'n', path: [[12, 19], [9, 21], [12, 22]], dwell: 3.2 },
-      { id: 'villager_f', x: 36.0, y: 15.6, facing: 's' },
     ],
     zones: [
       { kind: 'camera', id: 'bounds', x: 0, y: 0, w: W, h: H },

@@ -66,11 +66,11 @@ page.on('console', (m) => {
 
 await page.goto(`http://127.0.0.1:${port}/?skiptitle=1&map=lumen_vale&mute=1`, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => !!(window as any).__psyche?.ready, undefined, { timeout: 25000 }).catch(() => {});
-// The map runs its arrival cutscene on a fresh save, and that cutscene drives
-// the camera — teleporting under it captures whatever the pan is looking at.
-// Set the flag, then reload the map so it comes up in its ordinary state.
-await page.evaluate(() => (window as any).__psyche.setFlag('intro_done'));
-await page.evaluate(() => (window as any).__psyche.goto('lumen_vale', 'default'));
+// A fresh save runs the arrival cutscene, which drives the camera and ends on
+// a player choice — teleporting under it captures whatever the pan is looking
+// at. The 'town' checkpoint is the state straight after arrival, so the map
+// comes up in its ordinary, walk-around condition.
+await page.evaluate(() => (window as any).__psyche.jump('town'));
 await page.waitForFunction(
   () => (window as any).__psyche?.state()?.cutscene === false,
   undefined, { timeout: 20000 },

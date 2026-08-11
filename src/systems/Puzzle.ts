@@ -306,6 +306,58 @@ export class SequenceLock {
   reset(): void { this.entered = []; }
 }
 
+/**
+ * A lock that judges a whole entry at once, and says nothing until it is done.
+ *
+ * `SequenceLock` rejects on the first wrong symbol, which is the right feedback
+ * for a lock whose answer the player has been *shown*: it tells you exactly
+ * where you slipped. It is the wrong feedback for a lock whose answer the
+ * player has to *reconstruct*, because per-press rejection is a free oracle —
+ * press each rune until one is accepted and you have position one, repeat, and
+ * a four-symbol order falls out in about ten presses without understanding
+ * anything at all.
+ *
+ * `OrderLock` takes the whole entry before it judges. A wrong order costs one
+ * full entry and yields no positional information, so guessing an order out of
+ * twenty-four is not a strategy. Failure is still free — nothing is lost but
+ * the four presses (plan.md §67) — it just is not *informative*.
+ */
+export class OrderLock {
+  private entered: Rune[] = [];
+
+  constructor(
+    private scene: WorldScene,
+    /** How many symbols make one entry. */
+    public readonly length: number,
+    /** Judge a completed entry. Return true if it opened something. */
+    private onSubmit: (entry: Rune[]) => boolean,
+  ) {}
+
+  /** The entry so far — the caller lights its runes so input is never blind. */
+  get entry(): Rune[] { return [...this.entered]; }
+  get progress(): number { return this.entered.length; }
+
+  press(rune: Rune): { complete: boolean; ok: boolean } {
+    if (this.entered.length >= this.length) this.entered = [];
+    this.entered.push(rune);
+    const i = this.entered.length - 1;
+    Audio.sfx('rune_activate', { volume: 0.45, rate: 0.94 + i * 0.06 });
+    if (this.entered.length < this.length) return { complete: false, ok: false };
+
+    const submitted = [...this.entered];
+    this.entered = [];
+    const ok = this.onSubmit(submitted);
+    if (!ok) {
+      // Deliberately uninformative: the same shrug for every wrong order.
+      Audio.sfx('ui_cancel', { volume: 0.5 });
+      this.scene.shake(0.003, 160);
+    }
+    return { complete: true, ok };
+  }
+
+  reset(): void { this.entered = []; }
+}
+
 // ── Room controller ─────────────────────────────────────────────────────────
 
 /**

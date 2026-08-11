@@ -97,7 +97,7 @@ export async function driveToRound(page: Page, round: number, earlier: Record<nu
   await page.evaluate(() => (window as any).__trial.start({ fast: true }));
   for (let r = 1; r < round; r++) {
     await page.waitForFunction((n) => (window as any).__trial.snapshot().awaitingRound === n, r, { timeout: 45000 });
-    await page.evaluate((a) => (window as any).__trial.answer(a), earlier[r] ?? 'b');
+    await page.evaluate((a) => (window as any).__trial.answer(a), earlier[r] ?? 'c');
   }
   await page.waitForFunction((n) => (window as any).__trial.snapshot().awaitingRound === n, round, { timeout: 45000 });
 }
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
       await load(page, base);
       if (f.at) await page.evaluate(([x, y]) => (window as any).__psyche.teleport(x, y), f.at);
       if (f.hideHud) await page.evaluate(() => (window as any).__psyche.hideHud(true));
-      if (f.toRound) await driveToRound(page, f.toRound, { 1: 'b', 2: 'c', 3: 'a' });
+      if (f.toRound) await driveToRound(page, f.toRound, { 1: 'c', 2: 'c', 3: 'b' });
       await page.waitForTimeout(f.settle ?? 1200);
       await page.screenshot({ path: join(OUT, `${f.name}.png`) });
       const errs = (page as unknown as { __errors: string[] }).__errors;

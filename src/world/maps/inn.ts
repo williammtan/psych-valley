@@ -265,7 +265,7 @@ function props(): PropPlacement[] {
     { key: 'prop/int/inn_bench', x: 21.5, y: 9.4, spec: {}, id: 'settle' },
     { key: 'prop/int/inn_herbs', x: 23.4, y: 6, spec: { interact: 'prop.innHerbs' } },
     { key: 'prop/int/washbasin', x: 24.6, y: 6, spec: { solid: [18, 6], interact: 'clue.pipes' }, id: 'basin' },
-    { key: 'prop/int/inn_range_0', x: 26.6, y: 7, spec: { anim: 'range_steam', solid: [28, 26] } },
+    { key: 'prop/int/inn_range_0', x: 26.6, y: 7, spec: { anim: 'range_steam', solid: [28, 26] }, id: 'range' },
     { key: 'prop/int/inn_pots_hanging', x: 29, y: 6, spec: { interact: 'inn.pots' }, id: 'pots' },
     { key: 'prop/int/inn_broom', x: 30.4, y: 6.6, spec: { interact: 'prop.innBroom' } },
     { key: 'prop/int/inn_bread_rack', x: 29.6, y: 9, spec: { solid: [20, 8] } },

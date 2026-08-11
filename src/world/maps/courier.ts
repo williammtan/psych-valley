@@ -138,6 +138,15 @@ function build(): MapDef {
       { key: 'prop/int/inn_bucket', x: 8.6, y: 16.6 },
       { key: 'prop/int/inn_broom', x: 1.4, y: 12.6 },
       { key: 'prop/int/boots', x: 25.8, y: 4.6 },
+      // Yesterday's boots, still caked, well away from today's clean pair.
+      { key: 'prop/int/boots', x: 2.6, y: 10.4 },
+      { key: 'prop/int/inn_stool', x: 4.2, y: 5.6 },
+      { key: 'prop/int/inn_stool', x: 9.6, y: 5.4 },
+      { key: 'prop/int/lab_paperstack', x: 1.6, y: 6.4 },
+      { key: 'prop/int/books_stack', x: 6.4, y: 5.2 },
+      { key: 'prop/int/inn_barrel', x: 10.6, y: 16.6, spec: { solid: [14, 8] } },
+      { key: 'prop/int/post_sacks', x: 8.4, y: 12.4, spec: { solid: [30, 10] } },
+      { key: 'prop/int/rug_runner', x: 4.6, y: 9.8, spec: { depthBias: -70 } },
 
       // Parcels put down and never picked up again — the crisis, in objects.
       { key: 'prop/int/post_parcel_0', x: 14.2, y: 12.2 },
@@ -150,12 +159,19 @@ function build(): MapDef {
       { key: 'prop/int/post_parcel_3', x: 23.4, y: 12.6 },
       { key: 'prop/int/lab_crates', x: 27.2, y: 13, spec: { solid: [28, 10] } },
       { key: 'prop/int/books_stack', x: 24.4, y: 16.4 },
+      { key: 'prop/int/post_parcel_1', x: 3.4, y: 13.6 },
+      { key: 'prop/int/post_parcel_3', x: 5.8, y: 11.8 },
+      { key: 'prop/int/post_parcel_0', x: 7.2, y: 14.8 },
+      { key: 'prop/int/post_parcel_2', x: 2.4, y: 15.4 },
+      { key: 'prop/int/post_letters', x: 6.6, y: 17.2 },
+      { key: 'prop/town/parcel_3', x: 11.4, y: 10.6 },
     ],
 
     npcs: [
       { id: 'oren', x: 13, y: 10, facing: 'n', dwell: 2 },
       { id: 'villager_b', x: 20, y: 11, facing: 'w', dwell: 3 },
-      { id: 'villager_e', x: 25, y: 10, facing: 'n', dwell: 3 },
+      { id: 'villager_d', x: 25, y: 10, facing: 'n', dwell: 3 },
+      { id: 'villager_c', x: 23, y: 13, facing: 'n', path: [[23, 13], [19, 14], [23, 13]], dwell: 4 },
     ],
 
     zones: [

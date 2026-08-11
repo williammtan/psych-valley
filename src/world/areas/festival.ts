@@ -1,58 +1,80 @@
 /**
  * ACT IV — the Festival of Lanterns and the Lantern Trial.
  *
- * The design rule this file exists to serve (plan.md §16) is that the player has
- * to *feel* the pressure, not answer a question about it. So:
+ * Every word spoken in this quest lives in `src/data/dialogue/quest3_lantern.ts`
+ * and is played through `playExchange`. This file owns only what the words
+ * cannot: the tones, the light, the camera, the crowd's bubbles, and the moment
+ * the game stops and waits for the player.
  *
- *   THE TASK IS REAL.  Three lanterns each ring with their own tone; the
- *   reference lantern rings with one of them. Striking a lantern is free and
- *   unlimited — the answer prompt is also the instrument, and moving the cursor
- *   sounds that lantern. Anyone paying attention will be sure they are right.
- *   That certainty is the whole load-bearing beam: round three only hurts if you
- *   *know*.
+ * The design rule it exists to serve (plan.md §16) is that the player has to
+ * *feel* the pressure, not answer a question about it:
  *
- *   THE FALLBACK CARRIES THE SAME INFORMATION AND NO MORE.  With sound off, a
- *   struck lantern flashes a pattern — two slow, three, or five quick, all over
- *   the same total time, so it is the rhythm that identifies it, never the
+ *   THE TASK IS REAL, AND IT NEVER CHANGES.  The reference rings the third
+ *   lantern in every round. The player establishes that for themselves in round
+ *   one, privately, with nobody watching. Nothing about the lanterns is
+ *   different in round three — only the number of people pointing the same way.
+ *   Striking a lantern is free and unlimited; the answer prompt is also the
+ *   instrument, so a player can compare for as long as they like. That certainty
+ *   is the load-bearing beam: round three only hurts if you *know*.
+ *
+ *   THE SILENT FALLBACK CARRIES THE SAME INFORMATION AND NO MORE.  A struck
+ *   lantern flashes a pattern — two slow, three, or five quick, all over the
+ *   same total time, so it is the rhythm that identifies it and never the
  *   duration. The reference flashes the matching lantern's rhythm in its *own*
- *   colour, never the matching lantern's colour: a silent player does the same
- *   comparison a hearing player does.
+ *   colour, never the matching lantern's colour: a player with the sound off
+ *   does the same comparison a hearing player does, not an easier one.
  *
- *   NOTHING IS PUNISHED.  Rounds two to four never announce who was right. The
- *   player's round-three answer sets one flag, `q3_conformed`, and that flag
+ *   NOTHING IS PUNISHED.  No round announces who was right until round four
+ *   reveals it for everybody at once. The player's round-three answer is checked
+ *   against THE GROUP, never against the truth, and sets one flag. That flag
  *   only changes what people say to them afterwards. Conforming is a reasonable
  *   bet and the game treats it as one.
  *
  *   TAVI IS NOT A VILLAIN (§27).  He is quick, warm, funny and never once
- *   entertains the possibility that he is wrong. He is liked. That is what makes
- *   him work.
+ *   entertains the possibility that he is wrong. He is liked. That is the point.
  *
  * The words this quest is about appear nowhere until Sera's Insight Card.
  */
 import Phaser from 'phaser';
 import { DEPTH } from '@/core/config';
-import { emit, once } from '@/core/events';
-import { on as busOn } from '@/core/events';
+import { emit, on as busOn, once } from '@/core/events';
 import { State } from '@/core/state';
 import { Audio } from '@/audio/Audio';
 import { registerArea } from '../registry';
 import { TRIAL_COLORS } from '../maps/festival';
+import { FLAGS, TALK, ambient, playExchange, type Beat, type CutsceneLike } from '@/data/dialogue';
 import type { WorldScene } from '@/scenes/WorldScene';
-import type { CutsceneContext, SayOptions } from '@/systems/Cutscene';
+import type { CutsceneContext } from '@/systems/Cutscene';
 import type { Dir } from '@/entities/Player';
 
 type L = 'a' | 'b' | 'c';
 
-const PARTICIPANTS = ['tavi', 'villager_a', 'villager_b', 'villager_c', 'villager_d', 'villager_e', 'nia'];
+/** Everyone standing in the horseshoe around the player. */
+const PARTICIPANTS = [
+  'tavi', 'villager_a', 'villager_b', 'villager_c', 'villager_d', 'villager_e', 'villager_f', 'nia',
+];
+
+/** The reference rings the THIRD lantern. Every round. That is the whole trick. */
+const TRUTH: L = 'c';
+/** What the plaza decides it is, from round two on. */
+const GROUP: L = 'b';
 
 /**
- * How a struck lantern flashes. Same total length, different rhythm — the rate
- * is the signal, so a silent player is doing a comparison, not reading a label.
+ * How a struck lantern flashes for a player with the sound off. Same total
+ * length, different rhythm — the rate is the signal, so a silent player is
+ * doing a comparison, not reading a label.
  */
 const PATTERN: Record<L, { count: number; gap: number }> = {
   a: { count: 2, gap: 430 },
   b: { count: 3, gap: 287 },
   c: { count: 5, gap: 172 },
+};
+
+const BASE_FRAME: Record<L | 'ref', string> = {
+  a: 'prop/fest/trial_lantern_a',
+  b: 'prop/fest/trial_lantern_b',
+  c: 'prop/fest/trial_lantern_c',
+  ref: 'prop/fest/reference_lantern',
 };
 
 /**
@@ -64,99 +86,60 @@ const FRAME_STAGE = 20.0;
 const FRAME_GROUP = 25.4;
 const FRAME_PRESSURE = 25.9;
 
-const BASE_FRAME: Record<L | 'ref', string> = {
-  a: 'prop/fest/trial_lantern_a',
-  b: 'prop/fest/trial_lantern_b',
-  c: 'prop/fest/trial_lantern_c',
-  ref: 'prop/fest/reference_lantern',
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// What the crowd's bubbles do, round by round
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface Answer {
-  id: string;
+interface Vote {
   says: L;
-  /** The answer they give first, before visibly changing it. */
+  /** Their honest answer, shown first, before they visibly change it. */
   from?: L;
-  line?: [string, string];
-  emote?: string;
-}
-
-interface RoundDef {
-  n: number;
-  correct: L;
-  label: string;
-  mode: 'private' | 'public';
-  /** How many scripted answers land before the player is asked. */
-  askAfter: number;
-  script: Answer[];
-  /** Round 1 only: the slips are read out after everyone has written. */
-  reveal?: boolean;
 }
 
 /**
- * The four rounds of plan.md §16, as data. Only one thing changes between round
- * three and round four — whether anybody has broken ranks — which is what makes
- * the pair readable as an experiment the player lived through.
+ * The public answers, keyed by who gives them. A bubble goes up the instant its
+ * owner's authored line lands, so the player watches the consensus form rather
+ * than being told about it afterwards.
+ *
+ * Nia has no entry until round four: Elia's "you have not answered all evening"
+ * has to be true.
  */
-const ROUNDS: RoundDef[] = [
+const VOTES: Array<Record<string, Vote>> = [
+  // Round 1 — private slates, revealed only after the player has committed.
   {
-    n: 1, correct: 'b', mode: 'private', label: 'nobody hears your answer', askAfter: 0, reveal: true,
-    script: [
-      { id: 'tavi', says: 'b' }, { id: 'villager_a', says: 'b' }, { id: 'villager_b', says: 'b' },
-      { id: 'villager_c', says: 'b' }, { id: 'villager_d', says: 'c' }, { id: 'villager_e', says: 'b' },
-      { id: 'nia', says: 'b' },
-    ],
+    tavi: { says: 'c' }, villager_a: { says: 'c' }, villager_b: { says: 'c' },
+    villager_c: { says: 'c' }, villager_d: { says: 'a' }, villager_e: { says: 'c' },
+    villager_f: { says: 'c' }, nia: { says: 'c' },
   },
+  // Round 2 — Tavi first, and two of them audibly change their minds.
   {
-    n: 2, correct: 'c', mode: 'public', label: 'Tavi answers first', askAfter: 4,
-    script: [
-      { id: 'tavi', says: 'a', line: ['tavi', 'First one. Not close.'], emote: 'excl' },
-      { id: 'villager_a', says: 'a', from: 'c', line: ['villager_a', 'The first, then.'] },
-      { id: 'villager_b', says: 'a' },
-      { id: 'villager_c', says: 'a', from: 'c' },
-      { id: 'villager_d', says: 'a' },
-      { id: 'villager_e', says: 'c' },
-      { id: 'nia', says: 'a' },
-    ],
+    tavi: { says: 'b' }, villager_a: { says: 'b' },
+    villager_b: { says: 'b', from: 'c' }, villager_c: { says: 'b', from: 'c' },
+    villager_d: { says: 'b' }, villager_f: { says: 'b' },
   },
+  // Round 3 — six voices, one answer, and the player has not spoken yet.
   {
-    n: 3, correct: 'a', mode: 'public', label: 'you answer last', askAfter: 7,
-    script: [
-      { id: 'tavi', says: 'c', line: ['tavi', 'Third. Easy.'], emote: 'excl' },
-      { id: 'villager_a', says: 'c' },
-      { id: 'villager_b', says: 'c' },
-      { id: 'villager_c', says: 'c' },
-      { id: 'villager_d', says: 'c' },
-      { id: 'villager_e', says: 'c', from: 'a' },
-      { id: 'nia', says: 'c' },
-    ],
+    tavi: { says: 'b' }, villager_a: { says: 'b' }, villager_b: { says: 'b' },
+    villager_c: { says: 'b' }, villager_d: { says: 'b' }, villager_e: { says: 'b', from: 'c' },
   },
+  // Round 4 — Nia is wrong out loud, and the group comes apart anyway.
   {
-    n: 4, correct: 'c', mode: 'public', label: 'you answer last', askAfter: 7,
-    script: [
-      { id: 'tavi', says: 'b', line: ['tavi', 'Second.'] },
-      { id: 'nia', says: 'a', line: ['nia', 'No. The first one.'], emote: 'excl' },
-      { id: 'villager_a', says: 'c' },
-      { id: 'villager_b', says: 'b' },
-      { id: 'villager_c', says: 'c' },
-      { id: 'villager_d', says: 'a' },
-      { id: 'villager_e', says: 'c' },
-    ],
+    nia: { says: 'a' }, villager_b: { says: 'c' }, villager_f: { says: 'c' },
+    villager_c: { says: 'c' },
   },
 ];
 
-/** What people say afterwards. Two kinds of person, never labelled as such. */
-const AFTERMATH: Record<string, string[]> = {
-  tavi: ['Good trial. I was on form.', 'Third one, round three. I would say it again.'],
-  nia: ['I only went first.', 'Then three others said something different. Odd, that.'],
-  villager_a: ['Round three?', 'I had the first one. I just did not fancy being the only hand up.'],
-  villager_b: ['I would have sworn it was the first.', 'But that many people... I stopped trusting my own ears.'],
-  villager_c: ['I knew.', 'I was not going to be the one, though.'],
-  villager_d: ['Six people cannot all be wrong.', 'Can they?'],
-  villager_e: ['I held out a round.', 'Then I felt silly, so I stopped.'],
-  elia: ['Same every year.', 'Every single year, and I still cannot predict it.'],
-  mira: ['Skewer? They are good this year.'],
-  oren: ['I am not playing. I have had enough of trusting my own head this week.'],
-  villager_f: ['One more set and I am done. Three days of tuning for this.'],
+/** Post-trial exchanges, played once each before ambient life resumes. */
+const AFTER: Record<string, string> = {
+  tavi: 'taviAfter',
+  nia: 'afterNia',
+  villager_a: 'afterBram',
+  villager_b: 'afterHesta',
+  villager_c: 'afterDov',
+  villager_d: 'afterWren',
+  villager_e: 'afterTomas',
+  villager_f: 'afterIsolde',
+  elia: 'afterElia',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,7 +161,7 @@ class LanternRig {
       if (!p) return;
       this.sprite[key] = p.sprite;
       // Anchored on the lit head, not the sprite's base: the mounted lanterns
-      // carry their globe 29px up, the reference its diamond 39px up.
+      // carry their globe 28px up, the reference its diamond 38px up.
       const img = w.add.image(p.sprite.x, p.sprite.y - (key === 'ref' ? 38 : 28), 'atlas', 'fx/light_soft_128')
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(DEPTH.LIGHT + 2)
@@ -194,7 +177,7 @@ class LanternRig {
     bind('ref', 'ref_lantern', 0xfff2d2);
   }
 
-  /** Total time a strike takes, so the ceremony can wait for it. */
+  /** How long a strike takes, so the ceremony can wait for it. */
   static duration(p: L): number {
     return PATTERN[p].count * PATTERN[p].gap + 260;
   }
@@ -211,7 +194,10 @@ class LanternRig {
       w.time.delayedCall(delay + i * gap, () => {
         if (!img?.active) return;
         img.setAlpha(0);
-        w.tweens.add({ targets: img, alpha: 0.95, duration: Math.round(gap * 0.2), yoyo: true, hold: Math.round(gap * 0.08), ease: 'Quad.easeOut' });
+        w.tweens.add({
+          targets: img, alpha: 0.95, duration: Math.round(gap * 0.2), yoyo: true,
+          hold: Math.round(gap * 0.08), ease: 'Quad.easeOut',
+        });
         if (i === 0) w.fx.bellRing(img.x, img.y + 12, true);
       });
     }
@@ -228,7 +214,7 @@ class LanternRig {
   }
 
   /** The reference speaks: a call to attention, then the tone it is holding. */
-  strikeReference(w: WorldScene, correct: L): number {
+  strikeReference(w: WorldScene, correct: L = TRUTH): number {
     Audio.sfx('lantern_tone_ref', { volume: 0.4 });
     const spr = this.sprite.ref;
     if (spr && w.anims.exists('reference_lantern_struck')) spr.play('reference_lantern_struck', true);
@@ -250,9 +236,9 @@ class LanternRig {
 
 interface RoundRecord {
   n: number;
-  correct: L;
-  tavi: L;
-  /** Everyone's final public answer this round. */
+  truth: L;
+  group: L;
+  /** Everyone's public answer this round. */
   answers: Record<string, L>;
   /** Who was seen changing their answer to match. */
   shifted: string[];
@@ -266,14 +252,21 @@ const S = {
   finished: false,
   fast: false,
   round: 0,
-  correct: 'b' as L,
   awaiting: 0,
   answers: {} as Record<string, L>,
   history: [] as RoundRecord[],
+  record: null as RoundRecord | null,
   pending: null as ((a: L) => void) | null,
-  talkedTo: new Set<string>(),
+  heard: new Set<string>(),
   named: false,
+  rosette: false,
 };
+
+const cleanup: Array<() => void> = [];
+
+function sub(event: string, fn: (p: never) => void): void {
+  cleanup.push(busOn(event, fn as (p: unknown) => void));
+}
 
 function resetState(): void {
   S.rig?.destroy();
@@ -285,16 +278,23 @@ function resetState(): void {
   S.awaiting = 0;
   S.answers = {};
   S.history = [];
+  S.record = null;
   S.pending = null;
-  S.talkedTo = new Set();
+  S.heard = new Set();
   S.named = false;
+  S.rosette = false;
+}
+
+function headOf(w: WorldScene, id: string): { wx: number; wy: number } {
+  const n = w.npc(id);
+  return { wx: n?.x ?? 0, wy: (n?.y ?? 0) - 38 };
 }
 
 /**
  * Npc.update() turns idle characters to look around every few seconds, which is
- * exactly right for a market and exactly wrong for a ceremony: a directed
- * facing would silently un-set itself two seconds later. Freezing the
- * participants for the duration is what lets round three's turn-and-stare hold.
+ * right for a market and wrong for a ceremony: a directed facing would silently
+ * un-set itself two seconds later. Freezing the participants for the duration is
+ * what lets round three's turn-and-stare hold.
  */
 function holdStill(w: WorldScene, ids: string[], ms = 10 * 60 * 1000): void {
   for (const id of ids) w.npc(id)?.freeze(ms);
@@ -304,29 +304,280 @@ function faceAll(w: WorldScene, ids: string[], dir: Dir): void {
   for (const id of ids) w.npc(id)?.face(dir);
 }
 
-function head(w: WorldScene, id: string): { wx: number; wy: number } {
-  const n = w.npc(id);
-  return { wx: n?.x ?? 0, wy: (n?.y ?? 0) - 38 };
+// ─────────────────────────────────────────────────────────────────────────────
+// Bubbles, wired to the authored lines
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Raise (or move) one villager's public answer. */
+function showVote(w: WorldScene, id: string, vote: Vote, changed = false): void {
+  emit('trial:bubble', { id, answer: vote.says, changed, ...headOf(w, id) });
+  S.answers[id] = vote.says;
+  if (S.record) {
+    S.record.answers[id] = vote.says;
+    if (changed && !S.record.shifted.includes(id)) S.record.shifted.push(id);
+  }
+}
+
+/**
+ * A CutsceneLike that raises a speaker's vote bubble at the instant their line
+ * lands, and — for the two who cave in round two — shows the honest answer, a
+ * wobble, and then the group's answer, in that order. Watching an answer move is
+ * the whole of round two; being told about it afterwards is not the same thing.
+ */
+function withVotes(c: CutsceneContext, w: WorldScene, votes: Record<string, Vote>): CutsceneLike {
+  const said = new Set<string>();
+  return {
+    say: async (speaker, text, opts) => {
+      const v = votes[speaker];
+      if (v && !said.has(speaker)) {
+        said.add(speaker);
+        const npc = w.npc(speaker);
+        if (v.from) {
+          showVote(w, speaker, { says: v.from });
+          await c.wait(S.fast ? 16 : 700);
+          if (npc) w.fx.emote(npc.x, npc.y, 'sweat', 620);
+          await c.wait(S.fast ? 16 : 240);
+          showVote(w, speaker, v, true);
+          await c.wait(S.fast ? 16 : 200);
+        } else {
+          showVote(w, speaker, v);
+        }
+      }
+      if (S.fast) { await c.wait(1); return; }
+      await c.say(speaker, text, opts);
+    },
+    choose: (prompt, choices) => (S.fast ? Promise.resolve(0) : c.choose(prompt, choices)),
+    wait: (ms) => c.wait(S.fast ? Math.min(ms, 16) : ms),
+    // Never skipped, even for the harness: the card is what unlocks the
+    // journal entry, so a run that skipped it would not be a run of the quest.
+    insight: (id) => c.insight(id),
+    banner: (t, s2) => c.banner(t, s2),
+  };
+}
+
+/** Everyone in this round's table who has not spoken yet answers now, silently. */
+async function fillVotes(w: WorldScene, c: CutsceneContext, votes: Record<string, Vote>): Promise<void> {
+  for (const [id, v] of Object.entries(votes)) {
+    if (S.answers[id]) continue;
+    showVote(w, id, v);
+    await c.wait(S.fast ? 8 : 260);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The ceremony
 // ─────────────────────────────────────────────────────────────────────────────
 
+function askPlayer(mode: 'private' | 'public'): Promise<L> {
+  return new Promise((resolve) => {
+    S.awaiting = S.round;
+    S.pending = (a: L) => { S.awaiting = 0; S.pending = null; resolve(a); };
+    once('trial:answer', (p: { answer: L }) => S.pending?.(p.answer));
+    emit('trial:ask', { mode });
+  });
+}
+
+/** A murmur runs round the horseshoe when the newcomer speaks. */
+function plazaReacts(w: WorldScene): void {
+  Audio.sfx('ui_confirm', { volume: 0.3, rate: 0.8 });
+  ['tavi', 'villager_c', 'villager_d'].forEach((id, i) => {
+    const n = w.npc(id);
+    if (!n) return;
+    w.time.delayedCall(120 + i * 130, () => w.fx.emote(n.x, n.y, 'think', 520));
+  });
+}
+
+/** Play an authored exchange with vote bubbles and the ceremony's cue handlers. */
+function runExchange(
+  w: WorldScene,
+  c: CutsceneContext,
+  source: Parameters<typeof playExchange>[1],
+  votes: Record<string, Vote> = {},
+  extraCues: Record<string, () => void | Promise<void>> = {},
+): Promise<void> {
+  return playExchange(withVotes(c, w, votes), source, {
+    cue: async (name, note) => {
+      const extra = extraCues[name];
+      if (extra) { await extra(); return; }
+      await defaultCue(w, c, name, note);
+    },
+  });
+}
+
+async function defaultCue(w: WorldScene, c: CutsceneContext, name: string, note?: string): Promise<void> {
+  switch (name) {
+    case 'tone_reference': {
+      // Look at the lanterns while they speak...
+      await c.panTo(23.5, FRAME_STAGE, S.fast ? 1 : 460);
+      await c.wait(S.fast ? 16 : 260);
+      await c.wait(S.fast ? 16 : S.rig!.strikeReference(w));
+      await c.wait(S.fast ? 16 : 320);
+      // ...and back to the people, who are the actual subject of this quest.
+      await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 460);
+      break;
+    }
+    case 'tone_all': {
+      await c.panTo(23.5, FRAME_STAGE, S.fast ? 1 : 460);
+      for (const id of ['a', 'b', 'c'] as L[]) {
+        await c.wait(S.fast ? 16 : S.rig!.strike(w, id));
+        await c.wait(S.fast ? 8 : 220);
+      }
+      await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 460);
+      break;
+    }
+    case 'ability_grant':
+      State.grant((note ?? 'dissent') as 'dissent');
+      break;
+    case 'festival_lights':
+      w.fx.setAmbient('town_evening');
+      break;
+    default:
+      break;
+  }
+}
+
+function beginRound(n: number): void {
+  S.round = n;
+  S.answers = {};
+  S.record = { n, truth: TRUTH, group: n === 1 ? TRUTH : GROUP, answers: {}, shifted: [], unanimous: false };
+  emit('trial:clear', {});
+  emit('trial:round', {
+    n, total: 4,
+    label: n === 1 ? 'nobody hears your answer' : n === 2 ? 'Tavi answers first' : 'you answer last',
+  });
+}
+
+function recordPlayer(a: L): void {
+  if (S.record) S.record.player = a;
+}
+
+function endRound(flag: string): void {
+  const r = S.record;
+  if (r) {
+    const vals = Object.values(r.answers);
+    r.unanimous = vals.length > 1 && vals.every((v) => v === vals[0]);
+    S.history.push(r);
+  }
+  S.record = null;
+  State.set(flag);
+}
+
+async function round1(w: WorldScene, c: CutsceneContext, beat: (ms: number) => Promise<void>): Promise<void> {
+  beginRound(1);
+  // The only round nobody can see. Whatever the player answers here is the thing
+  // they will be asked to give up later, so it has to be theirs alone.
+  await runExchange(w, c, TALK.q3.round1, {}, {
+    trial_answer: async () => {
+      const a = await askPlayer('private');
+      recordPlayer(a);
+      State.set('trial_r1_wrong', a !== TRUTH);
+    },
+  });
+  await beat(300);
+  // The slates come up only now, so nobody's answer could have swayed anybody.
+  await fillVotes(w, c, VOTES[0]);
+  await runExchange(w, c, TALK.q3.round1Result);
+  endRound(FLAGS.trialR1);
+}
+
+async function round2(w: WorldScene, c: CutsceneContext, beat: (ms: number) => Promise<void>): Promise<void> {
+  beginRound(2);
+  await runExchange(w, c, TALK.q3.round2, VOTES[1], {
+    trial_answer: async () => {
+      await fillVotes(w, c, VOTES[1]);
+      recordPlayer(await askPlayer('public'));
+      plazaReacts(w);
+    },
+  });
+  await beat(200);
+  endRound(FLAGS.trialR2);
+}
+
+async function round3(w: WorldScene, c: CutsceneContext, beat: (ms: number) => Promise<void>): Promise<void> {
+  beginRound(3);
+  const cam = w.cameras.main;
+  await runExchange(w, c, TALK.q3.round3, VOTES[2], {
+    trial_answer: async () => {
+      await fillVotes(w, c, VOTES[2]);
+      // The pressure staging. All of it is about attention, none about threat:
+      // eight people stop looking at the lanterns and look at you, the frame
+      // tightens by a tenth, and then the game waits. There is no timer here,
+      // and there must never be one.
+      for (const id of PARTICIPANTS) w.npc(id)?.faceTowards(w.player.x, w.player.y);
+      cam.zoomTo(1.10, S.fast ? 1 : 900, 'Sine.easeInOut', true);
+      await c.panTo(23.5, FRAME_PRESSURE, S.fast ? 1 : 900);
+      await beat(500);
+
+      const answer = await askPlayer('public');
+      recordPlayer(answer);
+      // Checked against THE GROUP, never against the truth. Matching six wrong
+      // people is what conforming means; being wrong is not.
+      const conformed = answer === GROUP;
+      State.set(FLAGS.playerConformed, conformed);
+      State.set('q3_conformed', conformed);
+      plazaReacts(w);
+
+      faceAll(w, PARTICIPANTS, 'n');
+      cam.zoomTo(1, S.fast ? 1 : 600, 'Sine.easeInOut', true);
+      await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 600);
+    },
+  });
+  // Neither answer is congratulated and neither is corrected.
+  await runExchange(w, c, TALK.q3.round3After);
+  await beat(200);
+  endRound(FLAGS.trialR3);
+}
+
+async function round4(w: WorldScene, c: CutsceneContext, beat: (ms: number) => Promise<void>): Promise<void> {
+  beginRound(4);
+  const beats = TALK.q3.round4.beats as Beat[];
+  // Nia goes first and is wrong, three people immediately say something else,
+  // and only then is the player asked — into a group that no longer agrees.
+  // That is the controlled comparison with round three, so the split has to be
+  // on screen before the prompt opens. Tavi's "Hold on—" is the seam.
+  const cut = beats.findIndex((b) => b.kind === 'line' && b.speaker === 'tavi');
+  const opening = cut > 0 ? beats.slice(0, cut) : beats;
+  const closing = cut > 0 ? beats.slice(cut) : [];
+
+  await runExchange(w, c, opening, VOTES[3]);
+  State.set(FLAGS.niaDissented);
+  await fillVotes(w, c, VOTES[3]);
+  await beat(300);
+  recordPlayer(await askPlayer('public'));
+  plazaReacts(w);
+  if (closing.length) await runExchange(w, c, closing, VOTES[3]);
+  await beat(200);
+  endRound(FLAGS.trialR4);
+}
+
+/**
+ * The village-game stake. It attaches to turning up and answering four times in
+ * front of everyone — never to being right — so it can never become a punishment
+ * for conforming.
+ */
+function awardRosette(w: WorldScene, c: CutsceneContext): void {
+  if (S.rosette) return;
+  S.rosette = true;
+  State.set('q3_rosette');
+  w.prop('prize_ribbon')?.sprite.destroy();
+  c.toast("Newcomer's Rosette");
+  State.addNote('elia', "Gave you the Newcomer's Rosette for answering four times out loud.");
+}
+
 function startTrial(w: WorldScene, fast = false): void {
   if (S.started || S.finished) return;
   S.started = true;
   S.fast = fast;
+  State.set(FLAGS.trialJoined);
   State.startQuest('q3_lanterns');
   State.advanceQuest('q3_lanterns', 'join');
 
   void w.cutscene.run(async (c) => {
-    const say = (who: string, text: string, opts?: SayOptions) => (S.fast ? c.wait(1) : c.say(who, text, opts));
-    const beat = (ms: number) => c.wait(S.fast ? Math.min(ms, 16) : ms);
     const cam = w.cameras.main;
+    const beat = (ms: number) => c.wait(S.fast ? Math.min(ms, 16) : ms);
 
-    // Take the stand. The player's spot is the mouth of the arc, which is what
-    // makes them part of the group rather than an audience for it.
+    // Take the stand. The player's spot is the open end of the horseshoe, which
+    // is what makes them part of the group rather than an audience for it.
     cam.stopFollow();
     await c.movePlayer(23, 27.4, 92);
     c.face('player', 'n');
@@ -334,20 +585,17 @@ function startTrial(w: WorldScene, fast = false): void {
     faceAll(w, PARTICIPANTS, 'n');
     await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 620);
 
-    await say('elia', 'Everyone! Four rounds. Ears open.');
-    await say('tavi', "Four? I'll take all four.");
-    await say('villager_a', 'You said that last year, Tavi.');
-    await say('tavi', 'And I was right last year.');
-    await say('elia', 'You were right twice.');
+    await runExchange(w, c, TALK.q3.trialRules);
 
-    for (const r of ROUNDS) await runRound(w, c, r, say, beat);
+    await round1(w, c, beat);
+    await round2(w, c, beat);
+    await round3(w, c, beat);
+    await round4(w, c, beat);
 
     // ── the trial ends ─────────────────────────────────────────────────────
     emit('trial:end', {});
     await beat(400);
-    await say('elia', "That's the trial. Thank you, all.");
-    await say('elia', 'Stay. Eat something. Argue about it.');
-
+    awardRosette(w, c);
     cam.zoomTo(1, 380, 'Sine.easeInOut', true);
     c.followPlayer(420);
     // Give everyone their idle life back now the ceremony is over.
@@ -359,203 +607,68 @@ function startTrial(w: WorldScene, fast = false): void {
   });
 }
 
-async function runRound(
-  w: WorldScene,
-  c: CutsceneContext,
-  r: RoundDef,
-  say: (who: string, text: string, opts?: SayOptions) => Promise<void>,
-  beat: (ms: number) => Promise<void>,
-): Promise<void> {
-  const cam = w.cameras.main;
-  S.round = r.n;
-  S.correct = r.correct;
-  S.answers = {};
-  const rec: RoundRecord = { n: r.n, correct: r.correct, tavi: r.script[0].says, answers: {}, shifted: [], unanimous: false };
-
-  emit('trial:clear', {});
-  emit('trial:round', { n: r.n, total: ROUNDS.length, label: r.label });
-  await beat(520);
-
-  if (r.n === 1) await say('elia', 'Round one. Write it down. No calling out.');
-  if (r.n === 2) await say('elia', 'Round two. Out loud this time. Tavi, you start.');
-  if (r.n === 3) await say('elia', "Round three. We'll come to you last.");
-  if (r.n === 4) await say('elia', 'Last round. Same as before.');
-
-  // Look at the lanterns while they speak...
-  await c.panTo(23.5, FRAME_STAGE, S.fast ? 1 : 480);
-  await beat(300);
-  await c.wait(S.fast ? 16 : S.rig!.strikeReference(w, r.correct));
-  await beat(420);
-  // ...and back to the people, who are the actual subject of this quest.
-  await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 480);
-  await beat(200);
-
-  const speak = async (e: Answer) => {
-    const npc = w.npc(e.id);
-    if (npc) npc.face('n');
-    if (e.from) {
-      // Their honest answer, a visible wobble, and then the group's answer.
-      emit('trial:bubble', { id: e.id, answer: e.from, ...head(w, e.id) });
-      await beat(760);
-      if (npc) w.fx.emote(npc.x, npc.y, 'sweat', 620);
-      await beat(220);
-      emit('trial:bubble', { id: e.id, answer: e.says, changed: true, ...head(w, e.id) });
-      rec.shifted.push(e.id);
-    } else {
-      emit('trial:bubble', { id: e.id, answer: e.says, ...head(w, e.id) });
-    }
-    if (e.emote && npc) w.fx.emote(npc.x, npc.y, e.emote, 700);
-    S.answers[e.id] = e.says;
-    rec.answers[e.id] = e.says;
-    if (e.line) await say(e.line[0], e.line[1]);
-    await beat(420);
-  };
-
-  const ask = async (): Promise<void> => {
-    if (r.n === 3) {
-      // The pressure staging. Everything here is about attention, not threat:
-      // the group turns, the frame tightens, and then the game waits. No timer.
-      // Seven people stop looking at the lanterns and look at you instead.
-      // This is the round; everything else in it is staging.
-      for (const id of PARTICIPANTS) w.npc(id)?.faceTowards(w.player.x, w.player.y);
-      cam.zoomTo(1.10, S.fast ? 1 : 900, 'Sine.easeInOut', true);
-      await c.panTo(23.5, FRAME_PRESSURE, S.fast ? 1 : 900);
-      await beat(500);
-      await say('elia', 'And you?');
-      await beat(400);
-    } else if (r.mode === 'public') {
-      await say('elia', 'And you?');
-    }
-    const answer = await askPlayer(r);
-    rec.player = answer;
-    if (r.n === 3) {
-      const group = rec.tavi;
-      State.set('q3_conformed', answer === group);
-      // Deliberately neutral. Neither answer is congratulated or corrected.
-      await beat(300);
-      await say('elia', 'Noted.');
-      if (answer === group) await say('tavi', 'See? Everyone hears it.');
-      else await say('tavi', 'Huh.');
-      faceAll(w, PARTICIPANTS, 'n');
-      cam.zoomTo(1, S.fast ? 1 : 600, 'Sine.easeInOut', true);
-      await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 600);
-    }
-  };
-
-  for (let i = 0; i < r.script.length; i++) {
-    if (i === r.askAfter) await ask();
-    await speak(r.script[i]);
-  }
-  if (r.askAfter >= r.script.length) await ask();
-
-  const vals = Object.values(rec.answers);
-  rec.unanimous = vals.length > 1 && vals.every((v) => v === vals[0]);
-
-  if (r.reveal) {
-    // Round one, and only round one, tells the player they were right. After
-    // this the game never grades an answer again.
-    await beat(400);
-    await say('elia', 'Slips in. Let me read them out.');
-    for (const e of r.script) {
-      emit('trial:bubble', { id: e.id, answer: e.says, ...head(w, e.id) });
-      S.answers[e.id] = e.says;
-      await beat(240);
-    }
-    await beat(400);
-    await say('elia', 'The second lantern. Almost everyone.');
-    await say('tavi', 'Told you. Easy.');
-  }
-
-  S.history.push(rec);
-  await beat(700);
-}
-
-function askPlayer(r: RoundDef): Promise<L> {
-  return new Promise((resolve) => {
-    S.awaiting = r.n;
-    S.pending = (a: L) => { S.awaiting = 0; S.pending = null; resolve(a); };
-    once('trial:answer', (p: { answer: L }) => S.pending?.(p.answer));
-    emit('trial:ask', { mode: r.mode });
-  });
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Afterwards, and the naming moment
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * After the trial each villager has one thing they want to say about it, and
+ * then they go back to being themselves. Half of them knew and said second
+ * anyway; the other half genuinely stopped trusting their own ears. Nobody
+ * labels which they are, and the plaza's own ambient life takes over after.
+ */
 function afterLine(w: WorldScene, id: string): boolean {
-  const lines = AFTERMATH[id];
-  if (!lines) return false;
-  S.talkedTo.add(id);
+  const key = AFTER[id];
   State.meet(id);
-  void w.cutscene.talk(async (c) => {
-    for (const l of lines) await c.say(id, l);
-    if (id === 'tavi' && State.has('q3_conformed')) await c.say('tavi', 'You had it too. Good ear.');
-    if (id === 'tavi' && !State.has('q3_conformed')) await c.say('tavi', 'You said something else in three. Bold.');
-    if (id === 'nia' && !State.has('q3_conformed')) await c.say('nia', 'You went first, once. I noticed.');
-  });
+  if (key && !S.heard.has(id)) {
+    S.heard.add(id);
+    if (S.heard.size >= 3) State.set(FLAGS.villagersHonest);
+    void w.cutscene.talk((c) => runExchange(w, c, TALK.q3[key]));
+    return true;
+  }
+  const line = ambient(id);
+  if (!line) return false;
+  void w.cutscene.talk(async (c) => { await c.say(line.speaker, line.text, line); });
   return true;
 }
 
 function nameIt(w: WorldScene): boolean {
   if (S.named) return false;
-  const asked = [...S.talkedTo].filter((id) => id !== 'sera' && AFTERMATH[id]).length;
-  if (asked < 2) {
+  if (S.heard.size < 2) {
     void w.cutscene.talk(async (c) => {
       await c.say('sera', 'Not yet. Go and ask them what they heard.');
-      await c.say('sera', 'Two or three. Their answers will not match.');
+      await c.say('sera', 'Two or three of them. Their answers will not match.');
     });
     return true;
   }
   S.named = true;
 
   void w.cutscene.run(async (c) => {
-    const conformed = State.has('q3_conformed');
-    await c.say('sera', 'Round three.');
-    if (conformed) {
-      await c.say('player', 'I said what they said.');
-      await c.say('sera', 'I know. I was watching your face.');
-      await c.say('sera', 'Did you believe it?');
-      await c.say('player', 'No.');
-    } else {
-      await c.say('player', 'I said the first one.');
-      await c.say('sera', 'On your own, with seven people looking at you.');
-      await c.say('player', 'It was harder than it should have been.');
-    }
-    await c.say('sera', 'Nobody argued with you. Nobody had to.');
-    await c.say('sera', 'It was the agreeing that did it.');
-    await c.say('sera', 'Then Nia said one word in round four.');
-    await c.say('sera', 'She was wrong, by the way.');
-    await c.say('sera', 'It made no difference. Three people spoke up anyway.');
-    await c.say('sera', 'People adjust what they say — and what they think they heard —');
-    await c.say('sera', 'to match a group. Most of all when the group agrees completely.');
+    await runExchange(w, c, TALK.q3.naming);
 
-    await c.insight('conformity');
-
-    State.setAll(['q3_complete', 'insight_conformity', 'south_gate_open']);
-    State.grant('dissent');
+    State.setAll(['q3_complete', FLAGS.q3Done, 'insight_conformity', FLAGS.southGateOpen]);
     State.addInsightExample(
       'conformity',
-      'Round three: seven people named the third lantern. It was the first.',
+      'Round one, on your own slate, you heard the third lantern. So did almost everybody.',
     );
     State.addInsightExample(
       'conformity',
       State.has('q3_conformed')
-        ? 'You were asked last, and you said the third one too.'
-        : 'You were asked last, and you said the first one anyway.',
+        ? 'Round three: six people said second, you were asked last, and you said second too.'
+        : 'Round three: six people said second, you were asked last, and you said third anyway.',
     );
     State.addInsightExample(
       'conformity',
-      'Round four: Nia broke the agreement and three others changed their answers.',
+      'Round four: Nia said first — also wrong — and three people immediately said third.',
     );
+    State.addNote('nia', 'Broke a unanimous plaza by being wrong out loud.');
+    State.addNote('tavi', 'Never once checked. Six people followed him anyway.');
+
+    // DISSENT is granted by the `ability_grant` cue inside the exchange.
+    await runExchange(w, c, TALK.q3.dissent);
+
     State.advanceQuest('q3_lanterns', 'after');
     State.completeQuest('q3_lanterns');
-    State.addNote('nia', 'Broke a unanimous group by being wrong out loud.');
-    State.addNote('tavi', 'Never once checked. Everyone followed him anyway.');
-
-    await c.say('sera', 'Break the agreement and the group stops holding.');
-    await c.say('sera', 'That is worth knowing where we are going.');
-    await c.say('sera', 'The south road is clear. Whenever you are ready.');
   });
   return true;
 }
@@ -570,15 +683,13 @@ registerArea('festival', {
     // Evening life: fireflies over the crowd and drifting gold in the air.
     w.fx.setAmbient('town_evening');
     S.rig = new LanternRig(w);
-    State.setAll(['festival_started', 'q3_started']);
+    State.setAll(['festival_started', 'q3_started', FLAGS.festivalOpen]);
     State.startQuest('q3_lanterns');
     for (const id of ['tavi', 'nia', 'elia']) State.meet(id);
 
     if (State.has('q3_complete')) { S.started = true; S.finished = true; S.named = true; }
+    else if (State.has('q3_trial_done')) { S.started = true; S.finished = true; }
 
-    // Before the ceremony, the lanterns are yours to play with. Learning the
-    // task while nobody is watching is the point of round one, and this is
-    // where it actually starts.
     // The lanterns are mounted up on the stage posts, so the thing the player
     // walks up to is the deck edge below each one. Three anchors, 24px apart,
     // means standing in front of a post and pressing the button rings that
@@ -604,13 +715,14 @@ registerArea('festival', {
         radius: 6,
         label: 'Strike', observable: true,
         forbids: 'q3_trial_done',
-        onInteract: () => { if (!S.started) S.rig?.strikeReference(w, S.correct); },
+        onInteract: () => { if (!S.started) S.rig?.strikeReference(w); },
       });
     }
 
-    // The prompt doubles as the instrument: the cursor sounds the lantern.
-    on2('trial:preview', (p: { answer: L }) => S.rig?.strike(w, p.answer));
-    on2('trial:replay', () => S.rig?.strikeReference(w, S.correct));
+    // The prompt doubles as the instrument: the cursor sounds the lantern, and
+    // the player may compare for as long as they like.
+    sub('trial:preview', (p: { answer: L }) => S.rig?.strike(w, p.answer));
+    sub('trial:replay', () => S.rig?.strikeReference(w));
 
     installHarness(w);
   },
@@ -620,10 +732,7 @@ registerArea('festival', {
       State.set('q3_intro_done');
       void w.cutscene.run(async (c) => {
         c.banner('The Festival of Lanterns');
-        await c.say('elia', 'There you are. We were about to start without you.');
-        await c.say('elia', 'The Lantern Trial. Old game, one rule.');
-        await c.say('elia', 'A lantern is struck. You say which of the three matched it.');
-        await c.say('elia', 'Go and listen to them. Then stand with the others.');
+        await runExchange(w, c, TALK.q3.festivalOpen);
       });
       return true;
     }
@@ -638,21 +747,17 @@ registerArea('festival', {
   onInteract(w, id) {
     if (!id.startsWith('npc:')) return false;
     const who = id.slice(4);
-    if (who === 'elia' && !S.started && !S.finished) { startTrial(w); return true; }
-    if (who === 'sera' && S.finished) return nameIt(w);
     if (who === 'sera') {
+      if (S.finished) return nameIt(w);
       void w.cutscene.talk(async (c) => {
         await c.say('sera', 'Go and play. I want to watch this one.');
       });
       return true;
     }
     if (S.finished) return afterLine(w, who);
-    if (AFTERMATH[who]) {
-      void w.cutscene.talk(async (c) => {
-        await c.say(who, who === 'tavi' ? "Stand where you can hear. You'll want to." : 'It starts in a moment.');
-      });
-      return true;
-    }
+    if (who === 'elia' && !S.started) { startTrial(w); return true; }
+    // Before the ceremony everyone is just at a festival, and the town's own
+    // ambient dialogue already covers that. Nothing is intercepted here.
     return false;
   },
 
@@ -664,14 +769,6 @@ registerArea('festival', {
   },
 });
 
-/** `on` that returns its unsubscribe, kept local so onExit can tear down cleanly. */
-const cleanup: Array<() => void> = [];
-function on2(event: string, fn: (p: never) => void): () => void {
-  const off = busOn(event, fn as (p: unknown) => void);
-  cleanup.push(off);
-  return off;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // QA harness
 // ─────────────────────────────────────────────────────────────────────────────
@@ -682,13 +779,15 @@ export interface TrialSnapshot {
   round: number;
   /** Non-zero while the game is waiting for the player's answer in that round. */
   awaitingRound: number;
-  correct: L;
+  truth: L;
+  group: L;
   answers: Record<string, L>;
   unanimous: boolean;
   history: RoundRecord[];
   participants: string[];
   conformed: boolean;
   named: boolean;
+  heard: string[];
 }
 
 function installHarness(w: WorldScene): void {
@@ -699,7 +798,7 @@ function installHarness(w: WorldScene): void {
     answer(a: L) { emit('trial:answer', { answer: a }); },
     /** Strike a lantern, exactly as the prompt cursor does. */
     strike(a: L) { S.rig?.strike(w, a); },
-    /** Run an NPC's post-trial line, exactly as walking up and talking does. */
+    /** Run an NPC's post-trial conversation, as walking up and talking does. */
     talkTo(id: string) {
       if (id === 'sera') return nameIt(w);
       return afterLine(w, id);
@@ -711,13 +810,15 @@ function installHarness(w: WorldScene): void {
         finished: S.finished,
         round: S.round,
         awaitingRound: S.awaiting,
-        correct: S.correct,
+        truth: TRUTH,
+        group: GROUP,
         answers: { ...S.answers },
         unanimous: vals.length > 1 && vals.every((v) => v === vals[0]),
         history: S.history.map((h) => ({ ...h, answers: { ...h.answers }, shifted: [...h.shifted] })),
         participants: [...PARTICIPANTS],
         conformed: State.has('q3_conformed'),
         named: S.named,
+        heard: [...S.heard],
       };
     },
   };

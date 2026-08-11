@@ -44,7 +44,13 @@ export const SHRINE_LEGEND: Record<string, Material> = {
   '=': { base: 'tile/shrine/floor_grate' },
   '*': { base: 'tile/shrine/floor', blob: 'shrine_moss' },
   '~': { base: 'tile/shrine/floor_water', blob: 'shrine_water', solid: true },
+  /** Shallow water you can wade through — joins '~' seamlessly, same blob set. */
+  'w': { base: 'tile/shrine/floor_water', blob: 'shrine_water' },
   'o': { base: 'tile/shrine/floor', blob: 'shrine_pit', pit: true },
+  /** A dead rune plate set into the floor. */
+  'g': { base: 'tile/shrine/rune_floor_dim' },
+  /** A flight of steps. */
+  'x': { base: 'tile/shrine/step_n' },
   // Doorway floor. Same tile as '.', but a distinct char so a doorway is
   // obvious when you read the map source.
   '_': { base: 'tile/shrine/floor' },
@@ -115,6 +121,42 @@ export function doorwayN(x: number, f: Rect = ROOM_FLOOR): { x: number; y: numbe
 export function doorwayS(x: number, f: Rect = ROOM_FLOOR): { x: number; y: number; w: number; h: number } {
   return { x, y: f.y + f.h, w: 2, h: 1 };
 }
+
+// ── thresholds ──────────────────────────────────────────────────────────────
+// A doorway is cut TWO rows deep rather than one. That extra row is doing real
+// work: it gives the wall visible thickness from inside the room (you can see
+// the jamb you are standing between), it puts the transition zone off the room
+// floor so a player pacing along the south wall never triggers it by accident,
+// and it leaves one row of cap outside so the screen still has a solid frame.
+//
+//        row 0    # # # # # #      cap — the frame
+//        row 1    # # _ _ # #      threshold, door zone lives here
+//        row 2    N N _ _ N N      the wall face, where the door sprite stands
+//        row 3    . . . . . .      floor
+
+/** Cut a north doorway through the wall face and the row beyond it. */
+export function doorNorth(g: GridPainter, x: number, f: Rect = ROOM_FLOOR, w = 2): void {
+  for (let i = 0; i < w; i++) {
+    g.set(x + i, f.y - 1, '_');
+    g.set(x + i, f.y - 2, '_');
+  }
+}
+
+/** Cut a south doorway through the wall face and the row beyond it. */
+export function doorSouth(g: GridPainter, x: number, f: Rect = ROOM_FLOOR, w = 2): void {
+  for (let i = 0; i < w; i++) {
+    g.set(x + i, f.y + f.h, '_');
+    g.set(x + i, f.y + f.h + 1, '_');
+  }
+}
+
+/** Row a north door zone sits on. */
+export function northZoneY(f: Rect = ROOM_FLOOR): number { return f.y - 2; }
+/** Row a south door zone sits on. */
+export function southZoneY(f: Rect = ROOM_FLOOR): number { return f.y + f.h + 1; }
+/** Wall-face row a north / south door sprite stands in. */
+export function northWallY(f: Rect = ROOM_FLOOR): number { return f.y - 1; }
+export function southWallY(f: Rect = ROOM_FLOOR): number { return f.y + f.h; }
 
 // ── lights ──────────────────────────────────────────────────────────────────
 // Every light in the shrine comes from an object the player can see. Nothing

@@ -16,59 +16,34 @@
  * entrance and re-arms itself on `room:reset`, so going down costs you one
  * fight, never the walk back through the woods.
  *
- * TODO(dialogue): the strings in this file are placeholder copy written to the
- * §53 voice brief — one short line, no lectures, and Mote never speaks. When
- * `src/data/dialogue/` grows content files these move there wholesale, which is
- * why they are collected in tables at the top rather than inlined.
+ * DIALOGUE. Every word the woods says is authored data in `src/data/dialogue`
+ * (`TALK.woods`, the `carving.*` observatory logs, `sign.woods`). Props declare
+ * an exchange id as their `interact` value and this file only decides *when*.
+ * The two exceptions are the boulder and the chest, whose lines are reactions
+ * to a physical change the player just made rather than descriptions of a
+ * thing — those are marked TODO(dialogue) for the writer to absorb.
  */
 import { State } from '@/core/state';
 import { emit, on } from '@/core/events';
 import { DEPTH, TILE } from '@/core/config';
 import { hasFrame } from '@/core/textures';
 import { Audio } from '@/audio/Audio';
+import { TALK, describe, playExchange, runBeats } from '@/data/dialogue';
 import { registerArea, hasMap } from '../registry';
 import { ENCOUNTERS, WOODS } from '../maps/woods';
 import type { WorldScene } from '@/scenes/WorldScene';
 import type Phaser from 'phaser';
 
-// ── copy ───────────────────────────────────────────────────────────────────
-
-/** One-line look-at flavour for props carrying an `interact` id. */
-const LOOKS: Record<string, string> = {
-  woods_campsite: 'A cold campfire, ringed with stones. Someone waited here a long time.',
-};
-
-/** Multi-beat reads. Kept to two or three short lines each. */
-const READS: Record<string, string[]> = {
-  woods_signpost: [
-    'SOUTH: THE OLD SHRINE ROAD.',
-    'Under it, in a different hand: NOBODY MAINTAINS IT.',
-  ],
-  woods_first_stone: [
-    'A standing stone, older than the road beside it.',
-    'The lichen has grown around a mark it did not make.',
-  ],
-  woods_carving: [
-    'Someone cut a spiral into this stone, then cut it again, deeper.',
-    'Below it, four notches. Then a fifth, scratched out.',
-    'The shrine is meant to be *entered*, the carving says. Not opened.',
-  ],
-  woods_toadstools: [
-    'A perfect ring of toadstools, and nothing inside it but flattened grass.',
-    'Something small sleeps here. Not tonight, apparently.',
-  ],
-  woods_boulder_hint: [
-    'The stream runs shallow here — one stride, if there were anything to stride onto.',
-    'The boulder on the bank has been rocking in its socket for years.',
-  ],
-};
-
+// TODO(dialogue): reactions to player-caused change; no authored home yet.
 const TOASTS = {
-  chest: 'Found: a lantern-charm. It catches the light oddly.',
-  chestAlready: 'Empty. You took the good bit.',
   ford: 'The boulder settles into the streambed.',
   bushes: 'The bushes were hiding a cut in the rock.',
 };
+
+const BOULDER_HINT = [
+  'The stream runs shallow here — one stride, if there were anything to stride onto.',
+  'The boulder on the bank has been rocking in its socket for years.',
+];
 
 // ── encounter bookkeeping ──────────────────────────────────────────────────
 
@@ -96,6 +71,14 @@ function say(w: WorldScene, lines: string[], speaker = 'narrator'): boolean {
   w.cutscene.talk(async (c) => {
     for (const line of lines) await c.say(speaker, line);
   });
+  return true;
+}
+
+/** Play an authored exchange by id. Returns false if there is no such id. */
+function look(w: WorldScene, id: string): boolean {
+  const beats = describe(id);
+  if (!beats || !beats.length) return false;
+  w.cutscene.talk((c) => runBeats(c, beats));
   return true;
 }
 
@@ -149,7 +132,7 @@ registerArea('woods', {
       label: 'Look',
       observable: true,
       forbids: 'woods_ford_open',
-      onInteract: () => { say(w, READS.woods_boulder_hint); },
+      onInteract: () => { say(w, BOULDER_HINT); },
     });
 
     // ── the chest ───────────────────────────────────────────────────────────
@@ -197,9 +180,8 @@ registerArea('woods', {
   onInteract(w, id) {
     if (id === 'woods_chest') return openChest(w);
     if (id === 'woods_boulder') return shoveBoulder(w);
-    if (READS[id]) return say(w, READS[id]);
-    if (LOOKS[id]) return say(w, [LOOKS[id]]);
-    return false;
+    // Everything else is an authored exchange id declared on the prop itself.
+    return look(w, id);
   },
 
   onTrigger(w, id) {
@@ -213,6 +195,7 @@ registerArea('woods', {
     }
 
     if (id === 'woods_arrive') return arrival(w);
+    if (id === 'woods_narrows') return narrowsBeat(w);
     if (id === 'woods_dell') return dellBeat(w);
     if (id === 'to_shrine') return toShrine(w);
     return false;
@@ -222,20 +205,28 @@ registerArea('woods', {
 // ── beats ──────────────────────────────────────────────────────────────────
 
 /**
- * Arrival. Two lines and a gesture: the woods are a break from learning
- * (plan.md §36), so the zone opens by pointing at something and shutting up.
+ * Arrival. The authored `woods.enter` lines, then a gesture: the woods are a
+ * break from learning (plan.md §36), so the zone opens by pointing at the first
+ * Echo-touched thing and then shutting up.
  */
 function arrival(w: WorldScene): boolean {
   const [sx, sy] = [26, 10];
   w.cutscene.run(async (c) => {
     c.banner('Whisper Woods', 'the road south');
+    await c.wait(400);
+    await playExchange(c, TALK.woods.enter);
+    // Mote never speaks. It goes the colour of the thing it does not like.
+    w.mote?.pointAt(sx * TILE + 8, sy * TILE, 2400);
+    w.mote?.react('curious', 2400);
     await c.wait(500);
-    w.mote?.pointAt(sx * TILE + 8, sy * TILE, 2200);
-    w.mote?.react('curious', 2200);
-    await c.wait(700);
-    await c.say('narrator', 'Mote drifts off the path and hangs over the stone.');
-    await c.say('narrator', 'Its light has gone the same colour as the mark cut into it.');
+    await playExchange(c, TALK.woods.moteQuiet);
   });
+  return true;
+}
+
+/** Under the heaviest canopy, where the zone stops feeling like a road. */
+function narrowsBeat(w: WorldScene): boolean {
+  w.cutscene.talk((c) => playExchange(c, TALK.woods.deeper));
   return true;
 }
 
@@ -253,7 +244,7 @@ function toShrine(w: WorldScene): boolean {
     w.lighting.setDarkness(0.52, 900);
     w.mote?.react('alert', 2000);
     await c.wait(400);
-    await c.say('narrator', 'The trees stop. The ground under your boots is cut stone.');
+    await playExchange(c, TALK.woods.bridge);
     if (State.quests.q4_shrine?.active) State.advanceQuest('q4_shrine', 'shrine');
     await c.wait(200);
     if (hasMap('shrine_entrance')) {
@@ -339,7 +330,8 @@ function placeFordBoulder(w: WorldScene, sprite?: Phaser.GameObjects.Sprite): vo
 
 function openChest(w: WorldScene): boolean {
   if (State.has('woods_chest')) {
-    say(w, [TOASTS.chestAlready]);
+    // TODO(dialogue): no authored line for a chest you already emptied.
+    say(w, ['Empty. You took the good bit.']);
     return true;
   }
   State.set('woods_chest');
@@ -353,9 +345,8 @@ function openChest(w: WorldScene): boolean {
       w.lighting.addPixel(chest.sprite.x, chest.sprite.y - 10, 40, 0xf2ca5e, 0.5);
     }
     Audio.sfx('chest', { volume: 0.6 });
-    c.toast(TOASTS.chest);
-    await c.wait(400);
-    await c.say('narrator', 'A charm on a cord, cut from something that was never wood.');
+    await c.wait(200);
+    await playExchange(c, TALK.woods.chest);
   });
   return true;
 }

@@ -27,61 +27,63 @@
  * `src/data/dialogue/` when that folder grows content files.
  */
 import { State } from '@/core/state';
-import { CONCEPTS } from '@/data/concepts';
+import { FLAGS, describe, playById, runBeats } from '@/data/dialogue';
 import { registerArea } from '../registry';
 import type { WorldScene } from '@/scenes/WorldScene';
 
 // ── the shelf ──────────────────────────────────────────────────────────────
 
-interface ShelfEntry {
-  /** Concept id in CONCEPTS; also the gate. */
-  concept: string;
+interface ShelfTopic {
   /** Spine text shown in the choice list. */
   spine: string;
-  /** Two or three short lines. An aside, not a lecture. */
-  lines: string[];
+  /** Authored exchange ids in `src/data/dialogue/optional.ts`, in order. */
+  entries: string[];
+  /** Which quest has to be behind the player. */
+  gate: () => boolean;
 }
 
 /**
- * One entry per concept, unlocked by having lived it. The lines deliberately
- * do NOT restate the definition — the player already has that on their Insight
- * Card. These are the things a researcher would say over her shoulder.
+ * The shelf is a rotating stack, not a menu of articles: each visit to a topic
+ * turns up the *next* note in it, so coming back is worth something and no
+ * single read is long. The asides themselves are authored in
+ * `src/data/dialogue/optional.ts` under `shelf.*` — their `requires` notes are
+ * documentation, so the gate is enforced here.
  */
-const SHELF: ShelfEntry[] = [
+const SHELF: ShelfTopic[] = [
   {
-    concept: 'conditioning',
-    spine: 'ON LEARNED ALARM  (annotated, badly)',
-    lines: [
-      'A margin note, in Sera\'s hand: "the bell never became frightening."',
-      CONCEPTS.conditioning.misconception.replace(/^People often think /, 'Everyone assumes '),
-      `Underlined twice: "${CONCEPTS.conditioning.realWorld[0]}"`,
-    ],
+    spine: 'ON LEARNED ALARM',
+    entries: ['shelf.conditioning1', 'shelf.conditioning2', 'shelf.conditioning3'],
+    gate: () => done(FLAGS.q1Done, 'q1_pip', 'conditioning'),
   },
   {
-    concept: 'interference',
     spine: 'FIELD NOTES ON FORGETTING',
-    lines: [
-      'Sera has crossed out the title and written: NOT forgetting.',
-      CONCEPTS.interference.misconception,
-      `In the margin: "${CONCEPTS.interference.realWorld[1]}" — with a date, and a name scribbled out.`,
-    ],
+    entries: ['shelf.interference1', 'shelf.interference2', 'shelf.interference3'],
+    gate: () => done(FLAGS.q2Done, 'q2_oren', 'interference'),
   },
   {
-    concept: 'conformity',
-    spine: 'A TREATISE ON PUBLIC AGREEMENT',
-    lines: [
-      'Thin, and much-handled. Someone has folded down one page.',
-      CONCEPTS.conformity.misconception,
-      'At the bottom, pressed hard enough to dent the paper: "one voice is enough."',
-    ],
+    spine: 'ON PUBLIC AGREEMENT',
+    entries: ['shelf.conformity1', 'shelf.conformity2', 'shelf.conformity3'],
+    gate: () => done(FLAGS.q3Done, 'q3_lanterns', 'conformity'),
+  },
+  {
+    spine: 'A NEWER PAGE, PINNED CROOKED',
+    entries: ['shelf.echo'],
+    gate: () => State.has(FLAGS.shrineDone) || State.has(FLAGS.bossBeaten),
   },
 ];
 
-function unlocked(e: ShelfEntry): boolean {
-  return State.insightUnlocked(e.concept) || State.has(`insight_${e.concept}`);
+/** A concept counts as lived if its quest, its flag or its insight says so. */
+function done(flag: string, questId: string, concept: string): boolean {
+  return State.has(flag)
+    || State.has(`${questId.slice(0, 2)}_complete`)
+    || !!State.quests[questId]?.complete
+    || State.insightUnlocked(concept)
+    || State.has(`insight_${concept}`);
 }
 
 // ── copy ───────────────────────────────────────────────────────────────────
+// TODO(dialogue): workshop props have no authored `prop.*` entries yet. Written
+// to the §53 brief and ready to move into `src/data/dialogue/environment.ts`.
 
 const LOOKS: Record<string, string> = {
   chalkboard: 'Three diagrams. Two are crossed out. The third has a question mark and a date.',
@@ -110,6 +112,14 @@ function say(w: WorldScene, lines: string[], speaker = 'narrator'): boolean {
   return true;
 }
 
+/** Play an authored exchange by id. Returns false if there is no such id. */
+function look(w: WorldScene, id: string): boolean {
+  const beats = describe(id);
+  if (!beats || !beats.length) return false;
+  w.cutscene.talk((c) => runBeats(c, beats));
+  return true;
+}
+
 /** Is the third quest behind us? */
 function q3Done(): boolean {
   return State.has('q3_complete') || State.has('q3_done') || !!State.quests.q3_lanterns?.complete;
@@ -120,9 +130,12 @@ function q3Done(): boolean {
 registerArea('workshop', {
   onEnter(w) {
     // Sera keeps her own hours. She is here unless the story has her elsewhere:
-    // during the festival she is at the plaza, and once the gate is open she
-    // has gone ahead to the south road.
-    const elsewhere = (State.has('festival_started') && !q3Done()) || State.has('entered_woods');
+    // at the plaza while the Trial is running, and ahead of you on the south
+    // road once you have gone into the woods — but back at her desk afterwards,
+    // because a character who disappears permanently stops being a character.
+    const onTheRoad = State.has('entered_woods')
+      && !(State.has('shrine_done') || State.has('boss_beaten'));
+    const elsewhere = (State.has('festival_started') && !q3Done()) || onTheRoad;
     if (!elsewhere && !w.npc('sera')) {
       w.spawnNpc({
         id: 'sera',
@@ -163,24 +176,27 @@ registerArea('workshop', {
 // ── the bookshelf ──────────────────────────────────────────────────────────
 
 function readShelf(w: WorldScene): boolean {
-  const available = SHELF.filter(unlocked);
+  const available = SHELF.filter((t) => t.gate());
 
-  if (!available.length) {
-    say(w, [
-      'Books, three deep, in no order anyone could defend.',
-      'Most of it is about things you have not seen yet.',
-    ]);
-    return true;
-  }
+  // Before the first quest there is nothing on the shelf the player has earned
+  // the right to find interesting, so it stays shut rather than lecturing.
+  if (!available.length) return look(w, 'shelf.general') || say(w, ['Notes, five hands, no order.']);
 
   w.cutscene.talk(async (c) => {
-    await c.say('narrator', 'One shelf is at eye height and the spines on it are worn.');
-    const options = available.map((e) => ({ text: e.spine }));
+    if (!State.has('read_shelf')) {
+      State.set('read_shelf');
+      await runBeats(c, playById('shelf.intro'));
+    }
+    const options = available.map((t) => ({ text: t.spine }));
     options.push({ text: 'Leave it.' });
     const pick = await c.choose('Read something?', options);
-    const entry = available[pick];
-    if (!entry) return;
-    for (const line of entry.lines) await c.say('narrator', line);
+    const topic = available[pick];
+    if (!topic) return;
+    // Rotate: each visit to a topic turns up the next note in that stack.
+    const key = `shelf_${pick}_${topic.entries.length}`;
+    const n = State.count(key);
+    State.bump(key);
+    await runBeats(c, playById(topic.entries[n % topic.entries.length]));
   });
   return true;
 }

@@ -9,10 +9,12 @@
  *   1. walking into the office starts the quest
  *   2. every clue is discoverable from a prop or a person
  *   3. the pin board opens with exactly the clues that were found
- *   4. a memory-only arrangement is REFUSED, with the conflict visible
- *   5. a contextual card in the wrong row does not anchor either
- *   6. the arrangement the room supports anchors all six slots
- *   7. the keyboard alone can lift and place a card
+ *   4. placing a card decides nothing — no slot resolves until the player
+ *      commits the whole board, and the screen never shows a score
+ *   5. a memory-only arrangement is REFUSED, with the conflict visible
+ *   6. a refused commit argues instead of ruling: it never names the wrong card
+ *   7. the arrangement the room supports anchors all six slots at once
+ *   8. the keyboard alone can lift, place and commit
  *   8. the reveal runs, `q2_complete` / `insight_interference` are set and
  *      RECALL is granted
  */
@@ -170,49 +172,83 @@ async function main(): Promise<void> {
       'six things and four recollections',
     );
 
-    // ── 4. a memory-only arrangement is refused, and shows why ────────────
+    // ── 4. placing decides nothing ────────────────────────────────────────
+    for (const [card, day, slot] of SOLUTION.slice(0, 5)) {
+      await page.evaluate(([c, d, i]) => (window as any).__threads.place(c, d, i), [card, day, slot] as const);
+      await page.waitForTimeout(80);
+    }
+    t = await threads(page);
+    check(
+      t.anchored.length === 0,
+      'five correct cards down and nothing has resolved — a placement is a claim',
+      t.anchored,
+    );
+    await page.evaluate(() => (window as any).__threads.commit());
+    await page.waitForTimeout(250);
+    t = await threads(page);
+    check(t.anchored.length === 0 && !t.solved, 'committing an unfinished board resolves nothing');
+    check(/still empty/i.test(t.answer), 'an unfinished board is told it is unfinished, not scored', t.answer);
+
+    // ── 5. a memory-only arrangement is refused, and shows why ────────────
     await page.evaluate((mem) => {
       const th = (window as any).__threads;
+      for (const day of ['yesterday', 'today']) for (let i = 0; i < 3; i++) th.clear(day, i);
       th.place(mem[3], 'yesterday', 0);
       th.place(mem[0], 'today', 1);
       th.place(mem[1], 'yesterday', 2);
       th.place(mem[2], 'today', 2);
     }, MEMORY_CLUES);
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
     t = await threads(page);
     check(t.anchored.length === 0, 'nothing anchors on recollection alone', t.anchored);
     check(!t.solved, 'the board does not resolve');
     check(t.conflicts.length > 0, 'the board shows a conflict rather than a verdict', t.conflicts);
     const memVsMem = t.conflicts.some((c: any) => MEMORY_CLUES.includes(c.a) && MEMORY_CLUES.includes(c.b));
     check(memVsMem, 'two conflicting memories are pushed against each other', t.conflicts);
+    // Even the memory that happens to be in the right slot does not hold.
+    check(t.placed['1:2'] === 'm_wren' && t.anchored.length === 0, 'a correct guess still does not anchor', t.placed);
     mkdirSync(OUT, { recursive: true });
     await page.screenshot({ path: join(OUT, 'q2_playtest_conflict.png') });
 
-    // Even the memory that happens to be in the right slot does not hold.
-    const rightButUnproven = t.placed['1:2'] === 'm_wren';
-    check(rightButUnproven && t.anchored.length === 0, "a correct guess still does not anchor", t.placed);
-
-    // ── 5. a contextual card in the wrong row does not anchor ─────────────
+    // ── 6. a refused commit argues; it never names the wrong card ─────────
     await page.evaluate(() => {
       const th = (window as any).__threads;
-      th.clear('today', 1);
-      th.place('c_cord', 'today', 1); // the corded box is the eleventh's
+      for (const day of ['yesterday', 'today']) for (let i = 0; i < 3; i++) th.clear(day, i);
+      // All six are things, but the two blue boxes are the wrong way round.
+      th.place('c_slip_wet', 'yesterday', 0);
+      th.place('c_tape', 'yesterday', 1);
+      th.place('c_clean', 'yesterday', 2);
+      th.place('c_slip_dry', 'today', 0);
+      th.place('c_cord', 'today', 1);
+      th.place('c_paint', 'today', 2);
     });
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(250);
     t = await threads(page);
-    check(t.anchored.length === 0, 'evidence in the wrong row does not anchor either', t.anchored);
+    check(t.anchored.length === 0, 'a full board resolves nothing until it is committed', t.anchored);
+    const answers: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => (window as any).__threads.commit());
+      await page.waitForTimeout(250);
+      answers.push((await threads(page)).answer);
+    }
+    check(!(await threads(page)).solved, 'the wrong arrangement is refused');
+    check(
+      answers.every((a) => a && !/that is not|wrong|incorrect|try again/i.test(a)),
+      'the refusal states facts rather than ruling on cards',
+      answers,
+    );
+    check(new Set(answers).size > 1, 'repeated commits walk through the evidence', answers);
+    await page.screenshot({ path: join(OUT, 'q2_playtest_refused.png') });
 
-    // ── 6 + 7. the supported arrangement, the last card by keyboard ───────
+    // ── 7 + 8. the supported arrangement, last card + commit by keyboard ──
     await page.evaluate(() => {
       const th = (window as any).__threads;
       for (const day of ['yesterday', 'today']) for (let i = 0; i < 3; i++) th.clear(day, i);
     });
     for (const [card, day, slot] of SOLUTION.slice(0, 5)) {
       await page.evaluate(([c, d, i]) => (window as any).__threads.place(c, d, i), [card, day, slot] as const);
-      await page.waitForTimeout(120);
+      await page.waitForTimeout(90);
     }
-    t = await threads(page);
-    check(t.anchored.length === 5, 'five slots anchor as their evidence arrives', t.anchored.length);
 
     // The last card goes in with the keyboard only: move the cursor onto
     // c_paint in the tray, lift it, walk it to THE TWELFTH / afternoon, drop it.
@@ -243,10 +279,14 @@ async function main(): Promise<void> {
     cursorOk = (await threads(page)).cursor;
     check(cursorOk.row === 1 && cursorOk.col === 2, 'the held card can be walked to a slot', cursorOk);
     await page.keyboard.press('Space');
-    await page.waitForTimeout(400);
-
+    await page.waitForTimeout(250);
     t = await threads(page);
-    check(t.anchored.length === 6, 'all six slots anchor', t.anchored.length);
+    check(t.anchored.length === 0, 'the sixth card lands without resolving anything');
+
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(400);
+    t = await threads(page);
+    check(t.anchored.length === 6, 'ENTER resolves all six slots at once', t.anchored.length);
     check(t.solved, 'the board resolves');
     await page.screenshot({ path: join(OUT, 'q2_playtest_solved.png') });
 

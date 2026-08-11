@@ -65,7 +65,36 @@ window.__bossDriver = (() => {
     await wait(320);
   }
 
-  return { wait, until, goTo, strikeFrom, player };
+  /**
+   * Advance dialogue.
+   *
+   * DialogueBox listens to raw DOM keydown, not to InputManager, and
+   * InputManager is disabled during a cutscene anyway — so __psyche.press()
+   * alone will never move a scene on. Dispatch a real key event as well.
+   */
+  function advance() {
+    for (const type of ['keydown', 'keyup']) {
+      const ev = new KeyboardEvent(type, { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
+      window.dispatchEvent(ev);
+      document.dispatchEvent(ev);
+    }
+    try { P().press('interact'); } catch (e) { /* not in a world scene */ }
+  }
+
+  /** Hammer the advance key until a condition holds (or we give up). */
+  async function advanceUntil(pred, timeout) {
+    const t0 = performance.now();
+    while (performance.now() - t0 < (timeout || 60000)) {
+      let done = false;
+      try { done = !!pred(); } catch (e) { done = false; }
+      if (done) return true;
+      advance();
+      await wait(260);
+    }
+    return false;
+  }
+
+  return { wait, until, goTo, strikeFrom, player, advance, advanceUntil };
 })();
 `;
 
@@ -202,21 +231,41 @@ const SHOTS: Shot[] = [
     `,
   },
   {
-    name: 'ending_vista',
-    note: 'The valley, with more lights in it than there should be',
+    name: 'ending_sera',
+    note: 'Sera comes down the last stair, lantern first',
     drive: `
       const d = window.__bossDriver;
       window.__boss.phase(3);
       await d.wait(300);
       window.__boss.defeat();
-      // Advance the dialogue to the vista.
-      for (let i = 0; i < 60; i++) {
-        window.__psyche.press('interact');
-        await d.wait(320);
-        if (document.body.dataset.done) break;
-      }
+      await d.advanceUntil(() => window.__psyche.state().npcs.includes('sera'), 40000);
+      await d.wait(700);
     `,
-    settle: 200,
+  },
+  {
+    name: 'ending_vista',
+    note: 'The valley, with more lights in it than there should be (plan.md §48)',
+    drive: `
+      const d = window.__bossDriver;
+      window.__boss.phase(3);
+      await d.wait(300);
+      window.__boss.defeat();
+      // Stop advancing once the vista overlay is up, then let the lights arrive.
+      await d.advanceUntil(() => window.__psycheVista === true, 60000);
+      await d.wait(5200);
+    `,
+  },
+  {
+    name: 'ending_title',
+    note: 'PROJECT PSYCHE / End of Prototype — the last frame of the slice',
+    drive: `
+      const d = window.__bossDriver;
+      window.__boss.phase(3);
+      await d.wait(300);
+      window.__boss.defeat();
+      await d.advanceUntil(() => window.__psyche.flags()['game_complete'], 90000);
+      await d.wait(300);
+    `,
   },
 ];
 

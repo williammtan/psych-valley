@@ -72,9 +72,24 @@ const BELL_RANGE = 78;
 /** A scare inside this window after a ring re-pairs the two. */
 const PAIR_WINDOW = 2200;
 const RING_COOLDOWN = 2700;
-/** The tower's clock, and how long before a toll you can hear it coming. */
+/**
+ * The two clocks.
+ *
+ * One hazard the player can simply decline to trigger is not a skill, it is an
+ * abstention — you can beat it by keeping your hands in your pockets. So the
+ * room supplies noise on its own: the tower every fifteen seconds, and Mira's
+ * kettle every eleven and a half. They are coprime enough to drift, so the gap
+ * between them is never in the same place twice and the player has to read both
+ * warnings rather than memorise a rhythm.
+ *
+ * Both are telegraphed, and both draw their warning on the player as well as at
+ * the source, because the tower window is not on screen from the kitchen and a
+ * hazard you cannot see coming is just a dice roll.
+ */
 const TOWER_PERIOD = 15000;
 const TOWER_TELEGRAPH = 3300;
+const KETTLE_PERIOD = 11500;
+const KETTLE_TELEGRAPH = 2600;
 /** Four safe rings, as Sera counts them in q1.naming. */
 const RINGS_TO_CALM = 4;
 const FEAR_PER_RING = 100 / RINGS_TO_CALM;
@@ -83,6 +98,7 @@ const FEAR_PER_RING = 100 / RINGS_TO_CALM;
 const ATTACK_RANGE = 120;
 
 const WINDOW_PX: [number, number] = [8.5 * TILE + 8, 2 * TILE + 10];
+const RANGE_PX: [number, number] = [26.6 * TILE + 8, 6 * TILE + 12];
 const CALM_RINGS = 'q1_calm_rings';
 /** TODO(dialogue): promote to FLAGS once quest1_bell.ts owns it. */
 const ASKED_MIRA = 'clue_mira_pipes';
@@ -104,6 +120,8 @@ interface Runtime {
   calmRings: number;
   towerAt: number;
   telegraphed: boolean;
+  kettleAt: number;
+  kettleTelegraphed: boolean;
   spoiledOnce: boolean;
   busy: boolean;
   lastProgressAt: number;
@@ -226,6 +244,8 @@ registerArea('inn', {
       calmRings: rings,
       towerAt: w.time.now + TOWER_PERIOD,
       telegraphed: false,
+      kettleAt: w.time.now + KETTLE_PERIOD,
+      kettleTelegraphed: false,
       spoiledOnce: State.has(FLAGS.bellSpoiled),
       busy: false,
       lastProgressAt: w.time.now,
@@ -255,6 +275,7 @@ registerArea('inn', {
     // If the player already has the bell, put it back in their hand.
     if (hasBell() && !done) giveBell(w, false);
     else if (!done) addBellPickup(w);
+    addBarReach(w);
 
     // The claw marks have no prop — they are a place on the floor, which is the
     // point of them.
@@ -319,11 +340,13 @@ registerArea('inn', {
     // while you are reading dialogue is not a skill test, it is an ambush.
     if (rt.busy || w.cutscene.active) {
       rt.towerAt = Math.max(rt.towerAt, now + 1200);
+      rt.kettleAt = Math.max(rt.kettleAt, now + 1400);
       return;
     }
 
     if (!questDone()) {
       towerClock(w, now);
+      kettleClock(w, now);
       resolvePending(w, now);
       if (hasBell() && w.keys.justPressed('interact') && !w.interactions.target) ringBell(w);
       hints(w, now);
@@ -398,6 +421,14 @@ registerArea('inn', {
 
 // ── setup ───────────────────────────────────────────────────────────────────
 
+/**
+ * Reach across the bar.
+ *
+ * The counter is two tiles of solid, so anything standing on it — the bell,
+ * and Mira herself — sits three tiles from the nearest square a player can
+ * occupy, well outside the default 22px reach. Both get an explicit
+ * interactable with enough radius to be leaned over, which is how bars work.
+ */
 function addBellPickup(w: WorldScene): void {
   const p = w.prop('handbell');
   if (!p) return;
@@ -405,10 +436,24 @@ function addBellPickup(w: WorldScene): void {
     id: 'inn.handbell',
     x: p.sprite.x,
     y: p.sprite.y - 6,
-    radius: 10,
+    radius: 26,
     label: 'Take',
     observable: true,
     requires: FLAGS.q1Started,
+  });
+}
+
+function addBarReach(w: WorldScene): void {
+  const mira = w.npc('mira');
+  if (!mira) return;
+  w.addInteractable({
+    id: 'npc:mira',
+    x: mira.x,
+    y: mira.y - 12,
+    radius: 40,
+    label: 'Talk',
+    observable: true,
+    follow: mira.sprite,
   });
 }
 
@@ -633,7 +678,7 @@ function resolvePending(w: WorldScene, now: number): void {
  * This is the only thing in the quest that takes progress away, and it always
  * has a visible cause the player could have avoided.
  */
-function startle(w: WorldScene, source: 'tower' | 'attack' | 'pots'): void {
+function startle(w: WorldScene, source: 'tower' | 'attack' | 'pots' | 'kettle'): void {
   const rt = R;
   if (!rt || questDone()) return;
   if (State.has(FLAGS.pipCalm)) { rt.pip.noteBell(...WINDOW_PX); return; }
@@ -650,21 +695,33 @@ function startle(w: WorldScene, source: 'tower' | 'attack' | 'pots'): void {
   w.shake(0.005, 280);
   w.mote?.react('alert', 1200);
   rt.lastProgressAt = w.time.now;
-  // A grace period, so a reset never immediately cascades into another one.
-  rt.towerAt = Math.max(rt.towerAt, w.time.now + TOWER_PERIOD);
+  // A grace period on both clocks, so a reset never immediately cascades into
+  // another one. Losing the run once is instructive; losing it twice in four
+  // seconds is just noise.
+  rt.towerAt = Math.max(rt.towerAt, w.time.now + TOWER_PERIOD * 0.7);
+  rt.kettleAt = Math.max(rt.kettleAt, w.time.now + KETTLE_PERIOD * 0.7);
 
+  // The first time only. After that the room has already made the point, and
+  // stopping the player to say it again would be nagging, not teaching.
   if (rt.spoiledOnce) return;
   rt.spoiledOnce = true;
-  void scene(w, source === 'pots' ? TALK.q1.bellSpoiledKettle : SPOILED_BY_TOWER);
+  void scene(w, source === 'kettle' ? TALK.q1.bellSpoiledKettle
+    : source === 'tower' ? SPOILED_BY_TOWER
+    : SPOILED_BY_YOU);
 }
 
-/** TODO(dialogue): move to quest1_bell.ts as q1.bellSpoiledTower. */
+/** TODO(dialogue): move both to quest1_bell.ts, as q1.bellSpoiledTower / ...ByYou. */
 const SPOILED_BY_TOWER: Beat[] = [
   nar('You ring. Two seconds later the tower answers it, and the glasses on the bar answer the tower.'),
   nar('Pip is further back under the settle than when you started.'),
   group({ requires: FLAGS.metSera }, [
-    say('sera', 'Not your fault. Entirely avoidable, though. Listen for the hour and go between.'),
+    say('sera', 'Ah. That will be the hour.'),
   ]),
+];
+
+const SPOILED_BY_YOU: Beat[] = [
+  nar('You ring — and then, half a beat later, make a noise the whole room can hear.'),
+  nar('Pip is further back under the settle than when you started.'),
 ];
 
 function knockPots(w: WorldScene): void {
@@ -684,6 +741,18 @@ function knockPots(w: WorldScene): void {
 
 // ── the tower ───────────────────────────────────────────────────────────────
 
+/**
+ * "You hear it from here."
+ *
+ * A small ring on the player, tinted to match whatever made the noise. The
+ * tower window is in the common room and the kettle is in the kitchen, so from
+ * any one position at least one of the two hazards is off screen. Without this
+ * the timing game would be unreadable half the time, which is not difficulty.
+ */
+function hearIt(w: WorldScene, tint: number, strength = 26): void {
+  ringFx(w, w.player.x, w.player.y - 14, strength, tint, 0.34);
+}
+
 function towerClock(w: WorldScene, now: number): void {
   const rt = R;
   if (!rt) return;
@@ -693,6 +762,7 @@ function towerClock(w: WorldScene, now: number): void {
     // through the window it will come through.
     Audio.sfx('bell_tower_far', { volume: 0.22 });
     ringFx(w, WINDOW_PX[0], WINDOW_PX[1], 34, 0x9fc4ef, 0.4);
+    hearIt(w, 0x9fc4ef);
   }
   if (now < rt.towerAt) return;
   rt.towerAt = now + TOWER_PERIOD;
@@ -703,9 +773,45 @@ function towerClock(w: WorldScene, now: number): void {
 function towerToll(w: WorldScene, scares: boolean): void {
   Audio.sfx('bell_tower', { volume: 0.6 });
   ringFx(w, WINDOW_PX[0], WINDOW_PX[1], 120, 0xbfd8ff, 0.75);
+  hearIt(w, 0xbfd8ff, 40);
   w.shake(0.0035, 320);
   w.cues.emitCue('bell', WINDOW_PX[0], WINDOW_PX[1], 420, 900);
   if (scares) startle(w, 'tower');
+}
+
+/**
+ * Mira's kettle, which is on the range and is nobody's fault.
+ *
+ * This is the hazard that makes protecting the pairing an active skill: the
+ * player cannot decline to trigger it, only ring around it.
+ */
+function kettleClock(w: WorldScene, now: number): void {
+  const rt = R;
+  if (!rt || !hasBell()) return;
+  const range = w.prop('range');
+
+  if (!rt.kettleTelegraphed && now >= rt.kettleAt - KETTLE_TELEGRAPH) {
+    rt.kettleTelegraphed = true;
+    Audio.sfx('kettle_rising', { volume: 0.3 });
+    ringFx(w, RANGE_PX[0], RANGE_PX[1], 28, 0xffb066, 0.5);
+    hearIt(w, 0xffb066);
+    if (range) {
+      w.tweens.add({
+        targets: range.sprite, y: range.sprite.y - 1, duration: 70, yoyo: true, repeat: 8,
+        onComplete: () => range.sprite.setY(Math.round(range.sprite.y)),
+      });
+    }
+  }
+  if (now < rt.kettleAt) return;
+  rt.kettleAt = now + KETTLE_PERIOD;
+  rt.kettleTelegraphed = false;
+  Audio.sfx('kettle', { volume: 0.5 });
+  ringFx(w, RANGE_PX[0], RANGE_PX[1], 96, 0xffd9a0, 0.7);
+  hearIt(w, 0xffd9a0, 40);
+  w.fx.emote(RANGE_PX[0], RANGE_PX[1], 'note', 500);
+  w.shake(0.003, 220);
+  w.cues.emitCue('clatter', RANGE_PX[0], RANGE_PX[1], 400, 500);
+  startle(w, 'kettle');
 }
 
 // ── hints (plan §66 — visual only) ──────────────────────────────────────────
@@ -793,6 +899,40 @@ async function finish(w: WorldScene): Promise<void> {
 
   rt.pip.setWander(true);
   rt.followUntil = 0;
+}
+
+// ── QA ──────────────────────────────────────────────────────────────────────
+
+/**
+ * What the playtest harness reads.
+ *
+ * The quest's own numbers, exposed honestly, so `tools/q1_playtest.ts` asserts
+ * against the real simulation rather than inferring it from pixels. Reading
+ * only; nothing here can drive the quest.
+ */
+function installQaHook(w: WorldScene): void {
+  (window as unknown as { __q1: unknown }).__q1 = {
+    get pip() {
+      if (!R) return null;
+      return { x: R.pip.x, y: R.pip.y, fear: R.pip.fear, state: R.pip.state, settled: R.pip.settled };
+    },
+    get calmRings() { return R ? R.calmRings : -1; },
+    get hasBell() { return !!R?.bell; },
+    get busy() { return !!R?.busy || w.cutscene.active; },
+    get clues() { return clueCount(); },
+    /** Time until the next unavoidable noise — how long a ring has to breathe. */
+    get msToNoise() {
+      if (!R) return 9999;
+      const now = w.time.now;
+      const tower = R.towerAt - now;
+      const kettle = hasBell() ? R.kettleAt - now : 9e9;
+      return Math.max(0, Math.min(tower, kettle));
+    },
+    get insights() {
+      return Object.keys(State.insights).filter((k) => State.insights[k].unlocked);
+    },
+    get counters() { return { ...State.counters }; },
+  };
 }
 
 /** Mira shifts the settle, the crates go back, and the storeroom is a room. */

@@ -185,7 +185,9 @@ async function main(): Promise<void> {
   const headed = argv.includes('--headed');
 
   const server = await createServer({
-    root: ROOT, server: { port: 0, strictPort: false, host: '127.0.0.1' }, logLevel: 'error',
+    // HMR off: an edit landing mid-run reloads the page and destroys the
+    // execution context halfway through a walk.
+    root: ROOT, server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false }, logLevel: 'error',
   });
   await server.listen();
   const port = (server.httpServer!.address() as { port: number }).port;

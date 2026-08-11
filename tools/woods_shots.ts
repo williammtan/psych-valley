@@ -74,7 +74,7 @@ for (const e of ENCOUNTERS) {
 async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevServer; base: string }> {
   const server = await createServer({
     root: ROOT,
-    server: { port: 0, strictPort: false, host: '127.0.0.1' },
+    server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false },
     logLevel: 'error',
   });
   await server.listen();

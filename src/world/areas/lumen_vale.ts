@@ -3,95 +3,62 @@
  *
  * Owns everything the map file cannot express as data:
  *   - the arrival sequence (plan.md §32)
- *   - the notice board, the signposts and the look-at layer that makes the
- *     town readable as a place people live in
- *   - the doors of buildings that have no interior yet (visibly shut, with a
- *     one-line reason — never a dead zone)
+ *   - the look-at layer that makes the town readable as a place people live in
+ *   - townsfolk conversation, which changes with the story stage
+ *   - the doors of buildings with no interior (visibly shut, with a reason)
  *   - the South Gate's open/closed state
  *
- * TODO(dialogue): every line here is placeholder copy written to the voice
- * brief in plan.md §53 (one short line, no lectures). When `src/data/dialogue/`
- * lands, these move there and this file reads from it.
+ * All player-visible text comes from `@/data/dialogue`. Props in the map file
+ * carry the dotted exchange id in their `interact` field (`prop.fountain`,
+ * `sign.bridge`), so adding a line to a prop is a dialogue-package edit and
+ * never a map edit. The handful of strings still literal here are for props
+ * the authored set does not cover; each is marked.
  */
 import { State } from '@/core/state';
+import {
+  ENV, TALK, ambient, anyHint, describe, hint, playExchange, runBeats,
+} from '@/data/dialogue';
 import { registerArea } from '../registry';
 import type { WorldScene } from '@/scenes/WorldScene';
 
-/** Look-at flavour for props that carry an `interact` id in the map file. */
-const LOOKS: Record<string, string> = {
-  fountain: 'Three spouts, one basin. Somebody keeps the moss off it.',
-  market_stall: 'Empty trestles. The awning has been patched twice.',
-  square_cart: 'A hand cart, parked and forgotten. The brake is off.',
-  store_apples: 'Apples, stacked by size. A price chalked too small to read from here.',
-  scarecrow: 'Someone gave it a hat. The birds are unbothered.',
-  beehive: 'A low, warm hum. Best not to lean closer.',
-  parcels: 'Four parcels, four different knots. All the same handwriting.',
-  courier_cart: "Oren's cart. The route board is chalked over twice.",
-  pigeons: 'The roost. They come back here no matter where they are let go.',
-  pump: 'The handle is worn smooth on one side.',
-  cat: 'Asleep in the only warm strip of the lane. Not Pip.',
-  cat_south: 'A ginger cat, flat out on a doorstep. Also not Pip.',
-  inn_cat: 'A stranger cat, sunning itself outside the inn. Mira feeds them all.',
-  sera_bench: 'A table of jars, a notebook, and a stone that should not be that colour.',
-  garden_basket: 'Beans, mostly. One very proud marrow.',
-  well: 'Deep, cold, and much older than the houses around it.',
-  jetty: 'Two planks are new. The rest are green with river.',
-  river_bench: 'A good bench. Someone sits here often enough to wear the paint.',
-  overlook: 'From up here the valley bends right around the town.',
-  roadside_shrine: 'A small stone, a bowl, a candle. Nobody remembers who started it.',
-  shrine_small: 'Offerings at the tower foot: a coin, a ribbon, a pressed flower.',
-  plaza_stall: 'A stall frame with no stall on it yet. Soon.',
-  plaza_crates: 'Lanterns, packed in straw. A lot of lanterns.',
-  plaza_arch: 'Flowers wired to a frame. Half of them are still in the crate.',
-  inn_table: 'Someone left half a drink and all of their cards.',
-  ford_sign: 'An arrow across the shallows, and one back to the square.',
-  farm_trough: 'Green water, and a very confident duck.',
+/**
+ * TODO(dialogue): props with no authored exchange yet. Everything else routes
+ * through `describe()`. Keep this list shrinking, not growing.
+ */
+const EXTRA: Record<string, string> = {
+  cat: 'Asleep in the only warm strip of the lane. Ginger, and emphatically not Pip.',
   laundry: 'Still damp. Someone will be out for it before dusk.',
-  woodpile: 'Split, stacked, and covered. Whoever did this enjoyed it.',
-  bridge_rail: 'Initials cut into the rail, worn almost smooth.',
+  woodpile: 'Split, stacked and covered. Whoever did this enjoyed it.',
+  store_apples: 'Apples stacked by size, and a price chalked too small to read from here.',
+  garden_basket: 'Beans, mostly. One very proud marrow.',
+  pigeons: 'The roost. They come back here no matter where they are let go.',
+  overlook: 'From the bench the whole valley bends around the town.',
+  plaza_arch: 'Flowers wired to a frame. Half of them are still in the crate.',
+  sera_bench: 'A table of jars, a notebook, and a stone that should not be that colour.',
 };
 
-/** Signposts and boards get a two-beat read rather than one line. */
-const READS: Record<string, [string, string]> = {
-  notice_board: [
-    'FESTIVAL OF LANTERNS — the plaza, this evening.',
-    'Below it: LOST — one cat, ginger, answers to nothing.',
-  ],
-  courier_board: [
-    'Delivery notes, pinned three deep. Half are crossed out.',
-    'The top one just says: ASK OREN. TWICE.',
-  ],
-  plaza_board: [
-    'Setup rota. Every name on it is Mayor Elia.',
-    'A second sheet: JUDGING AT DUSK. PLEASE DO NOT MOVE THE STAGE.',
-  ],
-  signpost_square: ['North: the plaza and the bell tower.', 'West: Courier Row. East: the bridge.'],
-  signpost_south: ['South: the gate, and the woods beyond it.', 'The lower arm has been snapped off.'],
-  signpost_bridge: ['East over the water: the Lantern Inn.', 'Someone has carved a cat into the post.'],
-  signpost_gate: ['South: WHISPER WOODS.', 'Underneath, in newer paint: CLOSED.'],
-  gate_sign: ['GATE SHUT BY ORDER OF THE COUNCIL.', 'No reason given. That is the part people mind.'],
-};
-
-/** Buildings whose door you can reach but not open. */
+/**
+ * Buildings whose door you can reach but not open. The second field is an
+ * authored exchange id where one exists, and otherwise a literal — a locked
+ * front door needs one clause, not a scene.
+ */
 const SHUT: Array<[string, string]> = [
-  ['store', 'Shutters down. A chalk note: BACK AFTER THE FESTIVAL.'],
+  ['store', 'sign.store'],
+  ['belltower', 'prop.towerDoor'],
   ['house_a', 'Locked. A boot scraper, and mud on it.'],
   ['house_b', 'Locked. Someone is humming on the other side.'],
   ['house_c', 'Locked. The knocker is shaped like a fish.'],
   ['house_d', 'Locked. A cat flap, and no cat.'],
   ['house_e', 'Locked. Three pairs of boots by the step.'],
-  ['belltower', 'The stair door is roped off. The rope is old and the knot is new.'],
 ];
 
-function say(w: WorldScene, lines: string[], speaker = 'narrator'): boolean {
-  w.cutscene.talk(async (c) => {
-    for (const line of lines) await c.say(speaker, line);
-  });
+function line(w: WorldScene, text: string, speaker = 'narrator'): boolean {
+  void w.cutscene.talk(async (c) => { await c.say(speaker, text); });
   return true;
 }
 
 function toast(w: WorldScene, text: string): void {
-  w.cutscene.run(async (c) => { c.toast(text); });
+  void w.cutscene.run(async (c) => { c.toast(text); });
 }
 
 /**
@@ -105,39 +72,40 @@ function marker(w: WorldScene, id: string): { x: number; y: number } {
 }
 
 /**
- * ARRIVAL (plan.md §32).
+ * ARRIVAL (plan.md §32, TALK.arrival.approach).
  *
- * The player has just come up the road through the south gate. The camera
- * leaves them for a moment to sweep north over the valley and land on the bell
- * tower — the thing they will navigate by for the next forty minutes — then
- * comes back and hands over control. One line of narration, no exposition.
+ * The player has come up the road through the south gate. The camera leaves
+ * them to sweep north over the valley and land on the bell tower — the thing
+ * they will navigate by for the next forty minutes — then hands control back.
+ * The authored script asks for that pan by name (`cue: camera_pan_town`); this
+ * is where the request gets honoured.
  */
 function runArrival(w: WorldScene): void {
-  w.cutscene.run(async (c) => {
+  void w.cutscene.run(async (c) => {
     await c.fadeIn(700);
     await c.wait(350);
     c.banner('Lumen Vale', 'a valley that remembers');
     await c.movePlayer(41, 66, 42);
-    await c.wait(700);
+    await c.wait(600);
 
-    // The gate swinging shut behind them, then the whole valley.
-    await c.panTo(42, 73, 750);
-    await c.wait(650);
-    await c.panTo(43, 58, 900);
-    await c.panTo(50, 30, 1500);
-    await c.wait(1100);
-    await c.say('narrator', 'The bell tower. You can see it from anywhere in the valley.', { auto: 2600 });
+    await playExchange(c, TALK.arrival.approach, {
+      cue: async (name) => {
+        if (name !== 'camera_pan_town') return;
+        await c.panTo(42, 73, 700);          // the gate, shut behind them
+        await c.wait(500);
+        await c.panTo(43, 58, 850);
+        await c.panTo(50, 30, 1500);         // up the valley to the bell tower
+        await c.wait(1200);
+        await c.panTo(46, 44, 1000);         // the square
+        await c.wait(600);
+        await c.panTo(70, 44, 900);          // river, bridge, inn
+        await c.wait(700);
+        c.followPlayer(900);
+        await c.wait(900);
+      },
+    });
 
-    await c.panTo(46, 44, 1100);
-    await c.wait(800);
-    await c.panTo(70, 44, 1000);
-    await c.wait(700);
-    await c.say('narrator', 'River, bridge, inn. That will do for a map.', { auto: 2200 });
-
-    c.followPlayer(1000);
-    await c.wait(1100);
     await c.movePlayer(41, 62, 48);
-    c.toast('Lumen Vale');
     State.set('intro_done');
   });
 }
@@ -145,7 +113,7 @@ function runArrival(w: WorldScene): void {
 registerArea('lumen_vale', {
   onEnter(w) {
     // ── doors without interiors: shut, with a reason ────────────────────────
-    for (const [id, line] of SHUT) {
+    for (const [id, text] of SHUT) {
       const d = marker(w, id);
       w.addInteractable({
         id: `shut_${id}`,
@@ -153,7 +121,11 @@ registerArea('lumen_vale', {
         y: d.y * 16 - 6,
         label: 'Open',
         observable: true,
-        onInteract: () => { say(w, [line]); },
+        onInteract: () => {
+          const beats = text in ENV ? describe(text) : null;
+          if (beats && beats.length) void w.cutscene.talk((c) => runBeats(c, beats));
+          else line(w, text);
+        },
       });
     }
 
@@ -170,9 +142,8 @@ registerArea('lumen_vale', {
       label: 'Look',
       observable: true,
       onInteract: () => {
-        say(w, State.has('south_gate_open')
-          ? ['The crossbar is up. The road south is open.']
-          : ['A crossbar as thick as your arm, and a new iron lock.']);
+        if (State.has('south_gate_open')) { line(w, 'The crossbar is up. The road south is open.'); return; }
+        void w.cutscene.talk((c) => playExchange(c, TALK.south.gate));
       },
     });
 
@@ -186,15 +157,40 @@ registerArea('lumen_vale', {
       label: 'Look',
       observable: true,
       forbids: 'festival_started',
-      onInteract: () => { say(w, ['They are still hanging the lights. Come back at dusk.']); },
+      onInteract: () => { line(w, 'They are still hanging the lights. Come back at dusk.'); },
     });
 
     if (!State.has('intro_done')) runArrival(w);
   },
 
   onInteract(w, id) {
-    if (LOOKS[id]) return say(w, [LOOKS[id]]);
-    if (READS[id]) return say(w, READS[id]);
+    // ── townsfolk ───────────────────────────────────────────────────────────
+    // Ambient sets are indexed by story stage, so the same villager says
+    // different things before and after each quest. Every third exchange they
+    // offer their "where to go next" line, which is the hint system for a lost
+    // player without a separate UI for it.
+    if (id.startsWith('npc:')) {
+      const who = id.slice(4);
+      const idle = ambient(who);
+      const nudge = State.bump(`lv_talk_${who}`) % 3 === 0 ? (hint(who) ?? anyHint()) : null;
+      if (!idle && !nudge) return false;
+      State.meet(who);
+      void w.cutscene.talk(async (c) => {
+        if (idle) await c.say(idle.speaker, idle.text);
+        if (nudge) await c.say(nudge.speaker, nudge.text);
+      });
+      return true;
+    }
+
+    // ── everything you can look at ──────────────────────────────────────────
+    if (id in ENV) {
+      const beats = describe(id);
+      if (beats && beats.length) {
+        void w.cutscene.talk((c) => runBeats(c, beats));
+        return true;
+      }
+    }
+    if (EXTRA[id]) return line(w, EXTRA[id]);
     return false;
   },
 

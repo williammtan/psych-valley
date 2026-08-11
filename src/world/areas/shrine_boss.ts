@@ -107,6 +107,7 @@ function teardown(): void {
   room.overlay?.destroy();
   room = null;
   delete (window as unknown as { __boss?: unknown }).__boss;
+  delete (window as unknown as { __psycheVista?: boolean }).__psycheVista;
 }
 
 function onUpdate(w: WorldScene, dt: number): void {
@@ -203,9 +204,6 @@ async function ending(w: WorldScene): Promise<void> {
     await c.wait(5200);
   });
 
-  State.set('shrine_done');
-  State.set('game_complete');
-  w.flow.autosave();
   emit('game:complete', {});
 }
 
@@ -218,20 +216,37 @@ async function endingCue(w: WorldScene, c: CutsceneContext, name: string): Promi
   }
 }
 
+/**
+ * Nothing in the ending is allowed to hang.
+ *
+ * A cutscene await that never resolves — an NPC that cannot reach its tile,
+ * a camera pan that gets interrupted — would leave the player staring at the
+ * last frame of the prototype with no way out. Every wait in the sequence is
+ * raced against a deadline so the scene always finishes.
+ */
+function noHang<T>(w: WorldScene, p: Promise<T>, ms: number): Promise<T | void> {
+  return Promise.race([p, new Promise<void>((r) => w.time.delayedCall(ms, r))]);
+}
+
 /** She comes down the last stair at a run, lantern first. */
 async function seraArrives(w: WorldScene, c: CutsceneContext): Promise<void> {
-  const doorTile = { x: 14, y: 13 };
+  const doorTile = { x: 14, y: 12 };
   w.spawnNpc({ id: 'sera', actor: 'sera', x: doorTile.x, y: doorTile.y, facing: 'n' });
   const sera = w.npc('sera');
   if (sera) {
     // A lantern is the only warm light left in the room.
-    w.lighting.addPixel(sera.x, sera.y - 12, 66, COLORS.amber, 0.7, 0.5);
+    w.lighting.addPixel(sera.x, sera.y - 12, 72, COLORS.amber, 0.75, 0.5);
     Audio.sfx('door_stone', { volume: 0.4 });
   }
-  await c.panTo(doorTile.x, doorTile.y, 500);
-  const px = Math.round((w.player.x - TILE / 2) / TILE);
-  const py = Math.round((w.player.y - TILE) / TILE);
-  await c.walk('sera', px + 2, py + 1);
+  await noHang(w, c.panTo(doorTile.x, doorTile.y, 500), 900);
+
+  // Walk her to a clear tile beside the player rather than to an offset that
+  // might land in a pillar or outside the floor.
+  const px = Phaser.Math.Clamp(Math.round((w.player.x - TILE / 2) / TILE) + 2, 4, 25);
+  const py = Phaser.Math.Clamp(Math.round((w.player.y - TILE) / TILE), 4, 12);
+  await noHang(w, c.walk('sera', px, py), 3000);
+
+  sera?.faceTowards(w.player.x, w.player.y);
   w.player.faceTowards(sera?.x ?? w.player.x + 16, sera?.y ?? w.player.y);
   c.followPlayer(400);
   await c.wait(400);
@@ -248,11 +263,17 @@ async function riseOverValley(w: WorldScene, c: CutsceneContext): Promise<void> 
   cam.pan(CHAMBER.centre.x, CHAMBER.arena.y0 - 40, 1400, 'Sine.easeInOut');
   w.tweens.add({ targets: cam, zoom: 1.12, duration: 1400, ease: 'Sine.easeInOut' });
   await c.wait(1200);
-  await c.fadeOut(900);
+  await noHang(w, c.fadeOut(900), 1400);
+
+  // Completion is banked here rather than after the title card: `game_complete`
+  // is an autosave point (§68) and its "Saved" toast would otherwise sit on top
+  // of the last frame of the game. By now the fight is unambiguously over.
+  State.set('shrine_done');
+  State.set('game_complete');
 
   buildVista(w);
   cam.setZoom(1);
-  await c.fadeIn(1);
+  await noHang(w, c.fadeIn(1), 600);
   await c.wait(900);
 }
 
@@ -260,9 +281,14 @@ async function riseOverValley(w: WorldScene, c: CutsceneContext): Promise<void> 
 function buildVista(w: WorldScene): void {
   if (!room) return;
   emit('ui:setHidden', { hidden: true });
+  (window as unknown as { __psycheVista?: boolean }).__psycheVista = true;
 
   const c = w.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.HUD - 10);
   room.overlay = c;
+
+  // Child 0 is an opaque backdrop that never fades, so when the vista dissolves
+  // the screen goes to black rather than back to the boss chamber.
+  c.add(w.add.rectangle(0, 0, GAME_W, GAME_H, 0x05040a, 1).setOrigin(0, 0).setScrollFactor(0));
 
   const sky = w.add.graphics().setScrollFactor(0);
   // Night, graded from a cold horizon up into near-black.
@@ -282,18 +308,21 @@ function buildVista(w: WorldScene): void {
   const stars = w.add.graphics().setScrollFactor(0);
   for (let i = 0; i < 90; i++) {
     const x = Math.random() * GAME_W;
-    const y = Math.random() * 130;
-    stars.fillStyle(0xf6ecd4, 0.15 + Math.random() * 0.5 * (1 - y / 150));
+    const y = Math.random() * 104;
+    stars.fillStyle(0xf6ecd4, 0.15 + Math.random() * 0.5 * (1 - y / 120));
     stars.fillRect(Math.round(x), Math.round(y), 1, 1);
   }
   c.add(stars);
 
-  // Three ridge lines. Each one darker and lower than the one behind it, which
-  // is the whole trick for reading distance in two colours.
+  // Four ridge lines, each darker and lower than the one behind it — the whole
+  // trick for reading distance in two colours. The horizon sits high so the
+  // valley, and not the sky, is what the last shot of the game is about, and so
+  // the figures still read above the dialogue box.
   const ridges: Array<[number, number, number]> = [
-    [150, 0x2b2545, 22],
-    [178, 0x1d1932, 30],
-    [212, 0x120f20, 40],
+    [104, 0x342c52, 16],
+    [128, 0x2b2545, 20],
+    [156, 0x1d1932, 26],
+    [192, 0x100d1c, 14],
   ];
   for (const [baseY, colour, amp] of ridges) {
     const g = w.add.graphics().setScrollFactor(0);
@@ -315,12 +344,12 @@ function buildVista(w: WorldScene): void {
   // The lights. Two ridges over, then another, further out — and then more than
   // the player was expecting.
   const spots: Array<[number, number, number, number]> = [
-    [126, 176, 30, 900],
-    [318, 196, 26, 2100],
-    [72, 208, 22, 3100],
-    [402, 172, 20, 3900],
-    [230, 158, 16, 4600],
-    [356, 152, 14, 5200],
+    [128, 146, 26, 900],
+    [322, 160, 22, 2100],
+    [64, 172, 20, 3100],
+    [408, 138, 18, 3900],
+    [232, 126, 14, 4600],
+    [360, 118, 12, 5200],
   ];
   for (const [x, y, r, delay] of spots) {
     if (!hasFrame(w, 'fx/light_soft_64')) break;
@@ -339,31 +368,34 @@ function buildVista(w: WorldScene): void {
     w.time.delayedCall(delay, () => Audio.sfx('echo_hum', { volume: 0.22, rate: 0.7 + r / 60 }));
   }
 
-  // The three of them, from behind, small against it.
-  const silhouettes: Array<[string, number, number, number]> = [
-    ['char/player/idle_n_0', 208, 262, 1],
-    ['char/sera/idle_n_0', 236, 264, 1],
+  // The two of them, from behind, on the near ridge and small against it. They
+  // stand above the dialogue box line (y 204) so the figures are never covered
+  // by the words they are saying.
+  const silhouettes: Array<[string, number, number]> = [
+    ['char/player/idle_n_0', 168, 202],
+    ['char/sera/idle_n_0', 190, 203],
   ];
-  for (const [frame, x, y, scale] of silhouettes) {
+  for (const [frame, x, y] of silhouettes) {
     if (!hasFrame(w, frame)) continue;
     const s = w.add.image(x, y, 'atlas', frame)
-      .setScrollFactor(0).setOrigin(0.5, 1).setScale(scale).setTint(0x0a0813);
+      .setScrollFactor(0).setOrigin(0.5, 1).setTint(0x08060f);
     c.add(s);
   }
   if (hasFrame(w, 'fx/echo_wisp_0')) {
-    const mote = w.add.sprite(258, 232, 'atlas', 'fx/echo_wisp_0')
-      .setScrollFactor(0).setTint(COLORS.echoCyan).setAlpha(0.9);
+    const mote = w.add.sprite(200, 186, 'atlas', 'fx/echo_wisp_0')
+      .setScrollFactor(0).setTint(COLORS.echoCyan).setAlpha(0.95);
     if (w.anims.exists('fx_echo_wisp')) mote.play('fx_echo_wisp');
     c.add(mote);
     // Mote drifts out past them both and hangs there, facing the far lights.
-    w.tweens.add({ targets: mote, x: 286, y: 208, duration: 2600, ease: 'Sine.easeOut' });
+    w.tweens.add({ targets: mote, x: 236, y: 158, duration: 2800, ease: 'Sine.easeOut' });
   }
 }
 
 async function fadeVista(w: WorldScene, c: CutsceneContext): Promise<void> {
   if (room?.overlay) {
-    const o = room.overlay;
-    w.tweens.add({ targets: o.list, alpha: 0, duration: 1400, ease: 'Sine.easeIn' });
+    // Everything except the black backdrop at index 0.
+    const fading = room.overlay.list.slice(1);
+    if (fading.length) w.tweens.add({ targets: fading, alpha: 0, duration: 1400, ease: 'Sine.easeIn' });
   }
   await c.wait(1500);
 }

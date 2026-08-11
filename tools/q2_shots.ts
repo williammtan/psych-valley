@@ -88,26 +88,42 @@ async function main(): Promise<void> {
     await page.waitForTimeout(700);
     await shot(page, 'q2_threads_empty');
 
-    // A memory-only arrangement: four people being certain, nothing proved.
+    // Two accounts of the same parcel, on two different days, shoving.
     await page.evaluate(() => {
       const t = (window as any).__threads;
-      t.place('m_hesta', 'yesterday', 0);
-      t.place('m_oren_dov', 'today', 1);
       t.place('m_oren_wren', 'yesterday', 2);
       t.place('m_wren', 'today', 2);
     });
     await page.waitForTimeout(900);
     await shot(page, 'q2_threads_memory_conflict');
     const conflictState = await page.evaluate(() => (window as any).__threads.state());
-    console.log('  memory-only anchors:', conflictState.anchored.length,
-      ' conflicts:', conflictState.conflicts.map((c: any) => c.reason));
+    console.log('  conflict   :', conflictState.conflicts.map((c: any) => c.reason).join(' | '));
 
-    // Half proved: two things and two recollections still on the board.
+    // A board that is entirely right and still will not close, because half of
+    // it is only remembered. This is the quest's whole argument in one screen.
     await page.evaluate(() => {
       const t = (window as any).__threads;
-      t.clear('yesterday', 0); t.clear('today', 1);
+      for (const day of ['yesterday', 'today']) for (let i = 0; i < 3; i++) t.clear(day, i);
+      t.place('c_slip_wet', 'yesterday', 0);
+      t.place('m_oren_dov', 'yesterday', 1);
+      t.place('c_clean', 'yesterday', 2);
+      t.place('m_hesta', 'today', 0);
+      t.place('c_tape', 'today', 1);
+      t.place('m_wren', 'today', 2);
+    });
+    await page.evaluate(() => (window as any).__threads.commit());
+    await page.waitForTimeout(900);
+    await shot(page, 'q2_threads_refused_memory');
+    console.log('  anchors    :', (await page.evaluate(() => (window as any).__threads.state())).anchored.length);
+    console.log('  board says :', (await page.evaluate(() => (window as any).__threads.state())).answer);
+
+    // Half the room's evidence down, nothing resolved, no score anywhere.
+    await page.evaluate(() => {
+      const t = (window as any).__threads;
+      for (const day of ['yesterday', 'today']) for (let i = 0; i < 3; i++) t.clear(day, i);
       t.place('c_slip_wet', 'yesterday', 0);
       t.place('c_cord', 'yesterday', 1);
+      t.place('m_oren_wren', 'yesterday', 2);
       t.place('c_tape', 'today', 1);
     });
     await page.waitForTimeout(900);
@@ -116,11 +132,17 @@ async function main(): Promise<void> {
     // The arrangement the room supports.
     await page.evaluate(() => {
       const t = (window as any).__threads;
-      t.clear('yesterday', 2); t.clear('today', 2);
+      for (const day of ['yesterday', 'today']) for (let i = 0; i < 3; i++) t.clear(day, i);
+      t.place('c_slip_wet', 'yesterday', 0);
+      t.place('c_cord', 'yesterday', 1);
       t.place('c_clean', 'yesterday', 2);
       t.place('c_slip_dry', 'today', 0);
+      t.place('c_tape', 'today', 1);
       t.place('c_paint', 'today', 2);
     });
+    await page.waitForTimeout(250);
+    await shot(page, 'q2_threads_full_uncommitted');
+    await page.evaluate(() => (window as any).__threads.commit());
     await page.waitForTimeout(450);
     await shot(page, 'q2_threads_solved');
     console.log('  solved:', (await page.evaluate(() => (window as any).__threads.state())).solved);

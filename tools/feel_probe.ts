@@ -23,8 +23,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const OUT = join(ROOT, '.tmp', 'feel');
 
-/** Maps searched for a test arena. The town is always used for the snag tour. */
-const CANDIDATE_MAPS = ['lumen_vale', 'festival', 'woods', 'inn', 'courier'];
+/** The town is always used for the snag tour; the arena map is chosen at boot. */
 const TOWN = 'lumen_vale';
 
 /* ─────────────────────────── in-page harness ─────────────────────────── */
@@ -132,9 +131,12 @@ function installHarness(): void {
 
   /* ── arena construction ───────────────────────────────────────────────── */
 
-  /** Top-left of an open WxH block of static floor, nearest the map centre. */
+  /**
+   * Top-left of an open WxH block, nearest the map centre. Reads the combined
+   * grid, so an arena never lands on a gate or block an area script placed.
+   */
   F.findOpen = (w2: number, h2: number) => {
-    const solid = F.scene.world.solid;
+    const solid = F.scene.collisionGrid();
     const H = solid.length, W = solid[0].length;
     let best: any = null;
     for (let y = 1; y + h2 <= H - 1; y++) {
@@ -203,6 +205,9 @@ function installHarness(): void {
     F.clearWalls();
     F.move(0, 0);
     F.trackHp = true;
+    // A cutscene or a death earlier in the run must not silently disable the
+    // action buttons for every later measurement.
+    F.scene.keys.enabled = true;
     w.__psyche.hp(6);
   };
 
@@ -279,27 +284,35 @@ async function load(page: Page, base: string): Promise<void> {
   await page.evaluate(installHarness);
 }
 
-/** Pick the map with the roomiest open block, so arenas sit on real open ground. */
+/**
+ * Pick the map with the roomiest open block. Maps whose area script runs a
+ * cutscene are rejected outright: a cutscene disables input and walks the
+ * player around, which silently invalidates every measurement taken on it.
+ */
 async function chooseArena(page: Page): Promise<string> {
-  const found: Array<{ map: string; size: number }> = [];
-  for (const map of CANDIDATE_MAPS) {
-    const size = await page.evaluate(async (m) => {
+  const maps = await page.evaluate(() => (window as any).__psyche.maps() as string[]);
+  const found: Array<{ map: string; size: number; busy: boolean }> = [];
+  for (const map of maps) {
+    const r = await page.evaluate(async (m) => {
       const F = (window as any).__F;
       F.goto(m);
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((res) => setTimeout(res, 450));
+      // keys.enabled is scene-wide and sticky, so clear it before judging.
+      F.scene.keys.enabled = true;
       const o = F.largestOpen();
-      return o ? o.w : 0;
-    }, map).catch(() => 0);
-    found.push({ map, size });
+      return { size: o ? o.w : 0, busy: F.scene.cutscene.active };
+    }, map).catch(() => ({ size: 0, busy: true }));
+    found.push({ map, ...r });
   }
-  found.sort((a, b) => b.size - a.size);
-  const best = found[0];
+  const usable = found.filter((f) => !f.busy && f.size >= 7).sort((a, b) => b.size - a.size);
+  const best = usable[0] ?? { map: TOWN, size: 0, busy: false };
   await page.evaluate(async (m) => {
     const F = (window as any).__F;
     F.goto(m);
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 400));
   }, best.map);
-  console.log(`arena map: ${best.map} (${best.size}x${best.size} open) — all: ${found.map((f) => `${f.map}:${f.size}`).join(' ')}`);
+  console.log(`arena map: ${best.map} (${best.size}x${best.size} open)`);
+  console.log(`  candidates: ${found.map((f) => `${f.map}:${f.size}${f.busy ? '(busy)' : ''}`).join(' ')}`);
   return best.map;
 }
 
@@ -839,40 +852,57 @@ async function snag(ctx: Ctx): Promise<Row[]> {
     const F = (window as any).__F;
     F.goto(town);
     await new Promise((res) => setTimeout(res, 400));
-    F.reset(); F.clean(); F.scripted(true);
-    // A long tour of the town, one held direction per leg.
-    const legs: Array<[number, number, number]> = [
-      [0, -1, 90], [1, -1, 80], [1, 0, 100], [1, 1, 80],
-      [0, 1, 100], [-1, 1, 80], [-1, 0, 100], [-1, -1, 80],
-      [0, -1, 80], [1, 0, 80], [0, 1, 80], [-1, 0, 80],
-    ];
-    let f = 2;
-    for (const leg of legs) { F.at(f, `F.move(${leg[0]},${leg[1]})`); f += leg[2]; }
-    F.at(f, 'F.move(0,0)');
-    const s = (await F.run(f + 10)).slice();
-    F.move(0, 0);
-
-    // A snag is forward progress stopping for a beat while the stick is still
-    // held, and then resuming. A permanent stop is a wall, not a snag.
-    let snags = 0;
-    const spans: number[] = [];
-    let i = 1;
-    while (i < s.length) {
-      if (s[i].sp < 8 && (s[i].ax || s[i].ay) && s[i - 1].sp > 40) {
-        let j = i;
-        while (j < s.length && s[j].sp < 8) j++;
-        if (j < s.length && s[j].sp > 40 && j - i <= 20) { snags++; spans.push(j - i); }
-        i = j + 1;
-      } else i++;
+    F.clean(); F.scripted(true);
+    // Walk between real destinations across the town rather than blindly into
+    // buildings: aim straight at an open tile 6–12 tiles away, hold that
+    // direction, and see whether progress ever stutters on the way.
+    const solid = F.scene.world.solid;
+    const open: Array<[number, number]> = [];
+    for (let y = 2; y < solid.length - 2; y++) {
+      for (let x = 2; x < solid[0].length - 2; x++) if (!solid[y][x] && !F.scene.dynamicSolids[y][x]) open.push([x, y]);
     }
-    let dist = 0;
-    for (let k = 1; k < s.length; k++) dist += Math.hypot(s[k].x - s[k - 1].x, s[k].y - s[k - 1].y);
+    let seed = 12345;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+    let snags = 0, held = 0, moving = 0, dist = 0, frames = 0;
+    const spans: number[] = [];
+    let here = open[Math.floor(rnd() * open.length)];
+    F.place(F.px(here[0]), F.py(here[1]), 's');
+    for (let leg = 0; leg < 16; leg++) {
+      const near = open.filter((t) => {
+        const d = Math.hypot(t[0] - here[0], t[1] - here[1]);
+        return d > 6 && d < 12;
+      });
+      if (!near.length) { here = open[Math.floor(rnd() * open.length)]; F.place(F.px(here[0]), F.py(here[1]), 's'); continue; }
+      const to = near[Math.floor(rnd() * near.length)];
+      const dx = to[0] - here[0], dy = to[1] - here[1];
+      // Just enough frames to arrive, so the leg does not end up grinding into
+      // whatever lies past the destination.
+      const legFrames = Math.round((Math.hypot(dx, dy) * 16) / 1.37) + 8;
+      F.reset();
+      F.at(1, `F.move(${dx},${dy})`);
+      const s = (await F.run(legFrames)).slice();
+      F.move(0, 0);
+      frames += s.length;
+      for (let k = 1; k < s.length; k++) dist += Math.hypot(s[k].x - s[k - 1].x, s[k].y - s[k - 1].y);
+      held += s.filter((r2: any) => r2.ax || r2.ay).length;
+      moving += s.filter((r2: any) => r2.sp > 8).length;
+      // A snag is forward progress stopping for a beat while the stick is still
+      // held, and then resuming. A permanent stop is a wall, not a snag.
+      let i = 1;
+      while (i < s.length) {
+        if (s[i].sp < 8 && (s[i].ax || s[i].ay) && s[i - 1].sp > 40) {
+          let j = i;
+          while (j < s.length && s[j].sp < 8) j++;
+          if (j < s.length && s[j].sp > 40 && j - i <= 20) { snags++; spans.push(j - i); }
+          i = j + 1;
+        } else i++;
+      }
+      const last = s[s.length - 1];
+      here = [Math.floor(last.x / 16), Math.floor((last.y - 1) / 16)];
+    }
     F.clean();
-    return {
-      snags, spans, dist,
-      held: s.filter((r2: any) => r2.ax || r2.ay).length,
-      moving: s.filter((r2: any) => r2.sp > 8).length,
-    };
+    return { snags, spans, dist, held, moving, frames };
   }, TOWN) as any;
   return [
     { metric: 'snag events on the town tour', value: r.snags, target: '0–2' },
