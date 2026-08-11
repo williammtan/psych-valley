@@ -57,22 +57,33 @@ export const Panel = {
     const midW = Math.max(0, w - cw * 2);
     const midH = Math.max(0, h - ch * 2);
 
-    const add = (frame: string, px: number, py: number, sx = 1, sy = 1) => {
-      const img = scene.add.image(px, py, 'atlas', frame).setOrigin(0, 0);
-      img.setScale(sx, sy);
-      c.add(img);
-      return img;
+    /**
+     * Edges and centre are TILED, not scaled.
+     *
+     * Scaling an 8px textured slice across a 460px dialogue box stretches its
+     * paper grain into visible rectangular blotches — the wider the panel, the
+     * worse it looks, and the dialogue box is the widest and most-seen panel in
+     * the game. A TileSprite repeats the slice at its native size instead, so
+     * the grain stays 8px whatever the panel's dimensions.
+     */
+    const tile = (frame: string, px: number, py: number, tw: number, th: number) => {
+      if (tw <= 0 || th <= 0) return;
+      const ts = scene.add.tileSprite(px, py, tw, th, 'atlas', frame).setOrigin(0, 0);
+      c.add(ts);
+    };
+    const corner4 = (frame: string, px: number, py: number) => {
+      c.add(scene.add.image(px, py, 'atlas', frame).setOrigin(0, 0));
     };
 
-    add(`${p}_c`, x + cw, y + ch, midW / cw, midH / ch);
-    add(`${p}_t`, x + cw, y, midW / cw, 1);
-    add(`${p}_b`, x + cw, y + h - ch, midW / cw, 1);
-    add(`${p}_l`, x, y + ch, 1, midH / ch);
-    add(`${p}_r`, x + w - cw, y + ch, 1, midH / ch);
-    add(`${p}_tl`, x, y);
-    add(`${p}_tr`, x + w - cw, y);
-    add(`${p}_bl`, x, y + h - ch);
-    add(`${p}_br`, x + w - cw, y + h - ch);
+    tile(`${p}_c`, x + cw, y + ch, midW, midH);
+    tile(`${p}_t`, x + cw, y, midW, ch);
+    tile(`${p}_b`, x + cw, y + h - ch, midW, ch);
+    tile(`${p}_l`, x, y + ch, cw, midH);
+    tile(`${p}_r`, x + w - cw, y + ch, cw, midH);
+    corner4(`${p}_tl`, x, y);
+    corner4(`${p}_tr`, x + w - cw, y);
+    corner4(`${p}_bl`, x, y + h - ch);
+    corner4(`${p}_br`, x + w - cw, y + h - ch);
     return c;
   },
 };
