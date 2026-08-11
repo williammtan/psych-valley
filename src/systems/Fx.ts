@@ -161,14 +161,30 @@ export class FxManager {
     return s;
   }
 
+  /**
+   * Footsteps and dash ghosts fire at the right moments — the feel probe
+   * confirmed the cadence — but both were pitched so quietly they did not read
+   * at 1x. Movement feedback you cannot see is the same as none, so both now
+   * start bright and grow as they fade rather than sitting at a constant low
+   * alpha.
+   */
   dust(x: number, y: number): void {
-    this.play(x + (Math.random() - 0.5) * 4, y - 1, 'fx_dust', 'fx/dust_0', DEPTH.ENTITY_BASE + y - 2, {
-      alpha: 0.7, flipX: Math.random() > 0.5,
-    });
+    const s = this.play(x + (Math.random() - 0.5) * 4, y - 1, 'fx_dust', 'fx/dust_0',
+      DEPTH.ENTITY_BASE + y - 2, { alpha: 0.95, flipX: Math.random() > 0.5 });
+    if (!s) return;
+    s.setScale(0.8);
+    this.scene.tweens.add({ targets: s, scaleX: 1.35, scaleY: 1.15, duration: 260, ease: 'Quad.easeOut' });
   }
 
   dashTrail(x: number, y: number): void {
-    this.play(x, y, 'fx_dash_trail', 'fx/dash_trail_0', DEPTH.ENTITY_BASE + y - 3, { alpha: 0.55 });
+    const s = this.play(x, y, 'fx_dash_trail', 'fx/dash_trail_0', DEPTH.ENTITY_BASE + y - 3,
+      { alpha: 0.9, tint: 0x95d0b3 });
+    if (!s) return;
+    // Each ghost stretches and thins as it is left behind, so a roll reads as
+    // one continuous wake rather than a row of separate puffs.
+    this.scene.tweens.add({
+      targets: s, scaleX: 1.5, scaleY: 0.75, alpha: 0, duration: 220, ease: 'Quad.easeOut',
+    });
   }
 
   slash(x: number, y: number, dir: string): void {

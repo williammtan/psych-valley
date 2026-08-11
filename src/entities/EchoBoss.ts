@@ -341,9 +341,31 @@ class Brazier {
  * happens when you try to turn one member of a unanimous group, which the
  * shrine's conformity room already taught the player to expect.
  */
+/**
+ * An additive glow that follows something.
+ *
+ * The shrine is deliberately dark and its floor is deliberately boring, which
+ * means anything that matters has to emit rather than reflect. The Echo and its
+ * followers are dark violet masses by design, so without this they read as
+ * holes in the floor — and phase three's entire premise is that the player can
+ * SEE six things flashing in unison and notice that one of them is late.
+ */
+function makeGlow(scene: WorldScene, radius: number, colour: number): Phaser.GameObjects.Image | undefined {
+  const size = radius <= 32 ? 64 : radius <= 64 ? 128 : 192;
+  const frame = `fx/light_soft_${size}`;
+  if (!hasFrame(scene, frame)) return undefined;
+  return scene.add.image(0, 0, 'atlas', frame)
+    .setBlendMode(Phaser.BlendModes.ADD)
+    .setScale((radius * 2) / size)
+    .setDepth(DEPTH.LIGHT + 2)
+    .setTint(colour)
+    .setAlpha(0);
+}
+
 class Follower implements ConformerLike {
   sprite: Phaser.GameObjects.Sprite;
   shadow: Phaser.GameObjects.Image;
+  private glow?: Phaser.GameObjects.Image;
   facing: Dir = 's';
   dissenting = false;
   /** The one that is already almost disagreeing. */
@@ -370,6 +392,7 @@ class Follower implements ConformerLike {
     this.sprite = scene.add.sprite(x, y, 'atlas', 'enemy/echomote/idle_0')
       .setOrigin(0.5, 1).setDepth(DEPTH.ENTITY_BASE + y);
     if (scene.anims.exists('echomote_idle')) this.sprite.play('echomote_idle');
+    this.glow = makeGlow(scene, 30, COLORS.echoCyan);
     this.sprite.setScale(0.4).setAlpha(0);
     scene.tweens.add({ targets: this.sprite, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut' });
   }
@@ -418,11 +441,19 @@ class Follower implements ConformerLike {
       this.vy *= 0.965;
     }
     const since = now - this.pulseAt;
-    const bright = since < 260 ? 1 : 0.62;
-    this.sprite.setAlpha(this.dead ? this.sprite.alpha : bright);
+    const onBeat = since < 260;
+    this.sprite.setAlpha(this.dead ? this.sprite.alpha : (onBeat ? 1 : 0.88));
     this.sprite.setPosition(Math.round(this.x), Math.round(this.y));
     this.sprite.setDepth(DEPTH.ENTITY_BASE + this.y);
     this.shadow.setPosition(Math.round(this.x), Math.round(this.y) - 1);
+    // The beat as a flash of light, not just a sprite swap: six of these going
+    // off together is the phase's central visual fact.
+    if (this.glow) {
+      this.glow.setPosition(Math.round(this.x), Math.round(this.y) - 9);
+      const base = this.dissenting ? 0.62 : 0.3;
+      this.glow.setAlpha(onBeat && !this.dissenting ? 0.95 - since / 260 * 0.42 : base);
+      if (this.dissenting) this.glow.setTint(COLORS.amber);
+    }
   }
 
   touches(px: number, py: number): boolean {
@@ -439,6 +470,8 @@ class Follower implements ConformerLike {
     if (this.dead) return;
     this.dead = true;
     this.shadow.destroy();
+    this.glow?.destroy();
+    this.glow = undefined;
     if (this.scene.anims.exists('echomote_die')) this.sprite.play('echomote_die');
     this.scene.tweens.add({
       targets: this.sprite, alpha: 0, y: this.sprite.y - 8, duration: 460,
@@ -452,6 +485,8 @@ class Follower implements ConformerLike {
     this.dead = true;
     this.sprite.destroy();
     this.shadow.destroy();
+    this.glow?.destroy();
+    this.glow = undefined;
   }
 }
 
@@ -470,6 +505,7 @@ export class EchoBoss {
 
   sprite: Phaser.GameObjects.Sprite;
   private shadow: Phaser.GameObjects.Image;
+  private glow?: Phaser.GameObjects.Image;
   private braziers: Brazier[] = [];
   private indicators: Indicator[] = [];
   private lastAnim = '';
@@ -517,6 +553,7 @@ export class EchoBoss {
       .setOrigin(0.5, 0.5).setAlpha(0.34).setDepth(DEPTH.SHADOW).setVisible(false);
     this.sprite = scene.add.sprite(this.x, this.y, 'atlas', 'enemy/echo/idle_0')
       .setOrigin(0.5, 1).setDepth(DEPTH.ENTITY_BASE + this.y).setVisible(false);
+    this.glow = makeGlow(scene, 62, COLORS.echoGlow);
 
     for (const b of opts.braziers) {
       const prop = scene.world.props.find((p) => Math.abs(p.sprite.x - b.x) < 2 && Math.abs(p.sprite.y - b.y) < 2);
@@ -621,6 +658,8 @@ export class EchoBoss {
     this.braziers = [];
     this.sprite.destroy();
     this.shadow.destroy();
+    this.glow?.destroy();
+    this.glow = undefined;
   }
 
   // ── frame ─────────────────────────────────────────────────────────────────
@@ -658,7 +697,13 @@ export class EchoBoss {
     this.sprite.setDepth(DEPTH.ENTITY_BASE + this.y);
     this.shadow.setPosition(Math.round(this.x), Math.round(this.y) - 1);
     this.sprite.setAlpha(now < this.invulnUntil && Math.floor(now / 60) % 2 === 0 ? 0.55 : 1);
-    this.ghost?.setAlpha(0.4 + Math.sin(this.drift * 5) * 0.14);
+    this.ghost?.setAlpha(0.62 + Math.sin(this.drift * 5) * 0.16);
+    if (this.glow) {
+      this.glow.setPosition(Math.round(this.x), Math.round(this.y) - 30);
+      // Brighter when it is open: the stagger is the thing you are waiting for.
+      this.glow.setAlpha(this.staggered ? 0.55 : 0.3);
+      this.glow.setTint(this.staggered ? COLORS.echoCyan : COLORS.echoGlow);
+    }
   }
 
   private clampToArena(): void {
@@ -896,7 +941,7 @@ export class EchoBoss {
       .setTint(COLORS.echoCyan)
       .setFlipX(side === 'w');
     if (this.scene.anims.exists('echo_afterimage')) this.ghost.play('echo_afterimage');
-    this.scene.tweens.add({ targets: this.ghost, alpha: 0.5, duration: 240 });
+    this.scene.tweens.add({ targets: this.ghost, alpha: 0.75, duration: 240 });
     this.sprite.setFlipX(side === 'w');
     emit('boss:learned', { signature: sig });
   }
@@ -1198,11 +1243,13 @@ export class EchoBoss {
     if (this.shield) {
       this.shield.clear();
       if (this.shielded) {
-        const pulseA = 0.30 + Math.sin(this.drift * 3.4) * 0.12;
-        this.shield.lineStyle(1, COLORS.echoCyan, pulseA + 0.3);
+        const pulseA = 0.34 + Math.sin(this.drift * 3.4) * 0.14;
+        this.shield.fillStyle(COLORS.echoCyan, 0.06);
+        this.shield.fillEllipse(this.x, this.y - 26, 92, 74);
+        this.shield.lineStyle(1, COLORS.echoCyan, Math.min(1, pulseA + 0.5));
         this.shield.strokeEllipse(this.x, this.y - 26, 92, 74);
-        this.shield.lineStyle(1, COLORS.echoGlow, pulseA);
-        this.shield.strokeEllipse(this.x, this.y - 26, 80, 64);
+        this.shield.lineStyle(1, COLORS.echoGlow, pulseA + 0.2);
+        this.shield.strokeEllipse(this.x, this.y - 26, 78, 62);
         this.shield.setDepth(DEPTH.ENTITY_BASE + this.y + 2);
       }
     }

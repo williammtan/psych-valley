@@ -307,7 +307,8 @@ async function capture(page: Page, base: string, shot: Shot): Promise<string[]> 
   await page.evaluate((src) => { (0, eval)(src); }, DRIVER);
   await page.evaluate(() => (window as any).__psyche.jump('boss'));
   await page.waitForFunction(() => !!(window as any).__boss, undefined, { timeout: 10000 }).catch(() => {});
-  await page.waitForTimeout(500);
+  // Let the location banner finish before capturing anything.
+  await page.waitForTimeout(2900);
   if (shot.hideHud) await page.evaluate(() => (window as any).__psyche.hideHud(true));
 
   await page.evaluate(`(async () => { ${shot.drive} })()`).catch((e) => errs.push(`drive: ${String(e).slice(0, 200)}`));

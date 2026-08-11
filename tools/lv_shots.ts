@@ -86,17 +86,19 @@ await page.waitForFunction(() => !!(window as any).__psyche?.ready, undefined, {
 // cutscene already had on screen — it ends on a dialogue choice, and an
 // abandoned choice would sit in the corner of all eighteen shots. The box
 // listens for real keydowns, not injected actions.
-await page.evaluate(() => (window as any).__psyche?.jump('town'));
 // The arrival holds the camera for a ~9s valley pan between its lines, so this
 // has to outlast the whole sequence, not just the dialogue.
-let settled = false;
-for (let i = 0; i < 160 && !settled; i++) {
-  settled = await page.evaluate(() => (window as any).__psyche?.state()?.cutscene === false);
-  if (settled) break;
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(300);
+async function settleCutscene(): Promise<void> {
+  for (let i = 0; i < 160; i++) {
+    if (await page.evaluate(() => (window as any).__psyche?.state()?.cutscene === false)) return;
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(300);
+  }
+  console.log('  ⚠ cutscene never settled');
 }
-if (!settled) console.log('  ⚠ arrival cutscene never settled');
+
+await page.evaluate(() => (window as any).__psyche?.jump('town'));
+await settleCutscene();
 await page.evaluate(() => (window as any).__psyche?.hideHud(true));
 await page.waitForTimeout(2600);   // let the location banner expire
 
@@ -108,12 +110,22 @@ mkdirSync(OUT, { recursive: true });
  * loudly, rather than silently shipping eighteen shots of somebody's pub.
  */
 async function ensureTown(name: string): Promise<void> {
-  const where = await page.evaluate(() => (window as any).__psyche?.state()?.map);
+  // A transient `undefined` means the scene is mid-transition, not that we are
+  // somewhere else — give it a moment before doing anything drastic.
+  let where = await page.evaluate(() => (window as any).__psyche?.state()?.map);
+  if (where === undefined) {
+    await page.waitForTimeout(1200);
+    where = await page.evaluate(() => (window as any).__psyche?.state()?.map);
+  }
   if (where === 'lumen_vale') return;
   console.log(`  ⚠ ${name}: fell into '${where}' — returning to lumen_vale`);
-  await page.evaluate(() => (window as any).__psyche?.goto('lumen_vale', 'default'));
-  await page.waitForTimeout(2600);   // let the location banner expire again
+  // Full re-arm, not just a goto: the checkpoint restores the flags that stop
+  // the arrival cutscene running again and dropping a dialogue box into every
+  // remaining shot.
+  await page.evaluate(() => (window as any).__psyche?.jump('town'));
+  await settleCutscene();
   await page.evaluate(() => (window as any).__psyche?.hideHud(true));
+  await page.waitForTimeout(2600);   // let the location banner expire again
 }
 
 for (const [name, x, y, sx, sy] of list) {
@@ -134,7 +146,11 @@ for (const [name, x, y, sx, sy] of list) {
     cam?.centerOn(cx * 16 + 8, cy * 16 + 8);
   }, [x, y]);
   await page.waitForTimeout(700);
-  const map = await page.evaluate(() => (window as any).__psyche?.state()?.map);
+  let map = await page.evaluate(() => (window as any).__psyche?.state()?.map);
+  if (map === undefined) {
+    await page.waitForTimeout(1000);
+    map = await page.evaluate(() => (window as any).__psyche?.state()?.map);
+  }
   if (map !== 'lumen_vale') { console.log(`  ⚠ ${name} landed in '${map}' — shot skipped`); continue; }
   await page.screenshot({ path: join(OUT, `${name}.png`) });
   console.log(`  shots/lv/${name}.png  (${x},${y})`);

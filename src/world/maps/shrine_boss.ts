@@ -181,12 +181,15 @@ function build(): MapDef {
    * is gameplay information; see `Brazier` in entities/EchoBoss.ts.
    */
   const lights: LightDef[] = [
-    // The seal is the brightest thing in the room and the reason you look up.
-    { x: 14.5, y: 2.6, radius: 150, color: SHRINE_VIOLET, intensity: 0.62, flicker: 0.18 },
+    // The seal lights the APPARATUS, not the arena. An earlier pass had it
+    // throwing a wide violet wash over the whole floor, which is exactly where
+    // the fight happens and exactly the colour the Echo is — the boss and its
+    // followers disappeared into their own background.
+    { x: 14.5, y: 2.4, radius: 100, color: SHRINE_VIOLET, intensity: 0.44, flicker: 0.18 },
     { x: 3.2, y: 2.6, radius: 62, color: SHRINE_CYAN, intensity: 0.5, flicker: 0.14 },
     { x: 25.8, y: 2.6, radius: 62, color: SHRINE_CYAN, intensity: 0.5, flicker: 0.14 },
     // The pool over the drain: the room's centre, and where it goes at the end.
-    { x: 14.5, y: 7.8, radius: 96, color: SHRINE_VIOLET, intensity: 0.46, flicker: 0.3 },
+    { x: 14.5, y: 7.8, radius: 70, color: SHRINE_VIOLET, intensity: 0.3, flicker: 0.3 },
     // The door you came in by stays lit, so the room always has a bottom edge.
     { x: 14.5, y: 13.4, radius: 56, color: SHRINE_VIOLET, intensity: 0.4, flicker: 0.1 },
   ];
