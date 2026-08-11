@@ -14,6 +14,7 @@ import { EnemyManager } from '@/systems/EnemyManager';
 import { Interactions, type Interactable } from '@/systems/Interactions';
 import { Cutscene } from '@/systems/Cutscene';
 import { Mote } from '@/entities/Mote';
+import { CueBus, RecallSystem } from '@/systems/Abilities';
 import { Audio } from '@/audio/Audio';
 import { installDebugApi } from '@/debug/api';
 
@@ -28,6 +29,10 @@ export class WorldScene extends Phaser.Scene {
   enemies!: EnemyManager;
   interactions!: Interactions;
   cutscene!: Cutscene;
+  /** Learned-association cues (LINK) emitted by bells, moths and lanterns. */
+  cues!: CueBus;
+  /** Context evidence the player can read (RECALL). */
+  recall!: RecallSystem;
 
   area?: AreaScript;
   mapId = '';
@@ -55,6 +60,8 @@ export class WorldScene extends Phaser.Scene {
     this.enemies = new EnemyManager(this);
     this.interactions = new Interactions(this);
     this.cutscene = new Cutscene(this);
+    this.cues = new CueBus(this);
+    this.recall = new RecallSystem(this);
 
     installDebugApi(this);
 
@@ -155,6 +162,8 @@ export class WorldScene extends Phaser.Scene {
     this.mote?.destroy();
     this.mote = undefined;
     this.enemies?.clear();
+    this.cues?.clear();
+    this.recall?.clear();
     this.fx?.clear();
     this.lighting?.clear();
     this.interactions?.clear();
@@ -213,6 +222,7 @@ export class WorldScene extends Phaser.Scene {
     for (const n of this.npcs) n.update(dt, grid);
     this.mote?.update(dt, this.player);
     this.enemies.update(dt, grid);
+    this.cues.update();
     this.fx.update(dt);
     this.lighting.update(dt);
 

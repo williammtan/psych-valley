@@ -576,9 +576,13 @@ function pineTree(variant: number): Surface {
       const botY = yk + jag;
       // upper boughs catch the sky, lower boughs sit in the tree's own shade
       const shift = t > 0.72 ? 1 : t < 0.34 ? -1 : 0;
+      const span = Math.max(1, botY - topY);
       for (let y = topY; y <= botY; y++) {
         const v = (dx + hw) / (2 * hw);
-        let idx = Math.max(0, Math.min(4, cylIndex(v) + shift));
+        // the near face of each bough rolls from lit at its ridge to dark at its skirt
+        const roll = (y - topY) / span;
+        const rollShift = roll < 0.25 ? 1 : roll > 0.72 ? -1 : 0;
+        let idx = Math.max(0, Math.min(4, cylIndex(v) + shift + rollShift));
         let c = ramp[idx];
         if (y >= botY - 1) c = ramp[0];                                  // hard shadow line under each bough
         else if (y <= topY + 1 && dx < 0) c = n(x, y, 2.4) > 0.55 ? sun : ramp[Math.min(4, idx + 1)];
@@ -586,8 +590,11 @@ function pineTree(variant: number): Surface {
         else if (n(x, y * 2, 1.8) < 0.26) c = ramp[Math.max(0, idx - 1)];
         s.px(x, y, c);
       }
-      // needle tips breaking the skirt line
-      if (Math.abs(dx) % 3 === 0 && u > 0.25) s.px(x, botY + 1, ramp[0]);
+      // needle sprigs breaking the skirt line
+      if (Math.abs(dx) % 3 === 0 && u > 0.25) {
+        s.px(x, botY + 1, ramp[0]);
+        if (dx < 0 && n(x, yk, 2.0) > 0.5) s.px(x - 1, botY, ramp[3]);
+      }
     }
   }
   // spire
@@ -836,11 +843,11 @@ function hedge(kind: 'mid' | 'end_l' | 'end_r' | 'corner'): Surface {
     for (let y = top; y <= botY; y++) {
       const depth = (y - top) / (botY - top);
       let c: string;
-      if (depth < 0.14) c = P.BUSH[4];                                   // top plane, full sun
-      else if (depth < 0.30) c = n(x, y, 2.2) > 0.45 ? P.BUSH[4] : P.BUSH[3];
-      else if (depth < 0.50) c = P.BUSH[3];
-      else if (depth < 0.78) c = n(x, y, 2.6) > 0.6 ? P.BUSH[3] : P.BUSH[2];
-      else if (depth < 0.93) c = P.BUSH[1];
+      if (depth < 0.10) c = n(x, y, 2.0) > 0.55 ? P.LEAF_SUN_COOL : P.BUSH[4];  // top plane, full sun
+      else if (depth < 0.28) c = n(x, y, 2.2) > 0.45 ? P.BUSH[4] : P.BUSH[3];
+      else if (depth < 0.48) c = P.BUSH[3];
+      else if (depth < 0.70) c = n(x, y, 2.6) > 0.6 ? P.BUSH[3] : P.BUSH[2];
+      else if (depth < 0.86) c = n(x, y, 2.4) > 0.55 ? P.BUSH[2] : P.BUSH[1];
       else c = P.BUSH[0];
       s.px(x, y, c);
     }
@@ -982,7 +989,7 @@ function windowBox(): Surface {
 function reeds(variant: number): Surface {
   return prop(18, 26, (s, r) => {
     const base = 24, cx = 9;
-    const blades = [7, 9, 6][variant];
+    const blades = [9, 11, 13][variant];   // the cattail-free clump is the densest
     for (let k = 0; k < blades; k++) {
       const bx = cx + r.int(-6, 6);
       const hgt = r.int(9, 20);
@@ -1013,35 +1020,41 @@ function reeds(variant: number): Surface {
 
 /** Lily pads float, so their "shadow" is a soft dark ring in the water. */
 function lilypad(variant: number): Surface {
-  const W = variant === 0 ? 14 : 12, H = 9;
-  return prop(W, H, (s, r) => {
-    const w = W - 2, h = 6;
-    s.ellipse(1, 1, w, h, P.TREE_DARK[3]);
+  const W = variant === 0 ? 18 : 15, H = 11;
+  return prop(W, H, (s) => {
+    const w = W - 2, h = 8;
+    const veg = P.VEG_LEAF;
+    s.ellipse(1, 1, w, h, veg[2]);
     for (let j = 0; j < h; j++) {
       for (let i = 0; i < w; i++) {
         if (!s.alphaAt(1 + i, 1 + j)) continue;
         const u = (i + 0.5) / w - 0.5, v = (j + 0.5) / h - 0.5;
-        const d = -(u * 0.6 + v * 0.8);
-        s.px(1 + i, 1 + j, d > 0.25 ? P.TREE_WARM[4] : d > 0 ? P.TREE_WARM[3] : d > -0.3 ? P.TREE_DARK[3] : P.TREE_DARK[2]);
+        const d = -(u * 0.55 + v * 0.85);
+        s.px(1 + i, 1 + j, d > 0.34 ? veg[4] : d > 0.06 ? veg[3] : d > -0.28 ? veg[2] : veg[1]);
       }
     }
-    // the wedge notch
+    // the wedge notch, cut in from the right
     const cxp = 1 + Math.floor(w / 2), cyp = 1 + Math.floor(h / 2);
-    for (let i = 0; i < Math.ceil(w / 2); i++) {
-      const spread = Math.round(i * 0.4);
-      for (let d = -spread; d <= spread; d++) s.data[((cyp + d) * s.w + cxp + i) * 4 + 3] = 0;
+    for (let i = 0; i < Math.ceil(w / 2) + 1; i++) {
+      const spread = Math.round(i * 0.45);
+      for (let d = -spread; d <= spread; d++) {
+        const y = cyp + d, x = cxp + i;
+        if (x < s.w && y >= 0 && y < s.h) s.data[(y * s.w + x) * 4 + 3] = 0;
+      }
     }
-    // veins
-    for (let k = 0; k < 5; k++) {
-      const a = -2.4 + k * 0.9;
-      s.line(cxp, cyp, cxp + Math.round(Math.cos(a) * w * 0.42), cyp + Math.round(Math.sin(a) * h * 0.42), P.TREE_DARK[1], 0.6);
+    // radial veins
+    for (let k = 0; k < 6; k++) {
+      const a = 1.15 + k * 0.7;
+      s.line(cxp, cyp, cxp + Math.round(Math.cos(a) * w * 0.44), cyp + Math.round(Math.sin(a) * h * 0.44), veg[1], 0.75);
     }
+    s.ellipseOutline(1, 1, w, h, veg[1], 0.5);
     if (variant === 1) { // one pad carries a flower
-      s.px(4, 2, P.FLOWER_WHITE[2]); s.px(5, 2, P.FLOWER_WHITE[3]);
-      s.px(4, 1, P.FLOWER_WHITE[1]); s.px(5, 3, P.FLOWER_ROSE[2]);
-      s.px(6, 2, P.FLOWER_WHITE[1]);
+      s.ellipse(3, 1, 6, 5, P.FLOWER_WHITE[1]);
+      s.ellipse(4, 2, 4, 3, P.FLOWER_WHITE[2]);
+      s.px(5, 2, P.FLOWER_ROSE[2]); s.px(6, 3, P.FLOWER_ROSE[1]);
+      s.px(4, 1, P.LINEN[4]); s.px(7, 2, P.FLOWER_WHITE[1]);
     }
-  }, { seed: 9960 + variant, shadow: W - 2, shadowY: H - 1, shadowH: 4, alpha: 0.22 });
+  }, { seed: 9960 + variant, shadow: W - 3, shadowY: H - 1, shadowH: 4, alpha: 0.2 });
 }
 
 /** Faceted boulders. Four sizes so authors can build rhythm. */
@@ -1359,10 +1372,11 @@ function bench(variant: number): Surface {
 /** Picnic table with attached benches. */
 function picnicTable(): Surface {
   return prop(40, 30, (s) => {
-    // far bench
-    planks(s, 2, 11, 36, 3, P.WOOD, false, 2, 11400);
-    s.hline(2, 11, 36, P.WOOD[3]);
-    s.hline(2, 13, 36, P.WOOD[0]);
+    // far bench, lifted clear of the table top so both read
+    planks(s, 2, 8, 36, 3, P.WOOD, false, 2, 11400);
+    s.hline(2, 8, 36, P.WOOD[3]);
+    s.hline(2, 10, 36, P.WOOD[0]);
+    for (const x of [6, 31]) { s.rect(x, 11, 2, 3, P.WOOD[1]); s.vline(x, 11, 3, P.WOOD[2]); }
     // table top
     planks(s, 3, 14, 34, 7, P.WOOD_LIGHT, false, 3, 11410);
     s.hline(3, 14, 34, P.WOOD_LIGHT[4]);
@@ -1569,7 +1583,7 @@ function lamppost(lit: number | null): Surface {
     for (let k = 0; k < 4; k++) s.px(8 + k, 12 - k, P.IRON[2]);
     // lantern housing
     s.rect(3, 4, 9, 9, P.IRON[1]);
-    s.rect(4, 5, 7, 7, lit !== null ? P.WINDOW_AMBER[3] : P.GLASS_COLD?.[2] ?? P.IRON[3]);
+    s.rect(4, 5, 7, 7, lit !== null ? P.WINDOW_AMBER[3] : P.ROOF_BLUE[1]); // cold glass when unlit
     s.rectOutline(3, 4, 9, 9, P.IRON[0]);
     s.vline(3, 4, 9, P.IRON[3]);
     s.hline(3, 4, 9, P.IRON[4]);
@@ -1665,12 +1679,14 @@ function cart(): Surface {
 
 function wheelbarrow(): Surface {
   return prop(28, 24, (s) => {
-    // tray
-    s.poly([[5, 6], [25, 6], [22, 16], [8, 16]], P.IRON[2]);
-    s.poly([[6, 7], [24, 7], [21, 12], [9, 12]], P.IRON[3]);
-    s.hline(5, 6, 21, P.IRON[4]);
+    // timber tray with an iron lip
+    s.poly([[5, 6], [25, 6], [22, 16], [8, 16]], P.WOOD[2]);
+    s.poly([[6, 7], [24, 7], [21, 12], [9, 12]], P.WOOD[3]);
+    for (let i = 8; i < 23; i += 4) s.line(i, 7, i - 1, 15, P.WOOD[0], 0.6);
+    s.hline(5, 6, 21, P.IRON[3]);
+    s.hline(5, 5, 21, P.IRON[4], 0.7);
     for (let k = 0; k < 4; k++) s.px(8 + k * 4, 16, P.IRON[0]);
-    s.line(8, 16, 22, 16, P.IRON[0]);
+    s.line(8, 16, 22, 16, P.WOOD[0]);
     // handles
     for (let k = 0; k < 8; k++) { s.px(24 + k - 8, 17 + Math.round(k * 0.3), P.WOOD[2]); }
     for (let k = 0; k < 6; k++) { s.px(21 + k, 15 + k, P.WOOD[2]); s.px(21 + k, 16 + k, P.WOOD[0]); }
@@ -1682,10 +1698,14 @@ function wheelbarrow(): Surface {
     s.ellipseOutline(3, 12, 10, 10, P.WOOD[0]);
     s.ellipse(6, 15, 4, 4, P.IRON[2]);
     s.px(7, 16, P.IRON[4]);
-    // a load of soil
-    for (let k = 0; k < 26; k++) {
-      const x = 7 + (k * 7) % 15, y = 5 + (k * 3) % 3;
-      s.px(x, y, k % 3 ? P.DIRT[2] : P.DIRT[3]);
+    // a heaped load of soil
+    for (let x = 7; x < 24; x++) {
+      const h = Math.round(Math.sin(((x - 7) / 16) * Math.PI) * 4);
+      for (let k = 0; k <= h; k++) {
+        const y = 6 - k;
+        const lit = (x + k) % 3 === 0 && x < 17;
+        s.px(x, y, k === h ? (lit ? P.DIRT[4] : P.DIRT[3]) : lit ? P.DIRT[3] : x > 18 ? P.DIRT[1] : P.DIRT[2]);
+      }
     }
   }, { seed: 11590, shadow: 22, shadowY: 23, shadowH: 5 });
 }
@@ -1821,11 +1841,13 @@ function basket(variant: number): Surface {
     }
     s.hline(4, 12, W - 8, P.ROPE[0], 0.7);
     if (variant === 1) { // apples
-      for (const [ax, ay] of [[4, 1], [8, 0], [11, 2], [6, 3]] as Array<[number, number]>) {
-        s.ellipse(ax, ay + 1, 4, 4, P.FLOWER_ROSE[1]);
-        s.px(ax + 1, ay + 2, P.FLOWER_ROSE[2]);
-        s.px(ax + 2, ay + 1, P.FLOWER_ROSE[3]);
-        s.px(ax + 1, ay, P.TREE_WARM[2]);
+      for (const [ax, ay] of [[3, 1], [8, 0], [11, 2]] as Array<[number, number]>) {
+        s.ellipse(ax, ay, 5, 5, P.FLOWER_ROSE[0]);
+        s.ellipse(ax, ay, 4, 4, P.FLOWER_ROSE[1]);
+        s.px(ax + 1, ay + 1, P.FLOWER_ROSE[2]);
+        s.px(ax + 1, ay, P.FLOWER_ROSE[3]);
+        s.px(ax + 2, ay + 2, P.FLOWER_ROSE[0]);
+        s.px(ax + 2, ay - 1, P.TREE_WARM[2]);   // stalk
       }
     } else if (variant === 2) { // folded cloth
       s.ellipse(3, 1, 11, 5, P.LINEN[3]);
@@ -1878,17 +1900,19 @@ function woodpile(variant: number): Surface {
     const rows = variant === 0 ? 4 : 3;
     for (let row = rows - 1; row >= 0; row--) {
       const y = H - 4 - row * 4;
-      const count = Math.floor((W - 4) / 5) - (row > 1 ? 1 : 0);
+      const count = Math.floor((W - 4) / 4) - (row > 1 ? 1 : 0);
       const off = row % 2 ? 2 : 0;
       for (let k = 0; k < count; k++) {
-        const x = 2 + off + k * 5;
-        s.ellipse(x, y - 4, 5, 5, P.WOOD[1]);
-        s.ellipse(x + 1, y - 3, 3, 3, P.WOOD_LIGHT[3]);
-        s.px(x + 2, y - 2, P.WOOD_LIGHT[4]);
-        s.ellipseOutline(x, y - 4, 5, 5, P.WOOD[0], 0.85);
-        // ring
-        s.px(x + 2, y - 3, P.WOOD_LIGHT[1]);
-        if (r.chance(0.35)) s.px(x + 1, y - 1, P.MOSS[2]);
+        // logs are split, not turned: vary the diameter and seat them unevenly
+        const d = r.int(4, 6);
+        const x = 2 + off + k * 4 - Math.floor((d - 4) / 2);
+        const yy = y - d + r.int(0, 1);
+        s.ellipse(x, yy, d, d, P.WOOD[1]);
+        s.ellipse(x + 1, yy + 1, d - 2, d - 2, P.WOOD_LIGHT[3]);
+        s.px(x + Math.floor(d / 2), yy + Math.floor(d / 2), P.WOOD_LIGHT[4]);
+        s.ellipseOutline(x, yy, d, d, P.WOOD[0], 0.85);
+        s.px(x + Math.floor(d / 2), yy + 1, P.WOOD_LIGHT[1]);
+        if (r.chance(0.35)) s.px(x + 1, yy + d - 2, P.MOSS[2]);
       }
     }
     // a couple of split logs leaning against the stack
@@ -2265,45 +2289,274 @@ function shrineSmall(): Surface {
   }, { seed: 11800, shadow: 18, shadowY: 27, shadowH: 5 });
 }
 
-/** Quest One's hand bell. Frame -1 is the resting sprite; 0..2 shake. */
+/**
+ * Quest One's hand bell: a held object, so it needs a grip, a shoulder, a flared
+ * lip and a visible mouth. Frame -1 rests; 0..2 shake it.
+ */
 function bellSmall(frame: number): Surface {
   const W = 14, H = 16;
   const tilt = frame < 0 ? 0 : [0, -1, 1][frame];
   return prop(W, H, (s) => {
     const cx = 6 + tilt;
-    // handle
-    s.rect(cx, 1, 2, 4, P.WOOD[2]);
-    s.px(cx, 1, P.WOOD[4]);
-    s.px(cx + 1, 4, P.WOOD[0]);
-    s.px(cx - 1, 2, P.WOOD[3]);
-    // bell body: a bell-shaped taper
-    for (let j = 0; j < 8; j++) {
-      const w = 4 + Math.round(Math.pow(j / 7, 1.5) * 6);
+    // turned wooden grip
+    s.rect(cx, 0, 2, 2, P.WOOD[3]);
+    s.px(cx - 1, 1, P.WOOD[2]); s.px(cx + 2, 1, P.WOOD[0]);
+    s.rect(cx, 2, 2, 2, P.WOOD[2]);
+    s.px(cx, 2, P.WOOD[4]);
+    s.px(cx + 1, 3, P.WOOD[0]);
+    // bronze crown collar
+    s.rect(cx - 1, 4, 4, 2, P.BRONZE[2]);
+    s.px(cx - 1, 4, P.BRONZE[4]); s.px(cx, 4, P.BRONZE[3]);
+    s.px(cx + 2, 5, P.BRONZE[0]);
+    // body: shoulder curve out to a flared lip
+    const profile = [4, 5, 6, 7, 8, 9, 11, 12];
+    profile.forEach((w, j) => {
       const x0 = cx + 1 - Math.floor(w / 2);
       for (let i = 0; i < w; i++) {
         const u = (i + 0.5) / w;
-        s.px(x0 + i, 5 + j, P.BRONZE[cylIndex(u)]);
+        let idx = cylIndex(u);
+        if (j >= 6) idx = Math.min(4, idx + 1); // the lip catches the light
+        s.px(x0 + i, 6 + j, P.BRONZE[idx]);
+      }
+    });
+    // moulded band above the lip, and the dark mouth beneath it
+    const lipW = 12, lipX = cx + 1 - 6;
+    for (let i = 0; i < lipW; i++) s.px(lipX + i, 12, P.BRONZE[i < 4 ? 4 : i < 8 ? 3 : 1]);
+    for (let i = 1; i < lipW - 1; i++) s.px(lipX + i, 14, P.OUTLINE);
+    for (let i = 2; i < lipW - 2; i++) s.px(lipX + i, 15, P.BRONZE[0]);
+    // specular streak + clapper swinging in the mouth
+    s.px(cx - 2, 8, P.BRONZE[4]); s.px(cx - 2, 9, P.BRONZE[4]); s.px(cx - 1, 10, P.BRONZE[4]);
+    s.px(cx + 3, 10, P.BRONZE[0]); s.px(cx + 3, 11, P.BRONZE[0]);
+    const clap = cx + 1 + (frame > 0 ? tilt * 3 : 0);
+    s.px(clap, 14, P.BRONZE[3]);
+    s.px(clap, 15, P.BRONZE[1]);
+    if (frame > 0) {
+      const d = frame === 1 ? -1 : 1;
+      for (let k = 0; k < 2; k++) {
+        s.px(cx + d * (7 + k), 7 + k * 3, P.LINEN[3], 0.65 - k * 0.2);
+        s.px(cx + d * (8 + k), 8 + k * 3, P.LINEN[2], 0.45 - k * 0.15);
       }
     }
-    // flared lip
-    const lipW = 12;
-    const lipX = cx + 1 - Math.floor(lipW / 2);
-    for (let i = 0; i < lipW; i++) {
-      const u = (i + 0.5) / lipW;
-      s.px(lipX + i, 13, P.BRONZE[Math.min(4, cylIndex(u) + 1)]);
-      s.px(lipX + i, 14, P.BRONZE[0]);
+  }, { seed: 11810, shadow: 11, shadowY: 15, shadowH: 3 });
+}
+
+// ── living detail ──────────────────────────────────────────────────────────
+
+/**
+ * Animals get a full outline (they are creatures, not scenery) and a contact
+ * shadow that stays put while the body moves, so the bob reads as weight.
+ */
+function creature(w: number, h: number, draw: (s: Surface) => void, shadow: { w: number; y: number; h?: number; cx?: number }): Surface {
+  const s = new Surface(w, h);
+  draw(s);
+  s.outline(P.OUTLINE);
+  contact(s, shadow.cx ?? w / 2, shadow.y, shadow.w, shadow.h ?? 3, 0.3);
+  return s;
+}
+
+/** Hen, pecking. Frames 0..3: down, mid, up, mid. */
+function chicken(frame: number): Surface {
+  const dip = [4, 2, 0, 2][frame];
+  const step = frame % 2;
+  return creature(16, 15, (s) => {
+    const f = P.FEATHER;
+    // body
+    s.ellipse(2, 4, 10, 8, f[2]);
+    for (let j = 4; j < 12; j++) {
+      for (let i = 2; i < 12; i++) {
+        if (!s.alphaAt(i, j)) continue;
+        const u = (i - 2) / 10 - 0.45, v = (j - 4) / 8 - 0.42;
+        const d = -(u * 0.6 + v * 0.85);
+        s.px(i, j, d > 0.42 ? f[4] : d > 0.1 ? f[3] : d > -0.25 ? f[2] : f[1]);
+      }
     }
-    // specular band + clapper
-    s.px(cx - 1, 7, P.BRONZE[4]); s.px(cx - 1, 8, P.BRONZE[4]);
-    s.px(cx + 3, 10, P.BRONZE[1]);
-    s.px(cx + 1 + (frame > 0 ? tilt * 2 : 0), 14, P.BRONZE[0]);
-    if (frame > 0) {
-      // motion ticks
-      const d = frame === 1 ? -1 : 1;
-      s.px(cx + d * 7, 8, P.LINEN[3], 0.6);
-      s.px(cx + d * 8, 10, P.LINEN[2], 0.45);
+    // wing
+    s.ellipse(4, 6, 6, 4, f[1]);
+    s.ellipse(4, 6, 5, 3, f[3]);
+    s.hline(4, 9, 5, f[0], 0.8);
+    // tail
+    for (let k = 0; k < 4; k++) { s.px(1 + k, 3 + k, f[3]); s.px(0 + k, 4 + k, f[1]); }
+    s.px(0, 5, f[0]);
+    // neck + head
+    const hx = 10, hy = 2 + dip;
+    s.rect(hx - 1, hy + 2, 3, 4, f[2]);
+    s.ellipse(hx, hy, 5, 5, f[3]);
+    s.px(hx + 1, hy + 1, f[4]);
+    // comb + wattle + beak + eye
+    s.px(hx + 1, hy - 1, P.FLOWER_ROSE[1]); s.px(hx + 2, hy - 1, P.FLOWER_ROSE[2]);
+    s.px(hx + 1, hy - 2, P.FLOWER_ROSE[1]);
+    s.px(hx + 2, hy + 4, P.FLOWER_ROSE[1]);
+    s.px(hx + 4, hy + 2, P.FLOWER_GOLD[2]); s.px(hx + 5, hy + 2, P.FLOWER_GOLD[1]);
+    s.px(hx + 3, hy + 1, P.OUTLINE);
+    // legs
+    for (const [lx, off] of [[5, step], [8, 1 - step]] as Array<[number, number]>) {
+      s.vline(lx, 11, 2 + off, P.FLOWER_GOLD[1]);
+      s.px(lx - 1, 12 + off, P.FLOWER_GOLD[0]);
+      s.px(lx + 1, 12 + off, P.FLOWER_GOLD[1]);
     }
-  }, { seed: 11810, shadow: 10, shadowY: 15, shadowH: 3 });
+  }, { w: 11, y: 14, cx: 7 });
+}
+
+/** Duck, waddling. */
+function duck(frame: number): Surface {
+  const bob = [0, 1, 0, 1][frame];
+  const step = frame % 2;
+  return creature(18, 16, (s) => {
+    const f = P.FEATHER;
+    const y0 = 6 + bob;
+    // body, longer and lower than the hen
+    s.ellipse(2, y0, 12, 7, f[2]);
+    for (let j = y0; j < y0 + 7; j++) {
+      for (let i = 2; i < 14; i++) {
+        if (!s.alphaAt(i, j)) continue;
+        const u = (i - 2) / 12 - 0.45, v = (j - y0) / 7 - 0.42;
+        const d = -(u * 0.6 + v * 0.85);
+        s.px(i, j, d > 0.42 ? f[4] : d > 0.1 ? f[3] : d > -0.25 ? f[2] : f[1]);
+      }
+    }
+    // folded wing along the flank, with a teal speculum at its trailing edge
+    s.ellipse(3, y0 + 2, 8, 3, P.HAIR.brown[2]);
+    s.hline(4, y0 + 2, 6, P.HAIR.brown[3]);
+    s.hline(4, y0 + 4, 5, P.HAIR.brown[1], 0.8);
+    s.px(3, y0 + 3, P.ROOF_TEAL[3]); s.px(4, y0 + 3, P.ROOF_TEAL[4]);
+    // tail flick
+    s.px(1, y0 + 1, f[3]); s.px(0, y0, f[2]); s.px(1, y0, f[4]);
+    // neck + green head
+    s.rect(12, y0 - 2, 3, 4, P.ROOF_TEAL[2]);
+    s.ellipse(12, y0 - 6, 6, 6, P.ROOF_TEAL[2]);
+    s.ellipse(13, y0 - 6, 4, 4, P.ROOF_TEAL[3]);
+    s.px(14, y0 - 5, P.ROOF_TEAL[4]);
+    s.px(15, y0 - 4, P.OUTLINE);
+    s.hline(12, y0 - 1, 3, P.LINEN[3], 0.9);   // white collar
+    // bill
+    s.rect(16, y0 - 4, 2, 2, P.FLOWER_GOLD[2]);
+    s.px(17, y0 - 3, P.FLOWER_GOLD[1]);
+    // feet
+    for (const [lx, off] of [[6, step], [9, 1 - step]] as Array<[number, number]>) {
+      s.vline(lx, y0 + 7, 1 + off, P.FLOWER_GOLD[1]);
+      s.px(lx + 1, y0 + 7 + off, P.FLOWER_GOLD[2]);
+    }
+  }, { w: 12, y: 15, cx: 8 });
+}
+
+/** A small brown bird, perched and looking about. */
+function birdPerched(frame: number): Surface {
+  return creature(12, 11, (s) => {
+    const b = P.HAIR.brown;
+    const turn = frame; // 0 looks left, 1 looks up-right
+    s.ellipse(2, 3, 7, 6, b[2]);
+    for (let j = 3; j < 9; j++) {
+      for (let i = 2; i < 9; i++) {
+        if (!s.alphaAt(i, j)) continue;
+        const u = (i - 2) / 7 - 0.45, v = (j - 3) / 6 - 0.42;
+        const d = -(u * 0.6 + v * 0.85);
+        s.px(i, j, d > 0.4 ? b[4] : d > 0.05 ? b[3] : d > -0.3 ? b[2] : b[1]);
+      }
+    }
+    // pale belly + wing bar
+    s.ellipse(3, 6, 5, 3, P.UI_PARCHMENT[3]);
+    s.hline(3, 6, 4, b[1], 0.7);
+    // tail
+    for (let k = 0; k < 4; k++) { s.px(1 - 0 + k - 1, 8 - k + (turn ? 0 : 1), b[1]); }
+    s.px(0, 7, b[0]);
+    // head
+    const hx = 7 - turn, hy = 1 + (turn ? 0 : 1);
+    s.ellipse(hx, hy, 5, 5, b[3]);
+    s.px(hx + 1, hy + 1, b[4]);
+    s.px(hx + 3, hy + 2, P.OUTLINE);
+    s.px(hx + 4, hy + 2, P.FLOWER_GOLD[1]);
+    s.px(hx + 5, hy + 2, P.FLOWER_GOLD[0]);
+    // legs
+    s.px(4, 9, P.WOOD[1]); s.px(6, 9, P.WOOD[1]);
+  }, { w: 8, y: 10, cx: 5 });
+}
+
+/** Butterfly, four frames of flap plus a little rise and fall. */
+function butterfly(frame: number): Surface {
+  const spread = [4, 3, 1, 3][frame];
+  const rise = [0, 1, 2, 1][frame];
+  return creature(12, 12, (s) => {
+    const cx = 6, cy = 7 - rise;
+    const c = P.FLOWER_GOLD;
+    for (const dir of [-1, 1]) {
+      const lit = dir < 0;
+      // forewing: wide at the top, tapering back toward the body
+      for (let j = 0; j < 3; j++) {
+        const w = Math.max(1, spread - (j === 2 ? 1 : 0));
+        for (let i = 0; i < w; i++) {
+          const x = cx + dir * (1 + i), y = cy - 4 + j;
+          s.px(x, y, i === w - 1 ? c[0] : lit ? c[2] : c[1]);
+        }
+      }
+      // hindwing: smaller, one row lower, with a gap so the pair reads as four wings
+      for (let j = 0; j < 2; j++) {
+        const w = Math.max(1, spread - 1 - j);
+        for (let i = 0; i < w; i++) {
+          const x = cx + dir * (1 + i), y = cy - 1 + j;
+          s.px(x, y, i === w - 1 ? c[0] : lit ? c[1] : c[0]);
+        }
+      }
+      // eyespot near the forewing tip
+      if (spread >= 3) s.px(cx + dir * (spread - 1), cy - 3, lit ? c[3] : c[2]);
+    }
+    // body + antennae
+    s.vline(cx, cy - 4, 6, P.HAIR.brown[1]);
+    s.px(cx, cy - 4, P.HAIR.brown[3]);
+    s.px(cx, cy + 1, P.OUTLINE);
+    s.px(cx - 1, cy - 5, P.OUTLINE); s.px(cx + 1, cy - 6, P.OUTLINE);
+  }, { w: 6, y: 11, cx: 6, h: 2 });
+}
+
+/** A fat ginger cat, asleep. Emphatically not Pip. */
+function catSleeping(frame: number): Surface {
+  const breath = frame; // 1px rise
+  return creature(20, 13, (s) => {
+    const g = P.CAT_GINGER;
+    const y0 = 3 + (1 - breath);
+    // curled body
+    s.ellipse(1, y0, 17, 9 - (1 - breath), g[2]);
+    for (let j = 0; j < 10; j++) {
+      for (let i = 1; i < 18; i++) {
+        const y = y0 + j;
+        if (!s.alphaAt(i, y)) continue;
+        const u = (i - 1) / 17 - 0.42, v = j / 9 - 0.42;
+        const d = -(u * 0.55 + v * 0.86);
+        s.px(i, y, d > 0.42 ? g[4] : d > 0.1 ? g[3] : d > -0.28 ? g[2] : g[1]);
+      }
+    }
+    // tabby stripes over the back
+    for (let k = 0; k < 4; k++) {
+      const x = 4 + k * 3;
+      for (let j = 0; j < 3; j++) s.pxOver(x + j % 2, y0 + 1 + j, g[1], 0.8);
+    }
+    // tail curled round the front
+    for (let k = 0; k < 9; k++) {
+      const x = 3 + k, y = y0 + 8 - Math.round(Math.sin((k / 8) * Math.PI) * 1.2);
+      s.px(x, y, k > 6 ? g[3] : g[2]);
+      s.px(x, y + 1, g[0], 0.8);
+    }
+    s.px(11, y0 + 8, P.LINEN[3]); // white tail tip
+    // head tucked at the right
+    s.ellipse(11, y0 + 1, 8, 7, g[3]);
+    for (let j = 0; j < 7; j++) for (let i = 11; i < 19; i++) {
+      const y = y0 + 1 + j;
+      if (!s.alphaAt(i, y)) continue;
+      const u = (i - 11) / 8 - 0.42, v = j / 7 - 0.42;
+      const d = -(u * 0.55 + v * 0.86);
+      s.px(i, y, d > 0.4 ? g[4] : d > 0.05 ? g[3] : d > -0.3 ? g[2] : g[1]);
+    }
+    // ears
+    s.px(12, y0, g[2]); s.px(13, y0 - 1, g[3]); s.px(14, y0, g[4]);
+    s.px(16, y0, g[2]); s.px(17, y0 - 1, g[2]);
+    s.px(13, y0, P.FLOWER_ROSE[1]);
+    // closed eyes + muzzle
+    s.px(14, y0 + 3, P.OUTLINE); s.px(15, y0 + 3, P.OUTLINE);
+    s.px(17, y0 + 3, P.OUTLINE); s.px(18, y0 + 3, P.OUTLINE);
+    s.px(16, y0 + 4, P.FLOWER_ROSE[1]);
+    s.px(16, y0 + 5, P.OUTLINE, 0.6);
+    // whisker
+    s.px(19, y0 + 4, P.LINEN[3], 0.7);
+  }, { w: 18, y: 12, cx: 10, h: 4 });
 }
 
 // ── registration ───────────────────────────────────────────────────────────
@@ -2367,4 +2620,11 @@ export function registerProps(b: ArtBuild): void {
   b.add('prop/town/shrine_small', shrineSmall());
   b.add('prop/town/bell_small', bellSmall(-1));
   b.addStrip('prop/town/bell_small_ring', [0, 1, 2].map(bellSmall), { key: 'bell_small_ring', frameRate: 12, repeat: -1 });
+
+  // ── living detail ──
+  b.addStrip('prop/town/chicken', [0, 1, 2, 3].map(chicken), { key: 'chicken_peck', frameRate: 4, repeat: -1 });
+  b.addStrip('prop/town/duck', [0, 1, 2, 3].map(duck), { key: 'duck_waddle', frameRate: 4, repeat: -1 });
+  b.addStrip('prop/town/bird_perched', [0, 1].map(birdPerched), { key: 'bird_perched_idle', frameRate: 2, repeat: -1 });
+  b.addStrip('prop/town/butterfly', [0, 1, 2, 3].map(butterfly), { key: 'butterfly_fly', frameRate: 8, repeat: -1 });
+  b.addStrip('prop/town/cat_sleeping', [0, 1].map(catSleeping), { key: 'cat_sleeping_idle', frameRate: 2, repeat: -1 });
 }

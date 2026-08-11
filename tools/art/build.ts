@@ -13,17 +13,6 @@ import { guaranteeFrames } from './lib/guarantee.js';
 import { Surface, upscale } from './lib/pixel.js';
 import { encodePNG } from './lib/png.js';
 
-import { registerTerrain } from './assets/terrain.js';
-import { registerBuildings } from './assets/buildings.js';
-import { registerProps } from './assets/props.js';
-import { registerCharacters } from './assets/characters.js';
-import { registerInteriors } from './assets/interiors.js';
-import { registerShrine } from './assets/shrine.js';
-import { registerEnemies } from './assets/enemies.js';
-import { registerFx } from './assets/fx.js';
-import { registerUI } from './assets/ui.js';
-import { registerFestival } from './assets/festival.js';
-import { registerWoods } from './assets/woods.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -37,28 +26,45 @@ function writePNG(path: string, s: Surface) {
 
 const build = new ArtBuild();
 
-const MODULES: Array<[string, (b: ArtBuild) => void]> = [
-  ['terrain', registerTerrain],
-  ['woods', registerWoods],
-  ['shrine', registerShrine],
-  ['buildings', registerBuildings],
-  ['interiors', registerInteriors],
-  ['props', registerProps],
-  ['festival', registerFestival],
-  ['characters', registerCharacters],
-  ['enemies', registerEnemies],
-  ['fx', registerFx],
-  ['ui', registerUI],
-];
+/**
+ * Modules are imported one at a time rather than statically.
+ *
+ * Several people work on different asset modules simultaneously, so at any
+ * moment one file may be mid-edit and fail to parse. A static import graph
+ * makes that one broken file break everyone's build; a dynamic import lets the
+ * pipeline skip it, report it loudly, and still produce usable assets.
+ */
+const MODULE_ORDER = [
+  'terrain', 'woods', 'shrine', 'buildings', 'interiors', 'props',
+  'festival', 'characters', 'enemies', 'fx', 'ui',
+] as const;
+
+const REGISTER_NAME: Record<string, string> = {
+  terrain: 'registerTerrain', woods: 'registerWoods', shrine: 'registerShrine',
+  buildings: 'registerBuildings', interiors: 'registerInteriors', props: 'registerProps',
+  festival: 'registerFestival', characters: 'registerCharacters', enemies: 'registerEnemies',
+  fx: 'registerFx', ui: 'registerUI',
+};
 
 const t0 = Date.now();
-for (const [name, fn] of MODULES) {
+const failed: Array<[string, string]> = [];
+
+for (const name of MODULE_ORDER) {
   const before = { t: build.tiles.length, s: build.sprites.length };
-  fn(build);
-  console.log(
-    `  ${name.padEnd(12)} +${String(build.tiles.length - before.t).padStart(4)} tiles  ` +
-    `+${String(build.sprites.length - before.s).padStart(4)} sprites`,
-  );
+  try {
+    const mod = await import(`./assets/${name}.js`) as Record<string, (b: ArtBuild) => void>;
+    const fn = mod[REGISTER_NAME[name]];
+    if (typeof fn !== 'function') throw new Error(`missing export ${REGISTER_NAME[name]}`);
+    fn(build);
+    console.log(
+      `  ${name.padEnd(12)} +${String(build.tiles.length - before.t).padStart(4)} tiles  ` +
+      `+${String(build.sprites.length - before.s).padStart(4)} sprites`,
+    );
+  } catch (e) {
+    const msg = (e as Error).message.split('\n')[0].slice(0, 160);
+    failed.push([name, msg]);
+    console.log(`  ${name.padEnd(12)} ✗ SKIPPED — ${msg}`);
+  }
 }
 
 const stubbed = guaranteeFrames(build);
@@ -130,12 +136,21 @@ function sheet(items: { name: string; s: Surface }[], title: string, cols = 12) 
 
 const groups = new Map<string, { name: string; s: Surface }[]>();
 for (const sp of build.sprites) {
-  const g = sp.name.split('/').slice(0, 2).join('_');
+  // 3+ segments group by their first two ('char/sera/...' -> char_sera);
+  // 2-segment names group by their first ('fx/dust_0' -> fx), otherwise every
+  // effect gets its own one-item sheet.
+  const parts = sp.name.split('/');
+  const g = parts.length >= 3 ? parts.slice(0, 2).join('_') : parts[0];
   if (!groups.has(g)) groups.set(g, []);
   groups.get(g)!.push(sp);
 }
 for (const [g, items] of groups) sheet(items, `sprite_${g}`, items.length > 40 ? 16 : 8);
 sheet(build.tiles, 'tiles_all', 24);
+
+if (failed.length) {
+  console.log(`\n  ⚠ ${failed.length} module(s) failed to load and were skipped:`);
+  for (const [n, m] of failed) console.log(`    ${n}: ${m}`);
+}
 
 console.log(
   `\n  tileset ${tileset.surface.w}x${tileset.surface.h} (${build.tiles.length} tiles)` +

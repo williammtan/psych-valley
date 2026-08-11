@@ -180,6 +180,8 @@ export const DISSENT: Ramp = ['#5e2a14', '#8f4a1c', '#c2762a', '#e8a349', '#ffd4
 /** Desaturated violet for *stale* information — old attack patterns. */
 export const ECHO_PALE: Ramp = ['#2a2438', '#3b3450', '#4e4668', '#665d84', '#8279a3'];
 export const ECHO_SPARK = '#eae2ff';
+/** The white-hot tint of a damage flash. Warm, so it never reads as Echo light. */
+export const HIT_FLASH = '#ffe6dc';
 
 // ── Whisper Woods: the cool, quiet zone between town and shrine (appended) ─
 // Related to the town ramps by hue so it reads as the same world — the woods
@@ -233,6 +235,8 @@ export const SHRINE_OUTER: Ramp = ['#20222e', '#2e3242', '#3e4457', '#525a70', '
 // TONE_ROSE = tone B, TONE_TEAL = tone C.
 /** Unlit paper: cold, dusty, obviously "off". */
 export const PAPER_DIM: Ramp = ['#3a3242', '#544a58', '#6f6472', '#8e8390', '#aca2ab'];
+/** Lit red paper — deep at the hem, hot at the core. Traditional festival red. */
+export const PAPER_RED: Ramp = ['#4a1220', '#7d2231', '#b83c40', '#e3745c', '#ffcf9e'];
 /** Warm paper stock for hanging lanterns that are lit but not ceremonial. */
 export const PAPER_WARM: Ramp = ['#8a5a30', '#b57c42', '#d9a361', '#f0c98c', '#fdefc6'];
 /** The ceremonial runner laid down the plaza's centre. */

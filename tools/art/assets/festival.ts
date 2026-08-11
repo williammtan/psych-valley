@@ -18,6 +18,7 @@
  */
 import { Surface, rng, valueNoise, speckle, type Rng } from '../lib/pixel.js';
 import { ArtBuild, TILE } from '../lib/registry.js';
+import { registerBlobSet } from '../lib/autotile.js';
 import * as P from '../lib/palette.js';
 
 type Ramp = readonly string[];
@@ -1391,6 +1392,1433 @@ function stallFoodWagon(): Surface {
   return s;
 }
 
+// ── game and craft stalls ──────────────────────────────────────────────────
+
+/** A small triangular pennant on a staff. */
+function pennant(s: Surface, x: number, y: number, ramp: Ramp, dir = 1, len = 9) {
+  for (let i = 0; i < len; i++) {
+    const h = Math.max(1, Math.round((1 - i / len) * 7));
+    for (let j = 0; j < h; j++) {
+      const c = j === 0 ? ramp[4] : j < h - 1 ? ramp[2] : ramp[1];
+      s.px(x + dir * i, y + j, c);
+    }
+    s.px(x + dir * i, y + h, ramp[0], 0.6);
+  }
+}
+
+/** stall 3 — ring toss: a peg board, hoops, and a low counter. */
+function stallGameRing(): Surface {
+  const W = 64, H = 56;
+  const s = new Surface(W, H);
+  // side posts
+  for (const px of [4, 57]) {
+    s.rect(px, 8, 3, 42, P.WOOD[2]);
+    s.vline(px, 8, 42, P.WOOD[3]);
+    s.vline(px + 2, 8, 42, P.WOOD[0]);
+    s.hline(px - 1, 7, 5, P.WOOD[4]);
+  }
+  pennant(s, 6, 2, P.DYE_SAFFRON, 1, 10);
+  s.vline(5, 2, 8, P.WOOD[3]);
+  pennant(s, 58, 2, P.DYE_PLUM, -1, 10);
+  s.vline(58, 2, 8, P.WOOD[3]);
+  s.hline(4, 9, 56, P.WOOD[1]);
+
+  // backing board with pegs
+  s.rect(7, 12, 50, 24, P.WOOD_LIGHT[1]);
+  planks(s, 7, 12, 50, 24, P.WOOD_LIGHT, 6101, 6, true);
+  s.rect(7, 12, 50, 24, P.OUTLINE, 0.18);
+  s.hline(7, 12, 50, P.WOOD_LIGHT[4], 0.8);
+  s.hline(7, 35, 50, P.OUTLINE, 0.7);
+  const pegRamps = [P.CARPET_RED, P.DYE_SAFFRON, P.DYE_SEA, P.DYE_PLUM, P.TONE_ROSE];
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 5; col++) {
+      const px = 12 + col * 10, py = 16 + row * 7;
+      // peg
+      s.rect(px, py, 2, 5, P.WOOD[3]);
+      s.px(px + 1, py, P.WOOD[4]);
+      s.px(px + 1, py + 4, P.WOOD[0]);
+      s.hline(px - 1, py + 5, 4, P.OUTLINE, 0.4);
+      // a hoop landed on some of them
+      if ((row + col) % 3 !== 1) continue;
+      const ramp = pegRamps[(row * 5 + col) % pegRamps.length];
+      s.ellipseOutline(px - 3, py + 2, 8, 4, ramp[2]);
+      s.px(px - 3, py + 4, ramp[1]);
+      s.px(px + 4, py + 4, ramp[0]);
+      s.px(px - 2, py + 2, ramp[4]);
+    }
+  }
+  // score marks painted on the board (symbols, never text)
+  for (let i = 0; i < 5; i++) {
+    const dots = (i % 3) + 1;
+    for (let d = 0; d < dots; d++) s.px(12 + i * 10 + d, 34, P.UI_GOLD[3]);
+  }
+
+  // counter with a rack of spare hoops
+  counter(s, 4, 38, 56, 14, P.WOOD, 6201);
+  s.rect(10, 42, 44, 7, P.CARPET_RED[1]);
+  s.rect(11, 43, 42, 5, P.CARPET_RED[2]);
+  s.hline(11, 43, 42, P.CARPET_RED[3]);
+  s.hline(11, 47, 42, P.CARPET_RED[0]);
+  for (let i = 0; i < 5; i++) {
+    const ramp = pegRamps[i];
+    s.ellipseOutline(14 + i * 9, 33, 9, 5, ramp[2]);
+    s.px(14 + i * 9, 35, ramp[3]);
+    s.px(22 + i * 9, 36, ramp[0]);
+  }
+  hangLantern(s, 31, 9, P.WINDOW_AMBER, 0);
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, 32, 55, 58, 8, 0.3);
+  return s;
+}
+
+/** stall 4 — lucky dip: a cloth-draped barrel under an arch of prizes. */
+function stallGameDip(): Surface {
+  const W = 56, H = 56;
+  const s = new Surface(W, H);
+  // prize arch
+  for (const px of [5, 47]) {
+    s.rect(px, 14, 3, 30, P.WOOD[2]);
+    s.vline(px, 14, 30, P.WOOD[3]);
+    s.vline(px + 2, 14, 30, P.WOOD[0]);
+  }
+  for (let x = 5; x < 51; x++) {
+    const y = 14 - Math.round(Math.sin(((x - 5) / 45) * Math.PI) * 7);
+    s.px(x, y, P.WOOD[3]);
+    s.px(x, y + 1, P.WOOD[2]);
+    s.px(x, y + 2, P.WOOD[0], 0.8);
+  }
+  // prizes hanging from the arch
+  const prizes: Array<[number, Ramp, string]> = [
+    [11, P.TONE_ROSE, 'lantern'], [20, P.DYE_SAFFRON, 'ribbon'],
+    [28, P.LANTERN, 'lantern'], [36, P.DYE_SEA, 'ribbon'], [44, P.DYE_PLUM, 'lantern'],
+  ];
+  for (const [px, ramp, kind] of prizes) {
+    const y = 14 - Math.round(Math.sin(((px - 5) / 45) * Math.PI) * 7) + 3;
+    s.vline(px, y, 3, P.ROPE[2]);
+    if (kind === 'lantern') {
+      hangLantern(s, px, y + 2, ramp, 0, true);
+    } else {
+      // rosette + tails
+      s.ellipse(px - 3, y + 3, 7, 6, ramp[1]);
+      s.ellipse(px - 2, y + 4, 5, 4, ramp[3]);
+      s.px(px, y + 5, ramp[4]);
+      for (let j = 0; j < 5; j++) {
+        s.px(px - 2, y + 8 + j, ramp[2]);
+        s.px(px + 2, y + 8 + j, ramp[1]);
+      }
+    }
+  }
+  // the barrel, draped in cloth
+  cylinder(s, 12, 30, 32, 24, 10, P.WOOD, { lid: false });
+  for (const by of [33, 45]) {
+    s.hline(12, by, 32, P.IRON[2]);
+    s.hline(12, by + 1, 32, P.IRON[0]);
+  }
+  // cloth cover with a hole in the middle
+  const cloth = new Surface(W, H);
+  cloth.ellipse(10, 26, 36, 14, '#ffffff');
+  for (let x = 10; x < 46; x++) {
+    const d = Math.round(Math.sin(((x - 10) / 36) * Math.PI * 5) * 1.6 + 2);
+    for (let j = 0; j < d + 6; j++) cloth.px(x, 33 + j, '#ffffff');
+  }
+  dirShade(s, cloth, P.DYE_PLUM, 18, 26, 0.024, 0.030, 0.66);
+  for (let x = 12; x < 45; x += 4) {
+    for (let j = 0; j < 12; j++) s.pxOver(x, 30 + j, P.DYE_PLUM[0], 0.22);
+  }
+  // the dip hole
+  s.ellipse(21, 26, 14, 8, P.SOOT[1]);
+  s.ellipse(22, 27, 12, 6, P.SOOT[0]);
+  s.hline(23, 26, 10, P.DYE_PLUM[4], 0.7);
+  s.ellipseOutline(21, 26, 14, 8, P.DYE_PLUM[3]);
+  // a straw poking out
+  for (let i = 0; i < 5; i++) s.px(26 + i, 27 - i, P.ROPE[i < 2 ? 3 : 2]);
+  // gold trim on the cloth hem
+  for (let x = 11; x < 46; x++) {
+    const d = Math.round(Math.sin(((x - 10) / 36) * Math.PI * 5) * 1.6 + 2);
+    s.px(x, 38 + d + 5, P.UI_GOLD[2], 0.9);
+  }
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, 28, 55, 40, 8, 0.32);
+  return s;
+}
+
+/** stall 5 — the craft stall: lanterns and charms for sale. */
+function stallCraft(): Surface {
+  const W = 64, H = 56;
+  const s = new Surface(W, H);
+  // open frame: two uprights and two cross-rails
+  for (const px of [4, 57]) {
+    s.rect(px, 6, 3, 44, P.WOOD_LIGHT[2]);
+    s.vline(px, 6, 44, P.WOOD_LIGHT[4]);
+    s.vline(px + 2, 6, 44, P.WOOD[0]);
+    s.hline(px - 1, 5, 5, P.WOOD_LIGHT[3]);
+    s.px(px + (px < 30 ? 3 : -1), 4, P.WOOD_LIGHT[4]);
+  }
+  for (const ry of [7, 24]) {
+    s.hline(4, ry, 56, P.WOOD_LIGHT[3]);
+    s.hline(4, ry + 1, 56, P.WOOD_LIGHT[2]);
+    s.hline(4, ry + 2, 56, P.WOOD[0], 0.8);
+  }
+  // corner braces
+  for (const [bx, dir] of [[7, 1], [54, -1]] as const) {
+    for (let i = 0; i < 5; i++) s.px(bx + dir * i, 10 + i, P.WOOD_LIGHT[i < 2 ? 3 : 2]);
+  }
+  // the goods: a row of paper lanterns for sale, in different colours
+  const lanterns: Array<[number, Ramp, 0 | 1 | 2, boolean]> = [
+    [12, P.LANTERN, 1, true], [23, P.TONE_ROSE, 0, true],
+    [33, P.LANTERN, 2, true], [43, P.TONE_TEAL, 1, true], [52, P.WINDOW_AMBER, 0, false],
+  ];
+  for (const [lx, ramp, size, lit] of lanterns) {
+    s.vline(lx, 10, 2, P.ROPE[2]);
+    hangLantern(s, lx, 11, ramp, size, lit);
+  }
+  // charms hanging from the lower rail
+  for (let i = 0; i < 9; i++) {
+    const cx2 = 8 + i * 6;
+    s.vline(cx2, 27, 3, P.ROPE[2]);
+    const ramp = [P.UI_GOLD, P.BRONZE, P.DYE_SEA, P.TONE_ROSE][i % 4];
+    if (i % 3 === 0) {
+      s.ellipse(cx2 - 2, 30, 5, 5, ramp[1]);
+      s.px(cx2 - 1, 31, ramp[3]);
+      s.px(cx2, 32, ramp[0]);
+    } else if (i % 3 === 1) {
+      for (let j = 0; j < 4; j++) {
+        const hw = j < 2 ? j : 3 - j;
+        for (let x = cx2 - hw; x <= cx2 + hw; x++) s.px(x, 30 + j, x < cx2 ? ramp[3] : ramp[1]);
+      }
+    } else {
+      s.rect(cx2 - 2, 30, 4, 5, ramp[2]);
+      s.hline(cx2 - 2, 30, 4, ramp[4]);
+      s.hline(cx2 - 2, 34, 4, ramp[0]);
+    }
+  }
+  // low counter with folded paper stock and a brush pot
+  counter(s, 6, 40, 52, 12, P.WOOD_LIGHT, 6401);
+  for (let i = 0; i < 4; i++) {
+    s.rect(9 + i * 4, 36, 3, 4, P.CANVAS[3]);
+    s.hline(9 + i * 4, 36, 3, P.CANVAS[4]);
+    s.px(11 + i * 4, 39, P.CANVAS[1]);
+  }
+  cylinder(s, 44, 33, 8, 8, 3, P.TERRACOTTA);
+  for (let i = 0; i < 3; i++) {
+    s.vline(46 + i * 2, 29, 5, P.WOOD[2]);
+    s.px(46 + i * 2, 28, P.IRON[1]);
+    s.px(46 + i * 2, 27, P.OUTLINE);
+  }
+  s.rect(26, 44, 14, 5, P.PLASTER[2]);
+  s.hline(26, 44, 14, P.PLASTER[4]);
+  s.hline(26, 48, 14, P.OUTLINE, 0.5);
+  hangLantern(s, 33, 45, P.LANTERN, 0, false);
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, 32, 55, 58, 8, 0.3);
+  return s;
+}
+
+/** The bandstand: a small stage with a painted screen and three instruments. */
+function stageMusic(): Surface {
+  const W = 80, H = 56;
+  const s = new Surface(W, H);
+  const deckTop = 30, deckBot = 46;
+
+  // backing screen with a curved head, painted with the lantern motif
+  const screen = new Surface(W, H);
+  for (let y = 6; y <= 32; y++) {
+    const t = Math.max(0, (12 - y) / 6);
+    const hw = 30 - Math.round(t * t * 10);
+    for (let x = 40 - hw; x <= 40 + hw; x++) screen.px(x, y, '#ffffff');
+  }
+  dirShade(s, screen, P.CANVAS, 22, 12, 0.014, 0.018, 0.68);
+  // painted arc bands
+  for (let y = 6; y <= 32; y++) {
+    const t = Math.max(0, (12 - y) / 6);
+    const hw = 30 - Math.round(t * t * 10);
+    if ((y - 6) % 7 < 2) {
+      for (let x = 40 - hw; x <= 40 + hw; x++) s.pxOver(x, y, P.DYE_PLUM[(y - 6) % 7 === 0 ? 3 : 2], 0.55);
+    }
+    s.pxOver(40 - hw, y, P.CANVAS[4], 0.6);
+    s.pxOver(40 + hw, y, P.OUTLINE, 0.5);
+  }
+  // a painted lantern in the middle of the screen
+  s.ellipse(34, 12, 12, 12, P.LANTERN[2]);
+  s.ellipse(36, 13, 8, 9, P.LANTERN[3]);
+  s.px(39, 16, P.LANTERN[4]);
+  s.hline(36, 10, 5, P.IRON[2]);
+  s.hline(37, 24, 3, P.IRON[1]);
+  s.vline(39, 7, 3, P.IRON[2]);
+  for (let a = 0; a < 8; a++) {
+    const th = (a / 8) * Math.PI * 2;
+    s.px(Math.round(40 + Math.cos(th) * 11), Math.round(16 + Math.sin(th) * 11), P.UI_GOLD[3], 0.8);
+  }
+  // frame posts
+  for (const px of [8, 69]) {
+    s.rect(px, 10, 3, 24, P.WOOD[2]);
+    s.vline(px, 10, 24, P.WOOD[3]);
+    s.vline(px + 2, 10, 24, P.WOOD[0]);
+  }
+  pennant(s, 11, 6, P.CARPET_RED, 1, 8);
+  s.vline(9, 6, 5, P.WOOD[3]);
+  pennant(s, 69, 6, P.DYE_SEA, -1, 8);
+  s.vline(70, 6, 5, P.WOOD[3]);
+
+  // deck + fascia
+  planks(s, 4, deckTop, 72, deckBot - deckTop, P.WOOD_LIGHT, 6501, 5, true);
+  s.hline(4, deckTop, 72, P.WOOD_LIGHT[4], 0.7);
+  for (let y = deckTop; y < deckTop + 4; y++) s.rect(4, y, 72, 1, P.OUTLINE, (4 - (y - deckTop)) * 0.06);
+  s.hline(4, deckBot - 1, 72, P.WOOD[0]);
+  planks(s, 4, deckBot, 72, 8, P.WOOD, 6601, 6, false);
+  s.rect(4, deckBot, 72, 8, P.OUTLINE, 0.3);
+  s.hline(4, 53, 72, P.OUTLINE, 0.8);
+  for (let i = 0; i < 9; i++) {
+    const fx = 8 + i * 8;
+    for (let j = 0; j < 5; j++) {
+      const hw = 2 - Math.floor(j / 2.5);
+      const ramp = [P.CARPET_RED, P.DYE_SAFFRON, P.CANVAS, P.DYE_SEA][i % 4];
+      for (let x = fx - hw; x <= fx + hw; x++) s.px(x, deckBot + j, x < fx ? ramp[3] : ramp[2]);
+    }
+  }
+
+  // ── instruments ─────────────────────────────────────────────────────────
+  // drum, on its side facing the viewer
+  s.ellipse(10, 22, 18, 18, P.WOOD[1]);
+  s.ellipse(11, 23, 16, 16, P.UI_PARCHMENT[1]);
+  const drumHead = new Surface(W, H);
+  drumHead.ellipse(11, 23, 16, 16, '#ffffff');
+  dirShade(s, drumHead, P.UI_PARCHMENT, 15, 27, 0.040, 0.044, 0.62);
+  s.ellipseOutline(10, 22, 18, 18, P.WOOD[3]);
+  s.ellipseOutline(11, 23, 16, 16, P.WOOD[1], 0.8);
+  // rope lacing round the shell
+  for (let a = 0; a < 10; a++) {
+    const th = (a / 10) * Math.PI * 2 + 0.3;
+    const x0 = Math.round(19 + Math.cos(th) * 8), y0 = Math.round(31 + Math.sin(th) * 8);
+    const x1 = Math.round(19 + Math.cos(th + 0.62) * 8), y1 = Math.round(31 + Math.sin(th + 0.62) * 8);
+    s.line(x0, y0, x1, y1, a < 5 ? P.ROPE[3] : P.ROPE[1], 0.85);
+    s.px(x0, y0, P.CARPET_RED[2]);
+  }
+  // a painted band across the head
+  for (let i = 0; i < 16; i++) {
+    if (s.alphaAt(11 + i, 30) === 0) continue;
+    s.px(11 + i, 30, P.CARPET_RED[2], 0.75);
+    s.px(11 + i, 31, P.CARPET_RED[1], 0.5);
+  }
+  s.hline(12, 39, 14, P.OUTLINE, 0.4);
+  // drumsticks
+  for (let i = 0; i < 9; i++) s.px(24 + i, 30 - i, P.WOOD_LIGHT[3]);
+  for (let i = 0; i < 9; i++) s.px(26 + i, 30 - i, P.WOOD_LIGHT[2]);
+
+  // fiddle on a stand
+  s.vline(46, 26, 12, P.WOOD[2]);
+  s.hline(43, 37, 7, P.WOOD[1]);
+  const fid = new Surface(W, H);
+  fid.ellipse(42, 14, 9, 9, '#ffffff');
+  fid.ellipse(43, 20, 7, 8, '#ffffff');
+  fid.rect(45, 4, 2, 12, '#ffffff');
+  dirShade(s, fid, P.WOOD_LIGHT, 42, 12, 0.05, 0.045, 0.68);
+  s.vline(46, 4, 12, P.WOOD[0], 0.5);
+  for (let i = 0; i < 4; i++) s.vline(45 + (i % 2), 8 + i, 6, P.LINEN[3], 0.5);
+  s.px(44, 4, P.WOOD[0]);
+  s.px(47, 5, P.WOOD[0]);
+  s.px(41, 18, P.OUTLINE, 0.6);
+  s.px(48, 18, P.OUTLINE, 0.6);
+  // bow leaning against the stand
+  for (let i = 0; i < 16; i++) s.px(52 + Math.round(i * 0.3), 12 + i, i % 5 === 0 ? P.WOOD[1] : P.WOOD[3]);
+  for (let i = 0; i < 16; i++) s.px(54 + Math.round(i * 0.3), 12 + i, P.LINEN[2]);
+
+  // pipes, hung on the post
+  for (let i = 0; i < 6; i++) {
+    const px = 59 + i * 2;
+    const len = 14 - i;
+    s.vline(px, 18, len, P.ROPE[3]);
+    s.vline(px + 1, 18, len, P.ROPE[1]);
+    s.px(px, 18, P.ROPE[4]);
+    s.px(px + 1, 18, P.ROPE[2]);
+    s.px(px, 18 + len, P.OUTLINE, 0.7);
+    s.px(px + 1, 18 + len, P.OUTLINE, 0.7);
+  }
+  s.hline(58, 17, 14, P.WOOD[3]);
+  s.hline(58, 22, 14, P.ROPE[0], 0.7);
+  s.hline(58, 23, 14, P.ROPE[2], 0.5);
+  // stool
+  s.ellipse(28, 34, 12, 5, P.WOOD[3]);
+  s.rect(29, 36, 10, 2, P.WOOD[2]);
+  for (const lx of [30, 37]) s.vline(lx, 37, 5, P.WOOD[1]);
+  s.hline(29, 41, 9, P.OUTLINE, 0.35);
+  hangLantern(s, 9, 12, P.LANTERN, 0);
+  hangLantern(s, 70, 12, P.LANTERN, 0);
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, 40, 55, 76, 8, 0.3);
+  return s;
+}
+
+/** The judging table: rosettes, a ledger and an inkpot. */
+function judgingTable(): Surface {
+  const W = 48, H = 32;
+  const s = new Surface(W, H);
+  // table top
+  s.rect(2, 12, 44, 4, P.WOOD_LIGHT[3]);
+  s.hline(2, 12, 44, P.WOOD_LIGHT[4]);
+  s.hline(2, 15, 44, P.WOOD[0]);
+  // cloth hanging to the floor
+  const cloth = new Surface(W, H);
+  for (let x = 3; x < 45; x++) {
+    const d = Math.round(Math.sin(((x - 3) / 42) * Math.PI * 6) * 1.4 + 1.5);
+    for (let j = 0; j < 13 + d; j++) cloth.px(x, 15 + j, '#ffffff');
+  }
+  dirShade(s, cloth, P.CARPET_RED, 12, 16, 0.020, 0.026, 0.66);
+  for (let x = 5; x < 45; x += 6) {
+    for (let j = 0; j < 13; j++) s.pxOver(x, 16 + j, P.CARPET_RED[0], 0.20);
+  }
+  for (let x = 3; x < 45; x++) {
+    const d = Math.round(Math.sin(((x - 3) / 42) * Math.PI * 6) * 1.4 + 1.5);
+    s.px(x, 15 + 13 + d, P.UI_GOLD[2]);
+    s.px(x, 14 + 13 + d, P.UI_GOLD[3], 0.7);
+  }
+  // rosettes pinned along the front
+  for (let i = 0; i < 3; i++) {
+    const rx = 10 + i * 14, ry = 21;
+    const ramp = [P.UI_GOLD, P.LINEN, P.BRONZE][i];
+    for (let a = 0; a < 8; a++) {
+      const th = (a / 8) * Math.PI * 2;
+      s.px(Math.round(rx + Math.cos(th) * 3), Math.round(ry + Math.sin(th) * 3), ramp[a < 4 ? 3 : 1]);
+    }
+    s.ellipse(rx - 2, ry - 2, 5, 5, ramp[2]);
+    s.px(rx - 1, ry - 1, ramp[4]);
+    s.px(rx - 1, ry + 4, ramp[1]);
+    s.px(rx + 1, ry + 4, ramp[0]);
+    s.px(rx - 1, ry + 5, ramp[2]);
+    s.px(rx + 1, ry + 5, ramp[1]);
+  }
+  // ledger, quill and inkpot on the table
+  s.rect(6, 8, 15, 5, P.UI_PARCHMENT[3]);
+  s.hline(6, 8, 15, P.UI_PARCHMENT[4]);
+  s.hline(6, 12, 15, P.UI_PARCHMENT[0]);
+  s.vline(13, 8, 5, P.LEATHER[2]);
+  for (let i = 0; i < 3; i++) s.hline(8, 9 + i, 4, P.UI_INK_SOFT, 0.6);
+  for (let i = 0; i < 3; i++) s.hline(15, 9 + i, 4, P.UI_INK_SOFT, 0.6);
+  cylinder(s, 26, 7, 6, 6, 3, P.GLASS_COLD);
+  s.ellipse(26, 7, 6, 3, P.UI_INK);
+  for (let i = 0; i < 6; i++) s.px(31 + i, 6 - i, i > 3 ? P.LINEN[4] : P.LINEN[2]);
+  s.px(30, 7, P.UI_INK);
+  // three small numbered paddles (dots, not text)
+  for (let i = 0; i < 3; i++) {
+    const px = 36 + i * 3;
+    s.rect(px, 8, 2, 5, P.WOOD_LIGHT[2]);
+    s.px(px, 8, P.WOOD_LIGHT[4]);
+    for (let d = 0; d <= i; d++) s.px(px, 9 + d, P.UI_GOLD[3]);
+  }
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, 24, 31, 44, 6, 0.3);
+  return s;
+}
+
+// ── fire, seating and clutter ──────────────────────────────────────────────
+
+/** An iron fire bowl on three legs. 4 animation frames. */
+function brazier(frame: number): Surface {
+  const W = 28, H = 40;
+  const s = new Surface(W, H);
+  const cx = 14;
+  // legs
+  for (const [lx, dir] of [[6, -1], [22, 1], [14, 0]] as const) {
+    for (let i = 0; i < 9; i++) s.px(lx + dir * Math.round(i * 0.35), 27 + i, dir < 0 ? P.IRON[3] : P.IRON[1]);
+    s.px(lx, 36, P.IRON[0]);
+  }
+  for (let i = 0; i < 16; i++) s.px(6 + i, 31 + Math.round(Math.sin((i / 16) * Math.PI) * -2), P.IRON[2]);
+  // bowl
+  cylinder(s, 3, 18, 22, 12, 8, P.IRON, { lid: false });
+  s.ellipse(3, 17, 22, 8, P.IRON[3]);
+  s.ellipse(5, 19, 18, 6, P.SOOT[1]);
+  for (let i = 0; i < 22; i++) {
+    s.px(3 + i, 17 + Math.round(Math.abs(i - 10) * 0.06), P.IRON[i < 8 ? 4 : i < 15 ? 3 : 1]);
+  }
+  // coals
+  const cr = rng(7100 + frame * 13);
+  for (let i = 0; i < 46; i++) {
+    const x = 6 + cr.int(0, 15), y = 20 + cr.int(0, 3);
+    const t = cr.next();
+    s.px(x, y, t > 0.7 ? P.FIRE[2] : t > 0.4 ? P.COAL[4] : P.COAL[2]);
+  }
+  // flames — four keyframes of a lively fire
+  const fr = rng(7200 + frame * 977);
+  const tongues = [
+    [{ x: 0, h: 13 }, { x: -4, h: 8 }, { x: 4, h: 9 }],
+    [{ x: 1, h: 15 }, { x: -5, h: 7 }, { x: 4, h: 11 }],
+    [{ x: -1, h: 12 }, { x: -3, h: 10 }, { x: 5, h: 8 }],
+    [{ x: 0, h: 14 }, { x: -4, h: 9 }, { x: 3, h: 10 }],
+  ][frame % 4];
+  for (const t of tongues) {
+    for (let j = 0; j < t.h; j++) {
+      const p = j / t.h;
+      const w = Math.max(0, Math.round((1 - p) * 3.4 - (p > 0.7 ? 1 : 0)));
+      const ox = Math.round(Math.sin(p * 2.6 + frame) * 1.6);
+      for (let i = -w; i <= w; i++) {
+        const edge = Math.abs(i) >= w - 0.4;
+        const c = p > 0.78 ? P.FIRE[1] : p > 0.5 ? (edge ? P.FIRE[2] : P.FIRE[3]) : edge ? P.FIRE[3] : P.FIRE[4];
+        s.px(cx + t.x + ox + i, 20 - j, c);
+      }
+    }
+  }
+  // sparks
+  for (let i = 0; i < 3; i++) {
+    s.px(cx + fr.int(-6, 6), 6 + fr.int(0, 8), P.FIRE[4], 0.8);
+  }
+  glow(s, cx, 15, 18, P.FIRE[2], 0.34 + (frame % 2) * 0.05);
+  glow(s, cx, 17, 10, P.FIRE[4], 0.30);
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, cx, 39, 22, 6, 0.34);
+  return s;
+}
+
+/** Festival bench: plank seat, turned legs, a folded blanket on one. */
+function benchFest(variant: number): Surface {
+  const W = 40, H = 24;
+  const s = new Surface(W, H);
+  // seat
+  s.rect(2, 10, 36, 4, P.WOOD_LIGHT[2]);
+  s.hline(2, 10, 36, P.WOOD_LIGHT[4]);
+  s.hline(2, 11, 36, P.WOOD_LIGHT[3]);
+  s.hline(2, 13, 36, P.WOOD[0]);
+  grain(s, 2, 10, 36, 4, P.WOOD_LIGHT, 7300 + variant, true);
+  // back rail on variant 1
+  if (variant === 1) {
+    s.rect(4, 2, 32, 3, P.WOOD_LIGHT[2]);
+    s.hline(4, 2, 32, P.WOOD_LIGHT[4]);
+    s.hline(4, 4, 32, P.WOOD[0]);
+    for (const px of [6, 33]) {
+      s.vline(px, 3, 8, P.WOOD[2]);
+      s.vline(px + 1, 3, 8, P.WOOD[0]);
+    }
+  }
+  // legs
+  for (const lx of [5, 32]) {
+    s.rect(lx, 14, 4, 7, P.WOOD[2]);
+    s.vline(lx, 14, 7, P.WOOD[3]);
+    s.vline(lx + 3, 14, 7, P.WOOD[0]);
+    s.hline(lx - 1, 16, 6, P.WOOD[1]);
+    s.hline(lx - 1, 20, 6, P.WOOD[3]);
+  }
+  s.hline(9, 18, 24, P.WOOD[1]);
+  s.hline(9, 19, 24, P.WOOD[0], 0.7);
+  // a folded blanket / cushion
+  const ramp = variant === 0 ? P.CARPET_RED : P.DYE_SEA;
+  s.rect(20, 7, 15, 4, ramp[2]);
+  s.hline(20, 7, 15, ramp[3]);
+  s.hline(20, 8, 15, ramp[4], 0.4);
+  s.hline(20, 10, 15, ramp[0]);
+  for (let x = 21; x < 34; x += 3) s.px(x, 9, ramp[1], 0.7);
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, 20, 23, 36, 6, 0.3);
+  return s;
+}
+
+/** A stack of festival crates with cloth and stock. */
+function crateStackFest(): Surface {
+  const W = 34, H = 40;
+  const s = new Surface(W, H);
+  const crate = (x: number, y: number, w: number, h: number, seed: number) => {
+    planks(s, x, y, w, h, P.WOOD, seed, 5, false);
+    s.hline(x, y, w, P.WOOD[4], 0.8);
+    s.hline(x, y + h - 1, w, P.OUTLINE, 0.75);
+    s.vline(x, y, h, P.WOOD[3]);
+    s.vline(x + w - 1, y, h, P.WOOD[0]);
+    s.hline(x, y + Math.floor(h / 2), w, P.WOOD[1], 0.7);
+    s.hline(x, y + Math.floor(h / 2) + 1, w, P.WOOD[4], 0.3);
+  };
+  crate(2, 22, 20, 16, 7401);
+  crate(20, 26, 13, 12, 7402);
+  crate(6, 10, 15, 13, 7403);
+  // cloth thrown over the top crate
+  const cloth = new Surface(W, H);
+  cloth.rect(5, 7, 17, 5, '#ffffff');
+  for (let x = 5; x < 22; x++) {
+    const d = Math.round(Math.sin(((x - 5) / 17) * Math.PI * 3) * 1.6 + 2);
+    for (let j = 0; j < d; j++) cloth.px(x, 12 + j, '#ffffff');
+  }
+  dirShade(s, cloth, P.DYE_SAFFRON, 9, 8, 0.032, 0.04, 0.68);
+  // stock poking out: rolled banners and a lantern
+  for (let i = 0; i < 3; i++) {
+    const rx = 22 + i * 3;
+    s.vline(rx, 18, 9, [P.CARPET_RED, P.DYE_SEA, P.DYE_PLUM][i][2]);
+    s.px(rx, 18, [P.CARPET_RED, P.DYE_SEA, P.DYE_PLUM][i][4]);
+    s.px(rx, 26, P.OUTLINE, 0.6);
+  }
+  hangLantern(s, 12, 1, P.LANTERN, 0, false);
+  s.px(12, 0, P.ROPE[2]);
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, 17, 39, 32, 7, 0.3);
+  return s;
+}
+
+/** A cider barrel with a festival ribbon and a tap. */
+function barrelFest(): Surface {
+  const W = 24, H = 30;
+  const s = new Surface(W, H);
+  cylinder(s, 2, 6, 20, 22, 8, P.WOOD);
+  // staves
+  for (let x = 4; x < 21; x += 3) {
+    for (let y = 10; y < 25; y++) if (s.alphaAt(x, y)) s.px(x, y, P.WOOD[0], 0.28);
+  }
+  for (const by of [10, 22]) {
+    s.hline(2, by, 20, P.IRON[2]);
+    s.hline(2, by + 1, 20, P.IRON[0]);
+    s.hline(3, by, 8, P.IRON[4], 0.5);
+  }
+  // ribbon around the middle
+  s.hline(2, 15, 20, P.CARPET_RED[2]);
+  s.hline(2, 16, 20, P.CARPET_RED[3]);
+  s.hline(2, 17, 20, P.CARPET_RED[1]);
+  for (let j = 0; j < 5; j++) {
+    s.px(15 - j, 18 + j, P.CARPET_RED[2]);
+    s.px(19 + Math.floor(j / 3), 18 + j, P.CARPET_RED[1]);
+  }
+  s.ellipse(14, 14, 6, 5, P.CARPET_RED[3]);
+  s.px(16, 16, P.CARPET_RED[4]);
+  // tap
+  s.rect(10, 20, 3, 2, P.BRONZE[3]);
+  s.px(11, 22, P.BRONZE[2]);
+  s.px(11, 23, P.BRONZE[1]);
+  s.px(9, 20, P.BRONZE[4]);
+  // lid marks
+  s.ellipseOutline(4, 6, 16, 6, P.WOOD[4], 0.5);
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, 12, 29, 20, 6, 0.3);
+  return s;
+}
+
+// ── bunting, banners and hanging lanterns ──────────────────────────────────
+
+/**
+ * A 48-wide span of flag bunting. The rope enters and leaves at the same
+ * height so spans chain, and the art is built symmetrically about its centre
+ * so the runtime's `sway` looks right when it pivots the sprite.
+ */
+function bunting(variant: number): Surface {
+  const W = 48, H = 26;
+  const s = new Surface(W, H);
+  const top = 3, sag = variant === 1 ? 7 : variant === 2 ? 4 : 6;
+  const ropeY = (x: number) => Math.round(cableY(x, W, top, sag));
+  for (let x = 0; x < W; x++) {
+    const y = ropeY(x);
+    s.px(x, y, P.ROPE[3]);
+    s.px(x, y + 1, P.ROPE[1]);
+    if (x % 5 === 2) s.px(x, y, P.ROPE[4]);
+  }
+  const sets: Ramp[][] = [
+    [P.CARPET_RED, P.DYE_SAFFRON, P.CANVAS, P.DYE_SEA, P.DYE_PLUM],
+    [P.LANTERN, P.CARPET_RED, P.CANVAS, P.LANTERN, P.DYE_SAFFRON],
+    [P.DYE_SEA, P.CANVAS, P.TONE_ROSE, P.DYE_PLUM, P.CANVAS],
+  ];
+  const set = sets[variant % sets.length];
+  const step = 6;
+  for (let i = 0; i * step + 3 < W; i++) {
+    const fx = 3 + i * step;
+    const fy = ropeY(fx) + 2;
+    const ramp = set[i % set.length];
+    const shape = variant % 3;
+    for (let j = 0; j < 9; j++) {
+      let hw: number;
+      if (shape === 0) hw = Math.max(0, 2 - Math.floor(j / 3)); // triangle
+      else if (shape === 1) hw = j < 6 ? 2 : 2 - (j - 6); // swallowtail body
+      else hw = j < 7 ? 2 : 0; // square
+      if (shape === 1 && j >= 6) {
+        // swallowtail: two points
+        s.px(fx - 2, fy + j, ramp[2]);
+        s.px(fx + 2, fy + j, ramp[1]);
+        continue;
+      }
+      if (hw < 0) break;
+      for (let x = fx - hw; x <= fx + hw; x++) {
+        const u = hw === 0 ? 0.5 : (x - (fx - hw)) / (hw * 2);
+        s.px(x, fy + j, u < 0.34 ? ramp[4] : u < 0.7 ? ramp[3] : ramp[1]);
+      }
+      s.px(fx + hw, fy + j, ramp[0], 0.7);
+    }
+    s.px(fx, fy - 1, P.ROPE[0]);
+  }
+  return s;
+}
+
+/** A vertical hanging banner with a painted symbol — never text. */
+function banner(variant: number): Surface {
+  const W = 24, H = 52;
+  const s = new Surface(W, H);
+  const ramps = [P.CARPET_RED, P.DYE_PLUM, P.DYE_SEA];
+  const ramp = ramps[variant % ramps.length];
+  const cx = 12;
+  // cross-pole with finials
+  s.rect(1, 3, 22, 2, P.WOOD[2]);
+  s.hline(1, 3, 22, P.WOOD[4]);
+  s.hline(1, 4, 22, P.WOOD[0]);
+  s.px(0, 3, P.BRONZE[3]);
+  s.px(0, 4, P.BRONZE[1]);
+  s.px(23, 3, P.BRONZE[2]);
+  s.px(23, 4, P.BRONZE[0]);
+  // hanging cords
+  for (const hx of [4, 19]) {
+    s.px(hx, 5, P.ROPE[2]);
+    s.px(hx, 6, P.ROPE[1]);
+  }
+  // cloth: slight taper, notched hem
+  const cloth = new Surface(W, H);
+  for (let y = 7; y < 44; y++) {
+    const hw = 8 + Math.round(((y - 7) / 37) * 1.5);
+    for (let x = cx - hw; x <= cx + hw; x++) cloth.px(x, y, '#ffffff');
+  }
+  for (let x = cx - 9; x <= cx + 9; x++) {
+    const d = 4 - Math.abs(x - cx) < 0 ? 0 : Math.round(4 - Math.abs(x - cx) * 0.42);
+    for (let j = 0; j < d; j++) cloth.px(x, 44 + j, '#ffffff');
+  }
+  dirShade(s, cloth, ramp, cx - 6, 14, 0.022, 0.012, 0.66);
+  // vertical fold shading so the cloth has weight
+  for (const off of [-5, 0, 6]) {
+    for (let y = 8; y < 47; y++) s.pxOver(cx + off, y, off < 0 ? ramp[4] : ramp[0], off === 0 ? 0.18 : 0.3);
+  }
+  // gold border
+  for (let y = 7; y < 44; y++) {
+    const hw = 8 + Math.round(((y - 7) / 37) * 1.5);
+    s.pxOver(cx - hw, y, P.UI_GOLD[3], 0.9);
+    s.pxOver(cx + hw, y, P.UI_GOLD[1], 0.9);
+  }
+  s.hline(cx - 8, 7, 17, P.UI_GOLD[4], 0.9);
+  s.hline(cx - 9, 8, 19, P.UI_GOLD[2], 0.5);
+
+  // painted symbol
+  const ink = P.UI_GOLD;
+  if (variant % 3 === 0) {
+    // a lantern
+    s.ellipse(cx - 5, 17, 11, 12, ink[2]);
+    s.ellipse(cx - 3, 19, 7, 8, ink[4]);
+    s.hline(cx - 3, 15, 7, ink[3]);
+    s.hline(cx - 2, 29, 5, ink[3]);
+    s.vline(cx, 12, 3, ink[3]);
+    s.px(cx, 11, ink[4]);
+  } else if (variant % 3 === 1) {
+    // a bell
+    for (let j = 0; j < 12; j++) {
+      const hw = 2 + Math.round(Math.pow(j / 11, 0.7) * 5);
+      for (let x = cx - hw; x <= cx + hw; x++) s.px(x, 16 + j, x < cx ? ink[3] : ink[2]);
+    }
+    s.hline(cx - 8, 28, 17, ink[4]);
+    s.px(cx, 29, ink[3]);
+    s.px(cx, 30, ink[2]);
+    s.vline(cx, 13, 3, ink[3]);
+  } else {
+    // three tones: the trial's own emblem
+    const cols = [P.BELL_TONE[3], P.TONE_ROSE[3], P.TONE_TEAL[3]];
+    for (let i = 0; i < 3; i++) {
+      const px = cx - 6 + i * 6, py = 18 + (i === 1 ? -3 : 0);
+      s.ellipse(px - 3, py - 3, 7, 7, cols[i]);
+      s.ellipse(px - 2, py - 2, 4, 4, P.mix(cols[i], '#ffffff', 0.35));
+      s.ellipseOutline(px - 3, py - 3, 7, 7, ink[2]);
+    }
+    s.hline(cx - 8, 27, 17, ink[3]);
+    s.hline(cx - 6, 29, 13, ink[1]);
+  }
+  // tassels
+  for (const tx of [cx - 7, cx, cx + 7]) {
+    for (let j = 0; j < 3; j++) s.px(tx, 47 + j, j === 0 ? P.UI_GOLD[3] : P.UI_GOLD[1]);
+  }
+  rim(s, P.OUTLINE, 0.85);
+  return s;
+}
+
+/** Six hanging paper lanterns: different shapes, different warm colours. */
+function paperLantern(variant: number, pulse: number): Surface {
+  const W = 22, H = 30;
+  const s = new Surface(W, H);
+  const cx = 11;
+  const ramps: Ramp[] = [P.LANTERN, P.TONE_ROSE, P.DYE_SAFFRON, P.WINDOW_AMBER, P.TONE_TEAL, P.PAPER_RED];
+  const ramp = ramps[variant % ramps.length];
+  const top = 6;
+  const mask = new Surface(W, H);
+  let bodyBot = 22;
+  switch (variant % 6) {
+    case 0: { // round globe
+      mask.ellipse(cx - 8, top, 17, 16, '#ffffff');
+      bodyBot = top + 15;
+      break;
+    }
+    case 1: { // tall cylinder
+      for (let y = top; y < top + 18; y++) for (let x = cx - 6; x <= cx + 6; x++) mask.px(x, y, '#ffffff');
+      mask.ellipse(cx - 6, top - 2, 13, 5, '#ffffff');
+      mask.ellipse(cx - 6, top + 15, 13, 5, '#ffffff');
+      bodyBot = top + 18;
+      break;
+    }
+    case 2: { // teardrop: narrow shoulder, heavy belly, drawn to a point
+      for (let y = top; y < top + 20; y++) {
+        const t = (y - top) / 19;
+        const hw = t < 0.62
+          ? Math.round(1.5 + Math.pow(t / 0.62, 0.62) * 6.5)
+          : Math.round(8 - Math.pow((t - 0.62) / 0.38, 1.5) * 8);
+        for (let x = cx - hw; x <= cx + hw; x++) mask.px(x, y, '#ffffff');
+      }
+      bodyBot = top + 19;
+      break;
+    }
+    case 3: { // hexagonal: flat top, hard shoulders, straight sides
+      for (let y = top; y < top + 18; y++) {
+        const t = (y - top) / 17;
+        const hw = t < 0.22 ? Math.round(3 + (t / 0.22) * 4) : t > 0.80 ? Math.round(7 - ((t - 0.80) / 0.20) * 4) : 7;
+        for (let x = cx - hw; x <= cx + hw; x++) mask.px(x, y, '#ffffff');
+      }
+      bodyBot = top + 17;
+      break;
+    }
+    case 4: { // squat melon
+      mask.ellipse(cx - 9, top + 2, 19, 13, '#ffffff');
+      bodyBot = top + 14;
+      break;
+    }
+    default: { // tall oval
+      mask.ellipse(cx - 6, top - 1, 13, 21, '#ffffff');
+      bodyBot = top + 19;
+      break;
+    }
+  }
+  const lit = pulse > 0;
+  const paper = lit ? ramp : dimPaper(ramp[2]);
+  if (lit) paperShade(s, mask, ramp, cx - 1, (top + bodyBot) / 2, 9 * (1 + pulse * 0.06), (bodyBot - top) * 0.62, 0.94 + pulse * 0.10);
+  else dirShade(s, mask, paper, cx - 5, top + 2, 0.045, 0.04, 0.66);
+  // ribs / gores
+  if (variant % 6 === 3) {
+    // hex: straight corner posts and two rails, so the facets read
+    for (const off of [-7, -3, 3, 7]) {
+      for (let y = top + 3; y <= bodyBot - 3; y++) {
+        s.pxOver(cx + off, y, off < 0 ? P.IRON[4] : P.IRON[1], Math.abs(off) === 7 ? 0.55 : 0.35);
+      }
+    }
+    for (const ry of [top + 3, bodyBot - 3]) {
+      for (let x = cx - 7; x <= cx + 7; x++) s.pxOver(x, ry, P.IRON[2], 0.5);
+    }
+  } else {
+    const gores = [-6, -2, 2, 6];
+    for (const off of gores) {
+      for (let y = top; y <= bodyBot; y++) {
+        const t = (y - (top + bodyBot) / 2) / ((bodyBot - top) / 2);
+        const x = Math.round(cx + off * Math.sqrt(Math.max(0, 1 - t * t * 0.7)));
+        s.pxOver(x, y, off < 0 ? paper[4] : paper[0], off < 0 ? 0.26 : 0.36);
+      }
+    }
+  }
+  // caps and the cord it hangs from
+  s.hline(cx - 3, top - 1, 7, P.IRON[3]);
+  s.hline(cx - 3, top, 7, P.IRON[1]);
+  s.hline(cx - 2, bodyBot, 5, P.IRON[0], 0.85);
+  s.vline(cx, 0, top - 1, P.ROPE[2]);
+  s.px(cx + 1, 2, P.ROPE[0], 0.6);
+  // tassel
+  for (let j = 1; j <= 3; j++) s.px(cx, bodyBot + j, j === 3 ? P.UI_GOLD[1] : P.UI_GOLD[3]);
+  if (lit) {
+    s.px(cx - 1, Math.round((top + bodyBot) / 2), P.LANTERN[4]);
+    glow(s, cx, (top + bodyBot) / 2, 13 + pulse * 2, ramp[3], 0.34 + pulse * 0.08);
+    glow(s, cx, (top + bodyBot) / 2, 7, ramp[4], 0.28 + pulse * 0.10);
+  }
+  rim(s, P.OUTLINE, 0.7);
+  return s;
+}
+
+/** A little lantern raft drifting on the river. */
+function lanternFloat(variant: number, frame: number): Surface {
+  const W = 20, H = 18;
+  const s = new Surface(W, H);
+  const cx = 10;
+  const bob = [0, -1, 0, 1][frame % 4];
+  const ramps: Ramp[] = [P.LANTERN, P.TONE_ROSE, P.DYE_SAFFRON];
+  const ramp = ramps[variant % ramps.length];
+  // ripple rings on the water, widening with the frame
+  for (let k = 0; k < 2; k++) {
+    const rw = 12 + frame * 2 + k * 4;
+    const rh = Math.max(3, Math.round(rw * 0.30));
+    s.ellipseOutline(cx - Math.round(rw / 2), 14 - Math.round(rh / 2), rw, rh, k ? P.WATER[3] : P.WATER_FOAM, 0.55 - k * 0.18 - frame * 0.05);
+  }
+  // reflected light on the water
+  for (let j = 0; j < 4; j++) {
+    const w = 5 - j;
+    for (let i = -w; i <= w; i++) {
+      if (((i + j + frame) & 1) === 0) continue;
+      s.px(cx + i, 13 + j, ramp[3], 0.3 - j * 0.06);
+    }
+  }
+  // raft: a small board with folded paper sides
+  s.rect(cx - 6, 11 + bob, 13, 2, P.WOOD[2]);
+  s.hline(cx - 6, 11 + bob, 13, P.WOOD[4]);
+  s.hline(cx - 6, 12 + bob, 13, P.WOOD[0]);
+  for (const px of [cx - 6, cx + 6]) s.px(px, 10 + bob, P.WOOD[1]);
+  // paper shade
+  const mask = new Surface(W, H);
+  for (let y = 4 + bob; y <= 10 + bob; y++) {
+    const t = (y - (4 + bob)) / 6;
+    const hw = variant % 3 === 1 ? 4 : Math.round(2 + t * 3);
+    for (let x = cx - hw; x <= cx + hw; x++) mask.px(x, y, '#ffffff');
+  }
+  paperShade(s, mask, ramp, cx - 1, 8 + bob, 6, 5, 1);
+  s.hline(cx - 2, 3 + bob, 5, P.IRON[2]);
+  s.px(cx, 2 + bob, P.IRON[3]);
+  s.px(cx - 1, 7 + bob, P.LANTERN[4]);
+  glow(s, cx, 7 + bob, 9, ramp[3], 0.38);
+  glow(s, cx, 7 + bob, 5, ramp[4], 0.3);
+  return s;
+}
+
+/** Path-side lanterns that line the festival route. */
+function groundLantern(variant: number): Surface {
+  const W = 18, H = 26;
+  const s = new Surface(W, H);
+  const cx = 9;
+  const ramps: Ramp[] = [P.LANTERN, P.WINDOW_AMBER, P.DYE_SAFFRON];
+  const ramp = ramps[variant % ramps.length];
+  if (variant === 0) {
+    // stone cup with a candle
+    cylinder(s, 2, 14, 14, 11, 6, P.STONE_WALL);
+    s.ellipse(3, 13, 12, 5, P.SOOT[1]);
+    const mask = new Surface(W, H);
+    for (let y = 6; y < 14; y++) for (let x = cx - 3; x <= cx + 3; x++) mask.px(x, y, '#ffffff');
+    paperShade(s, mask, ramp, cx - 1, 11, 5, 7, 1);
+    s.px(cx - 1, 5, ramp[4]);
+    s.px(cx - 1, 4, ramp[3]);
+    s.px(cx, 5, ramp[2]);
+  } else if (variant === 1) {
+    // a small paper lantern on three sticks
+    for (const [lx, dir] of [[4, -1], [14, 1], [9, 0]] as const) {
+      for (let i = 0; i < 8; i++) s.px(lx + dir * Math.round(i * 0.3), 17 + i, dir < 0 ? P.WOOD[3] : P.WOOD[1]);
+    }
+    const mask = new Surface(W, H);
+    mask.ellipse(cx - 6, 5, 13, 13, '#ffffff');
+    paperShade(s, mask, ramp, cx - 1, 11, 8, 8, 1);
+    s.hline(cx - 2, 4, 5, P.IRON[2]);
+    s.hline(cx - 2, 17, 5, P.IRON[0]);
+    s.px(cx - 1, 11, P.LANTERN[4]);
+  } else {
+    // a squat clay lamp
+    cylinder(s, 1, 16, 16, 9, 6, P.TERRACOTTA);
+    s.ellipse(3, 12, 12, 8, P.TERRACOTTA[3]);
+    s.ellipse(5, 13, 8, 5, P.SOOT[1]);
+    for (let j = 0; j < 6; j++) {
+      const w = 3 - Math.floor(j / 2);
+      for (let i = -w; i <= w; i++) {
+        s.px(cx + i, 13 - j, Math.abs(i) >= w ? ramp[2] : j > 3 ? ramp[4] : ramp[3]);
+      }
+    }
+    s.px(cx - 1, 10, P.LANTERN[4]);
+  }
+  glow(s, cx, variant === 1 ? 11 : 10, 13, ramp[3], 0.36);
+  glow(s, cx, variant === 1 ? 11 : 10, 7, ramp[4], 0.28);
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, cx, 25, 16, 5, 0.3);
+  return s;
+}
+
+/** The flower arch at the plaza entrance. */
+function flowerArch(): Surface {
+  const W = 64, H = 72;
+  const s = new Surface(W, H);
+  const cx = 32;
+  // posts
+  for (const px of [8, 53]) {
+    for (let y = 20; y < 68; y++) {
+      for (let dx = 0; dx < 4; dx++) {
+        const u = dx / 3;
+        s.px(px + dx, y, u < 0.25 ? P.WOOD_LIGHT[4] : u < 0.55 ? P.WOOD_LIGHT[3] : u < 0.8 ? P.WOOD_LIGHT[2] : P.WOOD[0]);
+      }
+    }
+    grain(s, px, 20, 4, 48, P.WOOD_LIGHT, 8100 + px, false);
+    s.hline(px - 1, 66, 6, P.WOOD[1]);
+    s.hline(px - 1, 67, 6, P.OUTLINE, 0.7);
+  }
+  // the arch itself
+  const arch = (r: number, thick: number, fn: (x: number, y: number, t: number) => void) => {
+    for (let a = 0; a <= 180; a += 1) {
+      const th = (a / 180) * Math.PI;
+      for (let k = 0; k < thick; k++) {
+        const rr = r - k;
+        const x = Math.round(cx - Math.cos(th) * rr);
+        const y = Math.round(42 - Math.sin(th) * rr);
+        fn(x, y, k / Math.max(1, thick - 1));
+      }
+    }
+  };
+  arch(22, 4, (x, y, t) => s.px(x, y, t < 0.3 ? P.WOOD_LIGHT[4] : t < 0.6 ? P.WOOD_LIGHT[3] : t < 0.85 ? P.WOOD_LIGHT[2] : P.WOOD[0]));
+  // foliage wrapped around the arch and down the posts
+  const fr = rng(8200);
+  const leafAt = (x: number, y: number, n: number) => {
+    for (let i = 0; i < n; i++) {
+      const ox = fr.int(-3, 3), oy = fr.int(-3, 3);
+      const ramp = fr.chance(0.4) ? P.TREE_WARM : P.BUSH;
+      const lit = oy < 0 || ox < 0;
+      s.px(x + ox, y + oy, lit ? ramp[3] : ramp[1]);
+      s.px(x + ox, y + oy + 1, ramp[0], 0.7);
+      if (fr.chance(0.5)) s.px(x + ox + 1, y + oy, lit ? ramp[4] : ramp[2]);
+    }
+  };
+  arch(22, 1, (x, y) => { if (fr.chance(0.55)) leafAt(x, y, 2); });
+  arch(26, 1, (x, y) => { if (fr.chance(0.35)) leafAt(x, y, 2); });
+  for (const px of [10, 55]) for (let y = 24; y < 66; y += 3) if (fr.chance(0.75)) leafAt(px, y, 2);
+  // flowers, clustered rather than sprinkled
+  const flowerRamps = [P.FLOWER_ROSE, P.FLOWER_GOLD, P.FLOWER_WHITE, P.BLOSSOM];
+  const bloom = (x: number, y: number, ramp: readonly string[]) => {
+    const n = ramp.length;
+    s.px(x, y, ramp[n - 1]);
+    s.px(x - 1, y, ramp[n - 3]);
+    s.px(x + 1, y, ramp[n - 3]);
+    s.px(x, y - 1, ramp[n - 2]);
+    s.px(x, y + 1, ramp[n - 4 < 0 ? 0 : n - 4]);
+    s.px(x + 1, y + 1, P.OUTLINE, 0.3);
+  };
+  arch(23, 1, (x, y) => { if (fr.chance(0.16)) bloom(x, y, fr.pick(flowerRamps)); });
+  arch(20, 1, (x, y) => { if (fr.chance(0.12)) bloom(x, y, fr.pick(flowerRamps)); });
+  for (const px of [10, 55]) for (let y = 26; y < 64; y += 4) if (fr.chance(0.5)) bloom(px + fr.int(-1, 2), y, fr.pick(flowerRamps));
+  // hanging lanterns and ribbons under the crown
+  hangLantern(s, cx, 22, P.LANTERN, 1);
+  hangLantern(s, cx - 15, 27, P.WINDOW_AMBER, 0);
+  hangLantern(s, cx + 15, 27, P.WINDOW_AMBER, 0);
+  for (const [rx, ramp] of [[18, P.CARPET_RED], [46, P.DYE_SEA]] as const) {
+    for (let j = 0; j < 9; j++) {
+      s.px(rx + Math.round(Math.sin(j * 0.7) * 1.5), 30 + j, (ramp as Ramp)[j % 2 ? 2 : 3]);
+      s.px(rx + 1 + Math.round(Math.sin(j * 0.7) * 1.5), 30 + j, (ramp as Ramp)[0], 0.7);
+    }
+  }
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, 10, 71, 16, 5, 0.3);
+  contact(s, 55, 71, 16, 5, 0.3);
+  return s;
+}
+
+/** Drifting petals for the festival particle system. */
+function petal(variant: number): Surface {
+  const W = 8, H = 8;
+  const s = new Surface(W, H);
+  const ramps = [P.BLOSSOM, P.FLOWER_ROSE as unknown as Ramp, P.BLOSSOM, P.FLOWER_WHITE as unknown as Ramp];
+  const ramp = ramps[variant % ramps.length];
+  const hi = ramp.length - 1;
+  if (variant % 4 === 0) {
+    s.px(2, 3, ramp[hi - 1]); s.px(3, 2, ramp[hi]); s.px(4, 2, ramp[hi]);
+    s.px(3, 3, ramp[hi]); s.px(4, 3, ramp[hi - 1]); s.px(5, 3, ramp[hi - 2]);
+    s.px(4, 4, ramp[hi - 2]);
+  } else if (variant % 4 === 1) {
+    s.px(3, 2, ramp[hi]); s.px(3, 3, ramp[hi]); s.px(4, 3, ramp[hi - 1]);
+    s.px(3, 4, ramp[hi - 2]); s.px(2, 3, ramp[hi - 1]);
+  } else if (variant % 4 === 2) {
+    s.px(2, 2, ramp[hi - 1]); s.px(3, 2, ramp[hi]); s.px(4, 3, ramp[hi]);
+    s.px(5, 4, ramp[hi - 2]); s.px(3, 3, ramp[hi - 1]);
+  } else {
+    s.px(3, 3, ramp[hi]); s.px(4, 3, ramp[hi - 1]); s.px(3, 4, ramp[hi - 2]);
+  }
+  return s;
+}
+
+/** Confetti scraps thrown when the trial resolves. */
+function confetti(variant: number): Surface {
+  const W = 8, H = 8;
+  const s = new Surface(W, H);
+  const sets: Ramp[] = [P.DYE_SAFFRON, P.TONE_ROSE, P.DYE_SEA, P.UI_GOLD];
+  const ramp = sets[variant % sets.length];
+  if (variant % 4 === 0) {
+    s.rect(2, 3, 3, 2, ramp[3]);
+    s.hline(2, 3, 3, ramp[4]);
+    s.px(4, 4, ramp[1]);
+  } else if (variant % 4 === 1) {
+    // a curl
+    s.px(2, 4, ramp[2]); s.px(3, 3, ramp[3]); s.px(4, 3, ramp[4]); s.px(5, 4, ramp[2]);
+    s.px(3, 4, ramp[1]);
+  } else if (variant % 4 === 2) {
+    s.px(3, 2, ramp[4]); s.px(4, 3, ramp[3]); s.px(3, 4, ramp[2]); s.px(2, 3, ramp[3]);
+  } else {
+    s.rect(3, 2, 2, 4, ramp[2]);
+    s.px(3, 2, ramp[4]);
+    s.px(4, 5, ramp[0]);
+  }
+  return s;
+}
+
+// ── festival ground ────────────────────────────────────────────────────────
+
+/** Plaza paving, dressed for the festival with painted lines and chalk. */
+function plazaFlagTile(variant: number): Surface {
+  const s = new Surface(TILE, TILE);
+  const ramp = P.PATH_STONE;
+  const n1 = valueNoise(8300 + variant * 17);
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const v = n1(x, y, 3.4);
+      s.px(x, y, v > 0.78 ? ramp[4] : v > 0.30 ? ramp[3] : ramp[2]);
+    }
+  }
+  // flagstone joints, staggered per variant
+  const cuts = [0, 6, 11, 16];
+  for (const cy of cuts) {
+    for (let x = 0; x < TILE; x++) {
+      const j = Math.round(Math.sin((x + variant * 3) * 0.8) * 0.6);
+      s.pxOver(x, cy + j, ramp[1], 0.85);
+      s.pxOver(x, cy + j + 1, ramp[4], 0.5);
+    }
+  }
+  const stagger = [3, 9, 13, 5];
+  for (let band = 0; band < cuts.length - 1; band++) {
+    const sx = (stagger[(band + variant) % stagger.length] + variant * 2) % 16;
+    for (let y = cuts[band] + 1; y < cuts[band + 1]; y++) s.pxOver(sx, y, ramp[1], 0.8);
+  }
+  // festival dressing
+  const r = rng(8400 + variant * 31);
+  if (variant === 0) {
+    // a painted gold lane line — held at a fixed row so a run of these tiles
+    // forms one continuous painted line across the plaza
+    for (let x = 0; x < TILE; x++) {
+      s.px(x, 7, P.UI_GOLD[4], 0.55);
+      s.px(x, 8, P.UI_GOLD[3], 0.8);
+      s.px(x, 9, P.UI_GOLD[1], 0.45);
+    }
+    for (let x = 1; x < TILE; x += 5) s.px(x, 8, P.UI_GOLD[4], 0.7);
+  } else if (variant === 1) {
+    // the same lane, painted red and worn to dashes
+    for (let x = 0; x < TILE; x++) {
+      if ((x + 1) % 6 === 0) continue;
+      s.px(x, 7, P.CARPET_RED[4], 0.4);
+      s.px(x, 8, P.CARPET_RED[3], 0.7);
+      s.px(x, 9, P.CARPET_RED[1], 0.4);
+    }
+  } else if (variant === 2) {
+    // trodden petals and confetti
+    for (let i = 0; i < 7; i++) {
+      const px = r.int(0, TILE - 2), py = r.int(0, TILE - 2);
+      const c = r.pick([P.BLOSSOM[3], P.DYE_SAFFRON[3], P.DYE_SEA[3], P.TONE_ROSE[3]]);
+      s.px(px, py, c, 0.8);
+      if (r.chance(0.5)) s.px(px + 1, py, c, 0.5);
+    }
+  } else {
+    // a chalked ring where a stall stood
+    for (let a = 0; a < 40; a++) {
+      const th = (a / 40) * Math.PI * 2;
+      s.px(Math.round(8 + Math.cos(th) * 5), Math.round(8 + Math.sin(th) * 4), P.CANVAS[4], 0.35);
+    }
+    for (let i = 0; i < 4; i++) s.px(r.int(0, 15), r.int(0, 15), P.DYE_SAFFRON[3], 0.5);
+  }
+  return s;
+}
+
+/**
+ * Edge classification for a blob coverage mask.
+ *
+ * The shared `edgePixels` treats the tile's own border as "outside", which is
+ * right for a lone tile but wrong for a material that runs across many tiles:
+ * it hems every tile boundary and the run reads as a grid. Here an
+ * out-of-bounds neighbour counts as covered, so only real material edges are
+ * returned.
+ */
+function runEdges(cov: Surface) {
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= cov.w || y >= cov.h ? 1 : cov.alphaAt(x, y) ? 1 : 0);
+  const top: Array<[number, number]> = [];
+  const bottom: Array<[number, number]> = [];
+  const side: Array<[number, number]> = [];
+  for (let y = 0; y < cov.h; y++) {
+    for (let x = 0; x < cov.w; x++) {
+      if (!cov.alphaAt(x, y)) continue;
+      if (!at(x, y - 1)) top.push([x, y]);
+      else if (!at(x, y + 1)) bottom.push([x, y]);
+      else if (!at(x - 1, y) || !at(x + 1, y)) side.push([x, y]);
+    }
+  }
+  return { top, bottom, side, at };
+}
+
+/** The ceremonial runner laid down the centre of the plaza. */
+function carpetPainter(coverage: Surface, _mask: number, r: Rng): Surface {
+  const s = new Surface(TILE, TILE);
+  const ramp = P.CARPET_RED;
+  const n = valueNoise(8500);
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      if (coverage.alphaAt(x, y) === 0) continue;
+      const v = n(x, y, 2.6);
+      // woven texture: a fine weft, low contrast
+      const weave = ((x + y) & 1) === 0 ? 1 : 0;
+      s.px(x, y, v > 0.70 ? ramp[4] : v < 0.30 ? ramp[2] : ramp[2 + weave]);
+      if (((x * 3 + y) & 7) === 0) s.px(x, y, ramp[2], 0.45);
+    }
+  }
+  // woven motif: a repeating diamond, low contrast, so the runner reads as
+  // patterned cloth rather than as a flat red rectangle
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      if (coverage.alphaAt(x, y) === 0) continue;
+      const d = Math.abs((x % 8) - 4) + Math.abs((y % 8) - 4);
+      if (d === 4) s.px(x, y, ramp[4], 0.30);
+      else if (d === 3) s.px(x, y, ramp[3], 0.35);
+      else if (d === 0) s.px(x, y, P.UI_GOLD[2], 0.45);
+    }
+  }
+  speckle(s, r, 0, 0, TILE, TILE, ramp[1], 6, 0.3);
+  // hem: gold on the outer pixel, plus an inset gold thread two in from the
+  // sides — both derived from the run's real edges, not the tile's border
+  const { top, bottom, side, at } = runEdges(coverage);
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      if (coverage.alphaAt(x, y) === 0) continue;
+      const gapL = !at(x - 2, y) && at(x - 1, y);
+      const gapR = !at(x + 2, y) && at(x + 1, y);
+      if (gapL || gapR) s.px(x, y, gapL ? P.UI_GOLD[3] : P.UI_GOLD[1], 0.6);
+    }
+  }
+  for (const [x, y] of top) {
+    s.px(x, y, P.UI_GOLD[3], 0.9);
+    s.px(x, y + 1, P.UI_GOLD[1], 0.5);
+  }
+  for (const [x, y] of bottom) {
+    s.px(x, y, ramp[0]);
+    s.px(x, y - 1, ramp[1], 0.6);
+  }
+  for (const [x, y] of side) s.px(x, y, P.UI_GOLD[2], 0.8);
+  return s;
+}
+
+// ── food and small props ───────────────────────────────────────────────────
+
+function skewer(): Surface {
+  const W = 12, H = 20;
+  const s = new Surface(W, H);
+  s.vline(6, 2, 17, P.WOOD_LIGHT[3]);
+  s.vline(7, 2, 17, P.WOOD[1]);
+  s.px(6, 1, P.WOOD_LIGHT[4]);
+  for (let k = 0; k < 3; k++) {
+    const y = 3 + k * 5;
+    s.rect(3, y, 8, 4, P.FOOD_MEAT[2]);
+    s.hline(3, y, 8, P.FOOD_MEAT[3]);
+    s.hline(4, y, 6, P.FOOD_MEAT[4]);
+    s.hline(3, y + 3, 8, P.FOOD_MEAT[0]);
+    s.px(10, y + 1, P.FOOD_MEAT[1]);
+    if (k < 2) {
+      s.rect(4, y + 4, 6, 1, P.VEG_LEAF[2]);
+      s.px(5, y + 4, P.VEG_LEAF[4]);
+    }
+  }
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, 6, 19, 8, 3, 0.28);
+  return s;
+}
+
+function breadBasket(): Surface {
+  const W = 24, H = 20;
+  const s = new Surface(W, H);
+  // loaves first, basket in front
+  for (let i = 0; i < 3; i++) {
+    const bx = 3 + i * 6;
+    s.ellipse(bx, 2, 8, 7, P.FOOD_BREAD[1]);
+    s.ellipse(bx + 1, 2, 6, 6, P.FOOD_BREAD[3]);
+    s.px(bx + 2, 4, P.FOOD_BREAD[4]);
+    s.px(bx + 4, 3, P.FOOD_BREAD[0], 0.6);
+    s.px(bx + 3, 5, P.FOOD_BREAD[2]);
+  }
+  cylinder(s, 1, 7, 22, 12, 7, P.ROPE, { lid: false });
+  for (let x = 2; x < 22; x += 3) {
+    for (let y = 9; y < 17; y++) s.pxOver(x, y, P.ROPE[1], 0.45);
+  }
+  for (let y = 10; y < 17; y += 3) s.hline(1, y, 22, P.ROPE[4], 0.3);
+  s.hline(1, 8, 22, P.ROPE[4], 0.7);
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, 12, 19, 20, 5, 0.3);
+  return s;
+}
+
+function fruitBowl(): Surface {
+  const W = 22, H = 18;
+  const s = new Surface(W, H);
+  const fruits: Ramp[] = [P.FLOWER_ROSE as unknown as Ramp, P.DYE_SAFFRON, P.VEG_LEAF, P.DYE_SAFFRON, P.FLOWER_ROSE as unknown as Ramp];
+  for (let i = 0; i < 5; i++) {
+    const fx = 3 + (i % 3) * 6, fy = 2 + (i > 2 ? 3 : 0);
+    const ramp = fruits[i];
+    s.ellipse(fx, fy, 6, 6, ramp[1]);
+    s.ellipse(fx + 1, fy + 1, 4, 4, ramp[2]);
+    s.px(fx + 1, fy + 1, ramp[3]);
+    s.px(fx + 4, fy + 4, ramp[0]);
+  }
+  s.px(9, 1, P.VEG_LEAF[3]);
+  s.px(10, 0, P.VEG_LEAF[4]);
+  // glazed bowl
+  const bowl = new Surface(W, H);
+  for (let y = 9; y < 17; y++) {
+    const t = (y - 9) / 8;
+    const hw = Math.round(10 * Math.sqrt(Math.max(0, 1 - t * t)));
+    for (let x = 11 - hw; x <= 11 + hw; x++) bowl.px(x, y, '#ffffff');
+  }
+  dirShade(s, bowl, P.TERRACOTTA, 5, 10, 0.05, 0.05, 0.66);
+  s.hline(1, 9, 21, P.TERRACOTTA[4], 0.85);
+  s.hline(2, 10, 19, P.TERRACOTTA[1], 0.4);
+  for (let x = 4; x < 19; x += 4) s.px(x, 12, P.CANVAS[3], 0.7);
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, 11, 17, 18, 5, 0.3);
+  return s;
+}
+
+function pieStack(): Surface {
+  const W = 20, H = 22;
+  const s = new Surface(W, H);
+  for (let k = 2; k >= 0; k--) {
+    const y = 5 + k * 5;
+    // tin
+    s.ellipse(2, y + 3, 16, 6, P.METAL[2]);
+    s.rect(2, y + 3, 16, 3, P.METAL[2]);
+    s.hline(2, y + 5, 16, P.METAL[0]);
+    s.hline(2, y + 3, 16, P.METAL[4], 0.6);
+    // filling / crust
+    s.ellipse(3, y, 14, 6, P.FOOD_BREAD[2]);
+    s.ellipse(4, y, 12, 5, P.FOOD_BREAD[3]);
+    s.px(7, y + 1, P.FOOD_BREAD[4]);
+    s.px(11, y + 2, P.FOOD_BREAD[1]);
+    // lattice
+    for (let i = 0; i < 3; i++) s.px(6 + i * 3, y + 2, P.FOOD_BREAD[0], 0.5);
+    s.hline(5, y + 2, 10, P.FOOD_BREAD[4], 0.25);
+  }
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, 10, 21, 18, 5, 0.3);
+  return s;
+}
+
+function drinkBarrel(): Surface {
+  const W = 30, H = 34;
+  const s = new Surface(W, H);
+  // trestle
+  for (const [lx, dir] of [[5, -1], [23, 1]] as const) {
+    for (let i = 0; i < 8; i++) s.px(lx + dir * Math.round(i * 0.45), 25 + i, dir < 0 ? P.WOOD[3] : P.WOOD[1]);
+    for (let i = 0; i < 8; i++) s.px(lx + dir * Math.round(i * 0.45) + 1, 25 + i, P.WOOD[0], 0.8);
+  }
+  s.hline(4, 28, 21, P.WOOD[2]);
+  s.hline(4, 29, 21, P.WOOD[0]);
+
+  // the barrel lying on its side: a horizontal cylinder, lit along the top-left
+  const top = 4, bot = 26, cy = (top + bot) / 2;
+  const halfAt = (x: number) => {
+    const t = (x - 3) / 22;
+    return ((bot - top) / 2) * Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.5) * 2, 2) * 0.22));
+  };
+  for (let x = 3; x <= 25; x++) {
+    const hh = halfAt(x);
+    for (let y = Math.round(cy - hh); y <= Math.round(cy + hh); y++) {
+      const v = (y - (cy - hh)) / Math.max(1, hh * 2);
+      const c = v < 0.10 ? P.WOOD[1] : v < 0.28 ? P.WOOD[3] : v < 0.42 ? P.WOOD[4] : v < 0.70 ? P.WOOD[2] : v < 0.88 ? P.WOOD[1] : P.WOOD[0];
+      s.px(x, y, c);
+    }
+  }
+  // staves
+  for (let x = 5; x <= 24; x += 3) {
+    const hh = halfAt(x);
+    for (let y = Math.round(cy - hh) + 1; y <= Math.round(cy + hh) - 1; y++) s.px(x, y, P.WOOD[0], 0.22);
+  }
+  // iron hoops
+  for (const bx of [7, 15, 22]) {
+    const hh = halfAt(bx);
+    for (let y = Math.round(cy - hh); y <= Math.round(cy + hh); y++) {
+      const v = (y - (cy - hh)) / Math.max(1, hh * 2);
+      s.px(bx, y, v < 0.30 ? P.IRON[4] : v < 0.68 ? P.IRON[2] : P.IRON[0]);
+      s.px(bx + 1, y, P.IRON[0], 0.75);
+    }
+  }
+  // the near end cap
+  const capHalf = halfAt(3);
+  s.ellipse(0, Math.round(cy - capHalf), 8, Math.round(capHalf * 2) + 1, P.WOOD[1]);
+  for (let j = 0; j <= capHalf * 2; j++) {
+    for (let i = 0; i < 8; i++) {
+      if (s.alphaAt(i, Math.round(cy - capHalf) + j) === 0) continue;
+      const v = j / Math.max(1, capHalf * 2);
+      s.px(i, Math.round(cy - capHalf) + j, v < 0.24 ? P.WOOD_LIGHT[3] : v < 0.55 ? P.WOOD_LIGHT[2] : v < 0.8 ? P.WOOD[1] : P.WOOD[0]);
+    }
+  }
+  for (let j = 0; j <= capHalf * 2; j += 3) s.hline(1, Math.round(cy - capHalf) + j, 6, P.WOOD[0], 0.35);
+  s.ellipseOutline(0, Math.round(cy - capHalf), 8, Math.round(capHalf * 2) + 1, P.IRON[2], 0.8);
+  // tap, pouring
+  s.rect(24, 18, 4, 3, P.BRONZE[2]);
+  s.hline(24, 18, 4, P.BRONZE[4]);
+  s.px(27, 21, P.BRONZE[3]);
+  s.px(27, 22, P.BRONZE[1]);
+  s.px(26, 17, P.BRONZE[3]);
+  s.px(26, 16, P.BRONZE[1]);
+  for (let j = 0; j < 4; j++) s.px(27, 23 + j, P.LANTERN[3], 0.7 - j * 0.12);
+  // a chalk mark and a bung on the top
+  s.ellipse(12, 5, 5, 3, P.WOOD[0], 0.6);
+  s.hline(13, 5, 3, P.WOOD_LIGHT[3], 0.7);
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, 15, 33, 24, 6, 0.3);
+  return s;
+}
+
+function mug(): Surface {
+  const W = 12, H = 14;
+  const s = new Surface(W, H);
+  cylinder(s, 2, 3, 8, 10, 4, P.PLASTER, { lid: false });
+  // froth + drink
+  s.ellipse(2, 2, 8, 4, P.CANVAS[4]);
+  s.ellipse(3, 3, 6, 3, P.CANVAS[3]);
+  s.px(4, 3, P.CANVAS[4]);
+  s.ellipse(3, 4, 6, 2, P.LANTERN[1], 0.5);
+  // handle
+  for (const [x, y] of [[10, 6], [11, 7], [11, 8], [10, 9]] as const) s.px(x, y, P.PLASTER[2]);
+  s.px(10, 6, P.PLASTER[4]);
+  s.px(11, 9, P.PLASTER[0]);
+  rim(s, P.OUTLINE, 0.85);
+  contact(s, 6, 13, 9, 4, 0.28);
+  return s;
+}
+
+function prizeRibbon(): Surface {
+  const W = 16, H = 22;
+  const s = new Surface(W, H);
+  const ramp = P.UI_GOLD;
+  // tails
+  for (let j = 0; j < 9; j++) {
+    s.px(5 - Math.round(j * 0.2), 11 + j, P.CARPET_RED[2]);
+    s.px(6 - Math.round(j * 0.2), 11 + j, P.CARPET_RED[3]);
+    s.px(9 + Math.round(j * 0.2), 11 + j, P.CARPET_RED[1]);
+    s.px(10 + Math.round(j * 0.2), 11 + j, P.CARPET_RED[0]);
+  }
+  s.px(5, 19, P.CARPET_RED[0]);
+  s.px(10, 19, P.CARPET_RED[0]);
+  // pleated rosette
+  for (let a = 0; a < 12; a++) {
+    const th = (a / 12) * Math.PI * 2;
+    const x = Math.round(8 + Math.cos(th) * 6), y = Math.round(8 + Math.sin(th) * 6);
+    s.px(x, y, a < 6 ? ramp[3] : ramp[1]);
+    s.line(8, 8, x, y, a < 6 ? ramp[2] : ramp[1], 0.9);
+  }
+  s.ellipse(4, 4, 9, 9, ramp[2]);
+  s.ellipse(5, 5, 7, 7, ramp[3]);
+  s.ellipse(6, 6, 5, 5, ramp[1]);
+  s.px(7, 7, ramp[4]);
+  s.ellipseOutline(4, 4, 9, 9, ramp[0], 0.6);
+  rim(s, P.OUTLINE, 0.8);
+  return s;
+}
+
+function toyWindmill(): Surface {
+  const W = 18, H = 30;
+  const s = new Surface(W, H);
+  const cx = 9;
+  // stick
+  s.vline(cx, 10, 19, P.WOOD_LIGHT[3]);
+  s.vline(cx + 1, 10, 19, P.WOOD[1]);
+  s.px(cx, 29, P.OUTLINE, 0.6);
+  // four sails, alternating colours
+  const ramps = [P.CARPET_RED, P.DYE_SAFFRON, P.DYE_SEA, P.TONE_ROSE];
+  for (let q = 0; q < 4; q++) {
+    const ramp = ramps[q];
+    const th = (q / 4) * Math.PI * 2 + Math.PI / 4;
+    const dx = Math.cos(th), dy = Math.sin(th);
+    for (let r2 = 1; r2 <= 7; r2++) {
+      const w = Math.round(r2 * 0.55);
+      for (let k = -w; k <= w; k++) {
+        const px = Math.round(cx + dx * r2 - dy * k * 0.9);
+        const py = Math.round(9 + dy * r2 + dx * k * 0.9);
+        const lit = k < 0;
+        s.px(px, py, lit ? ramp[3] : r2 > 5 ? ramp[1] : ramp[2]);
+      }
+    }
+  }
+  s.px(cx, 9, P.UI_GOLD[4]);
+  s.px(cx - 1, 9, P.UI_GOLD[2]);
+  s.px(cx, 8, P.UI_GOLD[3]);
+  s.px(cx + 1, 10, P.UI_GOLD[1]);
+  rim(s, P.OUTLINE, 0.8);
+  contact(s, cx, 29, 8, 3, 0.28);
+  return s;
+}
+
 // ── registration ───────────────────────────────────────────────────────────
 
 type LampFn = (st: LampState) => Surface;
@@ -1451,4 +2879,59 @@ export function registerFestival(b: ArtBuild): void {
   b.add('prop/fest/stall_food_0', stallFoodAwning());
   b.add('prop/fest/stall_food_1', stallFoodGrill());
   b.add('prop/fest/stall_food_2', stallFoodWagon());
+  b.add('prop/fest/stall_game_0', stallGameRing());
+  b.add('prop/fest/stall_game_1', stallGameDip());
+  b.add('prop/fest/stall_craft', stallCraft());
+  b.add('prop/fest/stage_music', stageMusic());
+  b.add('prop/fest/judging_table', judgingTable());
+
+  const fire: Surface[] = [];
+  for (let f = 0; f < 4; f++) fire.push(brazier(f));
+  b.addStrip('prop/fest/brazier_fest', fire, { key: 'brazier_fest', frameRate: 8, repeat: -1 });
+
+  for (let i = 0; i < 2; i++) b.add(`prop/fest/bench_fest_${i}`, benchFest(i));
+  b.add('prop/fest/crate_stack_fest', crateStackFest());
+  b.add('prop/fest/barrel_fest', barrelFest());
+
+  // ── C2. decoration ──────────────────────────────────────────────────────
+  for (let i = 0; i < 3; i++) b.add(`prop/fest/bunting_${i}`, bunting(i));
+  for (let i = 0; i < 3; i++) b.add(`prop/fest/banner_${i}`, banner(i));
+
+  for (let i = 0; i < 6; i++) {
+    b.add(`prop/fest/paper_lantern_${i}`, paperLantern(i, 1));
+    b.add(`prop/fest/paper_lantern_${i}_dim`, paperLantern(i, 0));
+    const frames: Surface[] = [];
+    for (let f = 0; f < 3; f++) frames.push(paperLantern(i, [1, 1.6, 1.25][f]));
+    b.addStrip(`prop/fest/paper_lantern_${i}_glow`, frames, {
+      key: i === 0 ? 'paper_lantern_glow' : `paper_lantern_${i}_glow`, frameRate: 3, repeat: -1,
+    });
+  }
+
+  const floats: Surface[] = [];
+  for (let f = 0; f < 4; f++) floats.push(lanternFloat(0, f));
+  b.addStrip('prop/fest/lantern_float', floats, { key: 'lantern_float', frameRate: 4, repeat: -1 });
+  for (const [name, v] of [['b', 1], ['c', 2]] as const) {
+    const fr: Surface[] = [];
+    for (let f = 0; f < 4; f++) fr.push(lanternFloat(v, f));
+    b.addStrip(`prop/fest/lantern_float_${name}`, fr, { key: `lantern_float_${name}`, frameRate: 4, repeat: -1 });
+  }
+
+  for (let i = 0; i < 3; i++) b.add(`prop/fest/ground_lantern_${i}`, groundLantern(i));
+  b.add('prop/fest/flower_arch', flowerArch());
+  for (let i = 0; i < 4; i++) b.add(`prop/fest/petal_${i}`, petal(i));
+  for (let i = 0; i < 4; i++) b.add(`prop/fest/confetti_${i}`, confetti(i));
+
+  // ── C3. festival ground ─────────────────────────────────────────────────
+  for (let i = 0; i < 4; i++) b.addTile(`tile/fest/plaza_flag_${i}`, plazaFlagTile(i));
+  registerBlobSet(b, 'blob/fest_carpet', 8600, carpetPainter, { wobble: 0.4, radius: 2.4 });
+
+  // ── D. food and small props ─────────────────────────────────────────────
+  b.add('prop/fest/skewer', skewer());
+  b.add('prop/fest/bread_basket', breadBasket());
+  b.add('prop/fest/fruit_bowl', fruitBowl());
+  b.add('prop/fest/pie_stack', pieStack());
+  b.add('prop/fest/drink_barrel', drinkBarrel());
+  b.add('prop/fest/mug', mug());
+  b.add('prop/fest/prize_ribbon', prizeRibbon());
+  b.add('prop/fest/toy_windmill', toyWindmill());
 }

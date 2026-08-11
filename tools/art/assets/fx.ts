@@ -91,10 +91,13 @@ function bands(ramp: readonly string[], lo: number, hi: number, dither = 0.13): 
  */
 function bandsAt(
   ramp: readonly string[], lo: number, hi: number, dither: number,
-  peak: number, ref: number,
+  peak: number, ref: number, top?: string,
 ): Stop[] {
   const f = Math.pow(Math.max(0.08, peak / ref), 0.62);
-  return bands(ramp, lo * f, hi * f, dither * f);
+  const out = bands(ramp, lo * f, hi * f, dither * f);
+  // An optional sixth step above the ramp: the hottest 1-2 px of a burst.
+  if (top) out.push([hi * f * 1.14, top]);
+  return out;
 }
 
 // ── field primitives ───────────────────────────────────────────────────────
@@ -104,7 +107,7 @@ function bandsAt(
  * shaded lower-right, so dust and smoke obey the same light direction as
  * everything else in the game.
  */
-function fPuff(F: Field, cx: number, cy: number, rx: number, ry: number, amp = 1): void {
+function fPuff(F: Field, cx: number, cy: number, rx: number, ry: number, amp = 1, soft = 0.55): void {
   const x0 = Math.max(0, Math.floor(cx - rx - 1)), x1 = Math.min(F.w - 1, Math.ceil(cx + rx + 1));
   const y0 = Math.max(0, Math.floor(cy - ry - 1)), y1 = Math.min(F.h - 1, Math.ceil(cy + ry + 1));
   for (let y = y0; y <= y1; y++) {
@@ -113,7 +116,7 @@ function fPuff(F: Field, cx: number, cy: number, rx: number, ry: number, amp = 1
       const d = Math.hypot(nx, ny);
       if (d >= 1) continue;
       const light = 1 - 0.34 * (nx + ny) * 0.5;
-      fMax(F, x, y, amp * light * Math.pow(1 - d, 0.55));
+      fMax(F, x, y, amp * light * Math.pow(1 - d, soft));
     }
   }
 }
@@ -472,7 +475,7 @@ function dustFrames(seed: number): Surface[] {
     for (let j = 0; j < k.grit; j++) {
       fDot(F, 7 + r.range(-5, 5), cy - r.range(0, 2.5), 0.85, k.amp * 0.75, 1);
     }
-    return paint(s, F, bandsAt(P.DUST, 0.3, 1.3, 0.3, k.amp, 1.45));
+    return paint(s, F, bandsAt(P.DUST, 0.46, 1.26, 0.3, k.amp, 1.45));
   });
 }
 
@@ -494,7 +497,7 @@ function landFrames(): Surface[] {
       ampAt: (p) => 0.75 + 0.25 * Math.sin(p * Math.PI * 2),
     });
     if (i <= 1) fDot(F, cx, cy + 1, 2.4 + i, 0.55 - i * 0.2, 2);
-    return paint(s, F, bandsAt(P.DUST, 0.18, 1.05, 0.3, k.amp, 1.2));
+    return paint(s, F, bandsAt(P.DUST, 0.34, 1.02, 0.28, k.amp, 1.2));
   });
 }
 
@@ -535,7 +538,7 @@ function dashTrailFrames(): Surface[] {
     // one scuff of dust where the body met the ground
     fPuff(F, 8 + k.off * 0.6, 19.4, 3.0, 1.6, k.amp * 0.7);
     fPuff(F, 14 + k.off * 0.5, 20.0, 2.2, 1.2, k.amp * 0.55);
-    return paint(s, F, bandsAt(P.DUST, 0.22, 1.3, 0.3, k.amp, 1.55));
+    return paint(s, F, bandsAt(P.DUST, 0.42, 1.3, 0.3, k.amp, 1.55));
   });
 }
 
@@ -675,29 +678,50 @@ function pickupSparkleFrames(): Surface[] {
  * Four frames is enough for the eye to invent the rotation between them.
  */
 function leafFrames(ramp: readonly string[], seed: number): Surface[] {
-  const S = 9;
+  // Four hand-set poses of one tumbling leaf: broad face, three-quarter,
+  // edge-on (a 1 px sliver — that frame is what sells the spin), and back.
   const poses = [
-    { w: 6, h: 3, tilt: 1, y: 4 },
-    { w: 5, h: 4, tilt: 1, y: 3 },
-    { w: 2, h: 5, tilt: 0, y: 3 },
-    { w: 4, h: 4, tilt: -1, y: 3 },
+    [
+      '..*XX..',
+      '.*XvXXo',
+      'XXvXXo.',
+      '.oXvo..',
+      '..o....',
+    ],
+    [
+      '...*X..',
+      '..*XXo.',
+      '.XvXXo.',
+      '.XvXo..',
+      '..oo...',
+    ],
+    [
+      '...*...',
+      '...X...',
+      '...X...',
+      '...o...',
+      '...o...',
+    ],
+    [
+      '..X*...',
+      '.oXXX*.',
+      '.oXvXX.',
+      '..ooXo.',
+      '....o..',
+    ],
   ];
   const r = rng(seed);
-  return poses.map((p, i) => {
-    const s = new Surface(S, S);
-    const x0 = Math.round((S - p.w) / 2) + (i === 1 ? 1 : 0);
-    s.ellipse(x0, p.y, p.w, p.h, ramp[2]);
-    // midrib, running with the tilt
-    for (let k = 0; k < p.w; k++) {
-      s.pxOver(x0 + k, p.y + Math.floor(p.h / 2) + (p.tilt > 0 ? (k > p.w / 2 ? -1 : 0) : 0), ramp[1]);
+  return poses.map((rows, i) => {
+    const s = new Surface(9, 9);
+    const oy = 2 + (i === 2 ? 0 : 0);
+    for (let y = 0; y < rows.length; y++) {
+      for (let x = 0; x < rows[y].length; x++) {
+        const ch = rows[y][x];
+        if (ch === '.') continue;
+        const c = ch === '*' ? ramp[4] : ch === 'o' ? ramp[0] : ch === 'v' ? ramp[1] : ramp[2];
+        s.px(x + 1, y + oy, c);
+      }
     }
-    // upper-left catches the light, lower-right darkens
-    s.pxOver(x0 + 1, p.y, ramp[4]);
-    if (p.w > 3) s.pxOver(x0 + 2, p.y, ramp[3]);
-    s.innerShade(ramp[0], 0.7, [[0, 1], [1, 0]]);
-    // stem
-    const sx = x0 + (p.tilt >= 0 ? p.w : -1);
-    s.px(sx, p.y + p.h - 1, ramp[0]);
     void r;
     return s;
   });
@@ -740,9 +764,9 @@ function fireflyFrames(): Surface[] {
   return keys.map((k) => {
     const s = new Surface(S, S);
     const F = field(S, S);
-    fDot(F, c, c, k.halo, k.amp * 0.62, 2.2);
+    fDot(F, c, c, k.halo, k.amp * 0.6, 1.7);
     fDot(F, c, c, 1.4, k.amp * 1.3, 1);
-    paint(s, F, bandsAt(P.LANTERN, 0.26, 1.25, 0.38, k.amp, 1.15));
+    paint(s, F, bandsAt(P.LANTERN, 0.26, 1.25, 0.22, k.amp, 1.15));
     if (k.core) s.pxOver(4, 4, P.SPECULAR);
     return s;
   });
@@ -752,22 +776,27 @@ function fireflyFrames(): Surface[] {
 function smokeFrames(): Surface[] {
   const W = 18, H = 22;
   const keys = [
-    { y: 19.0, x: 6.0, rx: 1.8, ry: 1.5, amp: 1.25, lobes: 1 },
-    { y: 15.5, x: 6.6, rx: 2.6, ry: 2.2, amp: 1.35, lobes: 2 },
-    { y: 12.0, x: 7.6, rx: 3.4, ry: 2.8, amp: 1.10, lobes: 3 },
-    { y: 8.8, x: 9.0, rx: 4.0, ry: 3.2, amp: 0.85, lobes: 3 },
-    { y: 6.0, x: 10.6, rx: 4.6, ry: 3.6, amp: 0.60, lobes: 3 },
-    { y: 3.8, x: 12.0, rx: 5.0, ry: 3.8, amp: 0.38, lobes: 3 },
+    { y: 19.0, x: 6.0, rx: 1.9, ry: 1.7, amp: 1.30, soft: 0.5, lobes: 1 },
+    { y: 15.5, x: 6.6, rx: 2.7, ry: 2.5, amp: 1.35, soft: 0.6, lobes: 2 },
+    { y: 12.2, x: 7.6, rx: 3.4, ry: 3.1, amp: 1.28, soft: 0.9, lobes: 3 },
+    { y: 9.0, x: 9.0, rx: 4.0, ry: 3.6, amp: 1.20, soft: 1.4, lobes: 3 },
+    { y: 6.2, x: 10.6, rx: 4.6, ry: 4.0, amp: 1.10, soft: 2.1, lobes: 3 },
+    { y: 4.0, x: 12.0, rx: 5.0, ry: 4.2, amp: 1.00, soft: 3.1, lobes: 3 },
   ];
-  return keys.map((k, i) => {
+  return keys.map((k) => {
     const s = new Surface(W, H);
     const F = field(W, H);
-    fPuff(F, k.x, k.y, k.rx, k.ry, k.amp);
-    if (k.lobes > 1) fPuff(F, k.x - k.rx * 0.7, k.y + k.ry * 0.45, k.rx * 0.62, k.ry * 0.6, k.amp * 0.92);
-    if (k.lobes > 2) fPuff(F, k.x + k.rx * 0.65, k.y - k.ry * 0.4, k.rx * 0.55, k.ry * 0.5, k.amp * 0.86);
-    // a thin tail back down toward the chimney on the early frames
-    if (i <= 2) fLine(F, k.x, k.y + k.ry, 6, 21.5, 1.0, 0.4, k.amp * 0.7, k.amp * 0.4);
-    return paint(s, F, bandsAt(P.SMOKE_PUFF, 0.26, 1.2, 0.32, k.amp, 1.35));
+    fPuff(F, k.x, k.y, k.rx, k.ry, k.amp, k.soft);
+    if (k.lobes > 1) {
+      fPuff(F, k.x - k.rx * 0.62, k.y + k.ry * 0.42, k.rx * 0.68, k.ry * 0.66, k.amp * 0.94, k.soft);
+    }
+    if (k.lobes > 2) {
+      fPuff(F, k.x + k.rx * 0.6, k.y - k.ry * 0.36, k.rx * 0.6, k.ry * 0.58, k.amp * 0.88, k.soft);
+      fPuff(F, k.x - k.rx * 0.2, k.y - k.ry * 0.6, k.rx * 0.5, k.ry * 0.5, k.amp * 0.82, k.soft);
+    }
+    // Dissipation is coverage, not colour: the puff keeps its value and loses
+    // its pixels, which is the only fade that looks right in pixel art.
+    return paint(s, F, bands(P.SMOKE_PUFF, 0.34, 1.3, 0.5));
   });
 }
 
@@ -785,12 +814,12 @@ function steamFrames(): Surface[] {
       for (let k = 0; k < 6; k++) {
         const ny = py - 2.4;
         const nx = bx + Math.sin(phase + k * 0.9) * (1.1 + k * 0.28);
-        const amp = (1.15 - k * 0.16) * (j === 0 ? 1 : 0.82);
-        fLine(F, px, py, nx, ny, 0.75 - k * 0.06, 0.6 - k * 0.06, amp, amp * 0.85);
+        const amp = (1.35 - k * 0.21) * (j === 0 ? 1 : 0.86);
+        fLine(F, px, py, nx, ny, 1.05 - k * 0.07, 0.95 - k * 0.07, amp, amp * 0.9);
         px = nx; py = ny;
       }
     }
-    return paint(s, F, bands(P.STEAM, 0.3, 1.15, 0.4));
+    return paint(s, F, bands(P.STEAM, 0.42, 1.25, 0.22));
   });
 }
 
@@ -800,11 +829,11 @@ function splashFrames(): Surface[] {
   const r = rng(9301);
   const angles = spreadAngles(7, r, 0.25, -Math.PI / 2 - 0.4).map((a) => a * 0.55 - 1.0);
   const keys = [
-    { crown: 3.0, amp: 1.20, ring: 0, rAmp: 0, drops: 0, dist: 0 },
-    { crown: 6.0, amp: 1.45, ring: 3.5, rAmp: 0.9, drops: 5, dist: 5.5 },
-    { crown: 4.0, amp: 1.00, ring: 6.5, rAmp: 0.85, drops: 6, dist: 8.5 },
-    { crown: 1.6, amp: 0.62, ring: 8.5, rAmp: 0.6, drops: 5, dist: 10.5 },
-    { crown: 0, amp: 0.34, ring: 10.0, rAmp: 0.36, drops: 3, dist: 11.5 },
+    { crown: 3.2, amp: 1.20, ring: 0, rAmp: 0, drops: 0, dist: 0 },
+    { crown: 6.5, amp: 1.45, ring: 3.5, rAmp: 1.0, drops: 5, dist: 5.5 },
+    { crown: 3.5, amp: 1.00, ring: 6.5, rAmp: 0.9, drops: 6, dist: 8.5 },
+    { crown: 0, amp: 0.66, ring: 8.5, rAmp: 0.66, drops: 5, dist: 10.5 },
+    { crown: 0, amp: 0.36, ring: 10.0, rAmp: 0.36, drops: 3, dist: 11.5 },
   ];
   return keys.map((k, i) => {
     const s = new Surface(W, H);
@@ -825,8 +854,9 @@ function splashFrames(): Surface[] {
     for (let j = 0; j < k.drops; j++) {
       const a = angles[j % angles.length];
       const d = k.dist * (0.7 + 0.3 * ((j % 3) / 2));
-      const h = Math.sin((i + 1) / 5 * Math.PI) * 5.5;
-      fDot(F, cx + Math.cos(a) * d, cy - h + Math.sin(a) * d * 0.35, 0.95, k.amp * 0.8, 1);
+      // ballistic arc: up fast, then falling back toward the surface
+      const h = Math.max(0, 5.8 * Math.sin(((i + 0.6) / 4.6) * Math.PI));
+      fDot(F, cx + Math.cos(a) * d, cy - h + Math.sin(a) * d * 0.35, 0.95, k.amp * 0.85, 1);
     }
     paint(s, F, bandsAt(P.WATER, 0.2, 1.25, 0.3, k.amp, 1.45));
     // foam only where the water is thickest — the one near-white in the effect
@@ -865,17 +895,20 @@ function grassRustleFrames(): Surface[] {
   for (let i = 0; i < 9; i++) {
     blades.push({ x: 1 + i * 2 + r.int(0, 1), h: 4 + r.int(0, 3), side: i < 4 ? -1 : i > 4 ? 1 : 0 });
   }
-  const lean = [0.35, 1.0, 0.65, -0.25];
+  const lean = [0.4, 1.0, 0.6, -0.3];
   return lean.map((L) => {
     const s = new Surface(W, H);
     for (const b of blades) {
-      const tipX = b.x + Math.round(b.side * L * 2.2);
+      const tipX = b.x + Math.round(b.side * L * 3.6);
       const base = H - 2;
-      for (let k = 0; k <= b.h; k++) {
-        const t = k / b.h;
+      // blades in the path are pressed down as well as aside
+      const press = b.side === 0 ? Math.max(0, L) * 0.55 : Math.max(0, L) * 0.2;
+      const hgt = Math.max(2, Math.round(b.h * (1 - press)));
+      for (let k = 0; k <= hgt; k++) {
+        const t = k / hgt;
         const x = Math.round(b.x + (tipX - b.x) * t * t);
         const y = base - k;
-        const c = k >= b.h - 1 ? P.GRASS[4] : k > b.h * 0.5 ? P.GRASS[3] : P.GRASS[1];
+        const c = k >= hgt - 1 ? P.GRASS[4] : k > hgt * 0.5 ? P.GRASS[3] : P.GRASS[1];
         s.px(x, y, c);
       }
       s.px(b.x, base + 1, P.GRASS[0], 0.5);
@@ -887,11 +920,12 @@ function grassRustleFrames(): Surface[] {
 /** A small bird startled into the air — pure silhouette, read from shape alone. */
 function birdFlyFrames(): Surface[] {
   const S = 16;
+  // Startled → wings thrown up → power stroke down → gliding away.
   const poses: Array<{ y: number; wing: 'up' | 'mid' | 'down' | 'rest'; sx: number }> = [
     { y: 11, wing: 'rest', sx: 0 },
-    { y: 8, wing: 'down', sx: 1 },
-    { y: 5, wing: 'up', sx: 2 },
-    { y: 2, wing: 'mid', sx: 3 },
+    { y: 9, wing: 'up', sx: 1 },
+    { y: 5, wing: 'down', sx: 2 },
+    { y: 3, wing: 'mid', sx: 3 },
   ];
   return poses.map((p) => {
     const s = new Surface(S, S);
@@ -907,15 +941,20 @@ function birdFlyFrames(): Surface[] {
     if (p.wing === 'rest') {
       s.hline(bx + 1, by - 1, 3, ink);
     } else if (p.wing === 'down') {
+      s.line(bx + 1, by, bx - 2, by + 3, ink);
       s.line(bx + 2, by, bx - 1, by + 3, ink);
       s.line(bx + 3, by, bx + 6, by + 3, ink);
+      s.line(bx + 3, by + 1, bx + 5, by + 3, ink);
     } else if (p.wing === 'up') {
+      s.line(bx + 1, by - 1, bx - 2, by - 5, ink);
       s.line(bx + 2, by - 1, bx - 1, by - 5, ink);
       s.line(bx + 3, by - 1, bx + 6, by - 5, ink);
-      s.px(bx - 1, by - 4, ink); s.px(bx + 6, by - 4, ink);
+      s.line(bx + 3, by, bx + 5, by - 4, ink);
     } else {
-      s.line(bx + 2, by - 1, bx - 2, by - 1, ink);
-      s.line(bx + 3, by - 1, bx + 7, by - 1, ink);
+      s.line(bx + 1, by - 1, bx - 3, by - 2, ink);
+      s.line(bx + 1, by, bx - 3, by - 1, ink);
+      s.line(bx + 3, by - 1, bx + 7, by - 2, ink);
+      s.line(bx + 3, by, bx + 7, by - 1, ink);
     }
     // one lit pixel on the back keeps it from being a hole in the world
     s.pxOver(bx + 1, by, P.OUTLINE_SOFT);
@@ -946,15 +985,17 @@ function toneRingFrames(
     let peak = 0;
     for (let wave = 0; wave < 5; wave++) {
       const rad = f * opts.step - wave * opts.spacing + 2.5;
-      if (rad < 1 || rad > maxR) continue;
-      // Waves fade as they travel; the newest ring is always the brightest.
-      const amp = (1.35 - (rad / maxR) * 0.95) * (wave === 0 ? 1 : 0.82 - wave * 0.06);
+      if (rad < 1 || rad > maxR + 3) continue;
+      // Waves fade as they travel, and fade *out* as they reach the rim — a
+      // wave that vanishes on one frame reads as a bug, not as distance.
+      const rim = Math.max(0, Math.min(1, (maxR - rad) / 3));
+      const amp = (1.35 - (rad / maxR) * 0.95) * (wave === 0 ? 1 : 0.82 - wave * 0.06) * rim;
       if (amp <= 0.05) continue;
       peak = Math.max(peak, amp);
       fRing(F, {
         cx: c, cy: c, r: rad, squash, thick, amp,
         broken: opts.style === 'dotted' ? 9 : 0,
-        brokenDepth: 0.65,
+        brokenDepth: 0.5,
         ampAt: (p) => 0.82 + 0.18 * Math.cos(p * Math.PI * 2 - 0.9),
       });
       if (opts.style === 'double' && rad > 4) {
@@ -974,17 +1015,17 @@ function crashFrames(): Surface[] {
   const r = rng(9601);
   const spikes = spreadAngles(11, r, 0.5).map((a) => ({
     a,
-    kink: r.range(-0.55, 0.55),
-    kink2: r.range(-0.7, 0.7),
+    kink: r.range(-0.34, 0.34),
+    kink2: r.range(-0.45, 0.45),
     len: r.range(0.6, 1.35),
   }));
   const keys = [
-    { reach: 6, w: 1.6, amp: 1.15, n: 6, chips: 0 },
-    { reach: 17, w: 2.0, amp: 1.55, n: 11, chips: 5 },
-    { reach: 22, w: 1.3, amp: 1.15, n: 11, chips: 7 },
-    { reach: 25, w: 0.9, amp: 0.80, n: 9, chips: 7 },
-    { reach: 27, w: 0.7, amp: 0.52, n: 7, chips: 5 },
-    { reach: 28, w: 0.5, amp: 0.30, n: 5, chips: 4 },
+    { reach: 7, inner: 0.0, w: 1.6, amp: 1.15, n: 6, chips: 0 },
+    { reach: 17, inner: 1.0, w: 2.0, amp: 1.55, n: 11, chips: 4 },
+    { reach: 15, inner: 6.0, w: 1.3, amp: 1.15, n: 11, chips: 6 },
+    { reach: 11, inner: 11.0, w: 1.0, amp: 0.82, n: 9, chips: 6 },
+    { reach: 8, inner: 15.0, w: 0.8, amp: 0.54, n: 7, chips: 5 },
+    { reach: 5, inner: 18.5, w: 0.6, amp: 0.32, n: 5, chips: 4 },
   ];
   return keys.map((k, i) => {
     const s = new Surface(S, S);
@@ -992,8 +1033,8 @@ function crashFrames(): Surface[] {
     spikes.slice(0, k.n).forEach((sp, j) => {
       const L = k.reach * sp.len;
       // three straight segments, each bent — a broken pipe, not a ray of light
-      const p0: [number, number] = [c, c];
-      const p1: [number, number] = [c + Math.cos(sp.a) * L * 0.42, c + Math.sin(sp.a) * L * 0.42];
+      const p0: [number, number] = [c + Math.cos(sp.a) * k.inner, c + Math.sin(sp.a) * k.inner];
+      const p1: [number, number] = [p0[0] + Math.cos(sp.a) * L * 0.42, p0[1] + Math.sin(sp.a) * L * 0.42];
       const a2 = sp.a + sp.kink;
       const p2: [number, number] = [p1[0] + Math.cos(a2) * L * 0.34, p1[1] + Math.sin(a2) * L * 0.34];
       const a3 = a2 + sp.kink2;
@@ -1006,11 +1047,12 @@ function crashFrames(): Surface[] {
     // detached chips of metal flying off
     for (let j = 0; j < k.chips; j++) {
       const a = r.range(0, Math.PI * 2);
-      const d = k.reach * r.range(0.7, 1.15);
+      const d = (k.inner + k.reach) * r.range(0.75, 1.05);
       const x = c + Math.cos(a) * d, y = c + Math.sin(a) * d;
       fLine(F, x, y, x + Math.cos(a) * 2.2, y + Math.sin(a) * 2.2, 0.8, 0.1, k.amp * 0.8, 0.05);
     }
     if (i <= 1) fDot(F, c, c, 3.5 + i * 2, k.amp * 1.2, 1.1);
+    if (i === 2) fDot(F, c, c, 4.5, k.amp * 0.5, 2.2);
     paint(s, F, bandsAt(P.COLD_SPARK, 0.16, 1.35, 0.24, k.amp, 1.55));
     if (i === 1) {
       s.pxOver(23, 23, P.SPECULAR); s.pxOver(24, 23, P.SPECULAR);
@@ -1042,7 +1084,7 @@ function observePingFrames(): Surface[] {
     }
     // the pulse's origin keeps a small glow for the first half of the sweep
     if (f < 3) fDot(F, c, c, 5 - f, (1.0 - f * 0.3) * 0.9, 2);
-    return paint(s, F, bandsAt(P.ECHO_CYAN, 0.18, 1.2, 0.3, amp, 1.35));
+    return paint(s, F, bandsAt(P.ECHO_CYAN, 0.15, 0.98, 0.3, amp, 1.35));
   });
 }
 
@@ -1052,8 +1094,8 @@ function observeMarkFrames(): Surface[] {
   return [0, 1, 2, 3].map((f) => {
     const s = new Surface(S, S);
     const F = field(S, S);
-    const rot = (f * Math.PI) / 8;
-    const rad = 5.6 + Math.sin((f / 4) * Math.PI * 2) * 0.5;
+    const rot = (f * Math.PI) / 4;
+    const rad = 5.7 + Math.sin((f / 4) * Math.PI * 2) * 0.7;
     const pts: Array<[number, number]> = [0, 1, 2, 3].map((k) => {
       const a = rot + (k * Math.PI) / 2;
       return [c + Math.cos(a) * rad, c + Math.sin(a) * rad];
@@ -1114,8 +1156,8 @@ function linkNodeFrames(): Surface[] {
 /** A soft diamond glyph — the shape memory takes in this game's language. */
 function memoryGlyph(F: Field, cx: number, cy: number, rad: number, amp: number): void {
   for (let k = 0; k < 4; k++) {
-    const a1 = (k * Math.PI) / 2 + Math.PI / 4;
-    const a2 = ((k + 1) * Math.PI) / 2 + Math.PI / 4;
+    const a1 = (k * Math.PI) / 2;
+    const a2 = ((k + 1) * Math.PI) / 2;
     fLine(
       F, cx + Math.cos(a1) * rad, cy + Math.sin(a1) * rad * 1.25,
       cx + Math.cos(a2) * rad, cy + Math.sin(a2) * rad * 1.25,
@@ -1157,12 +1199,12 @@ function recallShimmerFrames(): Surface[] {
 function dissentBreakFrames(): Surface[] {
   const S = 32, c = 15.5;
   const keys = [
-    { r: 10.5, amp: 1.05, gap: 0, spread: 0, arcs: 1 },
-    { r: 11.0, amp: 1.35, gap: 0, spread: 0, arcs: 1 },
-    { r: 11.2, amp: 1.30, gap: 26, spread: 0, arcs: 1 },
-    { r: 11.6, amp: 1.05, gap: 34, spread: 1.2, arcs: 3 },
-    { r: 12.4, amp: 0.72, gap: 46, spread: 2.6, arcs: 3 },
-    { r: 13.2, amp: 0.40, gap: 62, spread: 4.2, arcs: 3 },
+    { r: 10.0, amp: 1.05, gap: 0, spread: 0, arcs: 1 },
+    { r: 10.4, amp: 1.35, gap: 0, spread: 0, arcs: 1 },
+    { r: 10.6, amp: 1.30, gap: 26, spread: 0, arcs: 1 },
+    { r: 10.8, amp: 1.05, gap: 34, spread: 1.0, arcs: 3 },
+    { r: 11.2, amp: 0.72, gap: 46, spread: 2.0, arcs: 3 },
+    { r: 11.6, amp: 0.40, gap: 62, spread: 3.0, arcs: 3 },
   ];
   return keys.map((k, i) => {
     const s = new Surface(S, S);
@@ -1190,8 +1232,8 @@ function dissentBreakFrames(): Surface[] {
     // the four conformers riding the ring
     if (i <= 3) {
       for (let d = 0; d < 4; d++) {
-        const a = (-90 + d * 90 + (i >= 2 && d === 0 ? 14 : 0)) * Math.PI / 180;
-        fDot(F, c + Math.cos(a) * k.r, c + Math.sin(a) * k.r, 1.7, k.amp * 0.95, 1.3);
+        const a = (-90 + d * 90 + (i >= 2 && d === 0 ? 16 : 0)) * Math.PI / 180;
+        fDot(F, c + Math.cos(a) * (k.r + 0.4), c + Math.sin(a) * (k.r + 0.4), 2.1, k.amp * 1.35, 1.1);
       }
     }
     // the crack itself: a bright fracture at the top-right, the moment it gives
@@ -1217,12 +1259,13 @@ function echoWispFrames(): Surface[] {
     const s = new Surface(W, H);
     const F = field(W, H);
     const t = f / 6;
-    const x = 5.5 + Math.sin(t * Math.PI * 2) * 2.2;
-    const y = 13 - t * 8;
-    const amp = 0.85 + 0.4 * Math.sin(t * Math.PI * 2 + 1);
-    fLine(F, x - Math.sin(t * Math.PI * 2) * 1.2, y + 3.2, x, y, 0.5, 1.15, amp * 0.32, amp);
-    fDot(F, x, y, 2.0, amp * 0.95, 1.9);
-    paint(s, F, bands(P.ECHO_VIOLET, 0.2, 1.3, 0.34));
+    const x = 5.5 + Math.sin(t * Math.PI * 2) * 2.0;
+    const y = 12.5 - t * 7;
+    const amp = 1.05 + 0.35 * Math.sin(t * Math.PI * 2 + 1);
+    // a short tail, then the mote itself
+    fLine(F, x - Math.sin(t * Math.PI * 2) * 1.6, y + 4.0, x, y, 0.4, 1.2, amp * 0.34, amp * 0.9);
+    fDot(F, x, y, 2.6, amp, 1.15);
+    paint(s, F, bands(P.ECHO_VIOLET, 0.24, 1.05, 0.3));
     s.pxOver(Math.round(x), Math.round(y), P.ECHO_GLOW);
     return s;
   });
@@ -1236,11 +1279,11 @@ function echoBurstFrames(): Surface[] {
   const lens = angles.map(() => r.range(0.55, 1.4));
   const keys = [
     { n: 6, inner: 0.5, len: 5.0, w: 1.3, amp: 1.10, core: 3.6, coreAmp: 1.4, ring: 0, rAmp: 0 },
-    { n: 11, inner: 1.4, len: 10.5, w: 2.1, amp: 1.55, core: 5.2, coreAmp: 1.95, ring: 8.0, rAmp: 1.2 },
-    { n: 10, inner: 4.5, len: 8.5, w: 1.3, amp: 1.10, core: 3.0, coreAmp: 1.0, ring: 12.5, rAmp: 0.85 },
-    { n: 8, inner: 8.0, len: 6.0, w: 0.9, amp: 0.78, core: 0, coreAmp: 0, ring: 15.5, rAmp: 0.55 },
-    { n: 6, inner: 11.0, len: 3.6, w: 0.7, amp: 0.50, core: 0, coreAmp: 0, ring: 17.4, rAmp: 0.32 },
-    { n: 4, inner: 13.5, len: 2.0, w: 0.5, amp: 0.28, core: 0, coreAmp: 0, ring: 0, rAmp: 0 },
+    { n: 11, inner: 1.4, len: 7.0, w: 2.1, amp: 1.55, core: 5.0, coreAmp: 1.95, ring: 9.5, rAmp: 1.45 },
+    { n: 10, inner: 4.5, len: 5.5, w: 1.3, amp: 1.10, core: 2.6, coreAmp: 1.0, ring: 13.0, rAmp: 1.10 },
+    { n: 8, inner: 8.0, len: 3.6, w: 0.9, amp: 0.78, core: 0, coreAmp: 0, ring: 15.8, rAmp: 0.78 },
+    { n: 6, inner: 11.0, len: 2.4, w: 0.7, amp: 0.50, core: 0, coreAmp: 0, ring: 17.6, rAmp: 0.50 },
+    { n: 4, inner: 13.5, len: 1.6, w: 0.5, amp: 0.28, core: 0, coreAmp: 0, ring: 0, rAmp: 0 },
   ];
   return keys.map((k, i) => {
     const s = new Surface(S, S);
@@ -1255,51 +1298,45 @@ function echoBurstFrames(): Surface[] {
       a, len: k.len * lens[j], w: k.w, amp: k.amp * (0.7 + 0.3 * lens[j]),
     })), 1, k.inner);
     if (k.core > 0) fDot(F, c, c, k.core, k.coreAmp, 1.4);
-    paint(s, F, bandsAt(P.ECHO_VIOLET, 0.16, 1.35, 0.26, k.amp, 1.55));
-    if (i === 1) {
-      s.pxOver(19, 19, P.ECHO_GLOW); s.pxOver(20, 19, P.ECHO_GLOW);
-      s.pxOver(19, 20, P.SPECULAR);
-    }
+    paint(s, F, bandsAt(P.ECHO_VIOLET, 0.16, 1.2, 0.26, k.amp, 1.55, P.ECHO_GLOW));
+    if (i === 1) s.pxOver(19, 20, P.SPECULAR);
     return s;
   });
 }
 
-const RUNE = [
-  '..X..',
-  '.XXX.',
-  'X.X.X',
-  '..X..',
-  'X.X.X',
-  '.XXX.',
-  '..X..',
-];
-
 /** A rune waking up: the glyph fills with cyan, then the ring pops off it. */
 function runeActivateFrames(): Surface[] {
   const S = 26, c = 12.5;
+  // The glyph as strokes, not as a scaled-up bitmap: a stem, two raised arms,
+  // a crossbar and a heart. Drawn at 1 px it stays legible at 1x.
+  const strokes: Array<[number, number, number, number]> = [
+    [0, -7.5, 0, 7.5],
+    [0, -3.0, -4.5, -7.5],
+    [0, -3.0, 4.5, -7.5],
+    [-3.5, 2.0, 3.5, 2.0],
+    [-3.5, 2.0, -3.5, 5.0],
+    [3.5, 2.0, 3.5, 5.0],
+  ];
   const keys = [
-    { glyph: 0.4, ring: 0, rAmp: 0, halo: 0.0 },
-    { glyph: 0.7, ring: 0, rAmp: 0, halo: 0.25 },
-    { glyph: 1.05, ring: 0, rAmp: 0, halo: 0.45 },
-    { glyph: 1.4, ring: 4.5, rAmp: 1.2, halo: 0.6 },
-    { glyph: 1.15, ring: 8.0, rAmp: 0.85, halo: 0.4 },
-    { glyph: 0.85, ring: 11.0, rAmp: 0.5, halo: 0.22 },
+    { glyph: 0.42, ring: 0, rAmp: 0, halo: 0.0 },
+    { glyph: 0.72, ring: 0, rAmp: 0, halo: 0.22 },
+    { glyph: 1.05, ring: 0, rAmp: 0, halo: 0.42 },
+    { glyph: 1.40, ring: 5.0, rAmp: 1.25, halo: 0.58 },
+    { glyph: 1.15, ring: 8.5, rAmp: 0.88, halo: 0.38 },
+    { glyph: 0.85, ring: 11.5, rAmp: 0.52, halo: 0.20 },
   ];
   return keys.map((k, i) => {
     const s = new Surface(S, S);
     const F = field(S, S);
-    if (k.halo > 0) fDot(F, c, c, 7.5, k.halo, 2.4);
-    if (k.ring > 0) fRing(F, { cx: c, cy: c, r: k.ring, thick: 0.85, amp: k.rAmp, broken: i >= 5 ? 7 : 0, brokenDepth: 0.5 });
-    // the glyph: 5x7 cells at 2 px each, so it reads at 1x
-    for (let gy = 0; gy < RUNE.length; gy++) {
-      for (let gx = 0; gx < RUNE[gy].length; gx++) {
-        if (RUNE[gy][gx] !== 'X') continue;
-        const px = c - 4.5 + gx * 2, py = c - 6.5 + gy * 2;
-        fLine(F, px, py, px + 1, py, 0.75, 0.75, k.glyph, k.glyph);
-      }
+    if (k.halo > 0) fDot(F, c, c, 8.5, k.halo, 2.4);
+    if (k.ring > 0) {
+      fRing(F, { cx: c, cy: c, r: k.ring, thick: 0.85, amp: k.rAmp, broken: i >= 5 ? 7 : 0, brokenDepth: 0.5 });
     }
-    paint(s, F, bandsAt(P.ECHO_CYAN, 0.2, 1.3, 0.26, Math.max(k.glyph, k.rAmp), 1.4));
-    if (i >= 3) s.pxOver(c - 0.5, c - 0.5, P.ECHO_RUNE);
+    for (const [x0, y0, x1, y1] of strokes) {
+      fLine(F, c + x0, c + y0, c + x1, c + y1, 0.72, 0.72, k.glyph, k.glyph);
+    }
+    fDot(F, c, c - 1, 1.6, k.glyph * 0.8, 1.4);
+    paint(s, F, bandsAt(P.ECHO_CYAN, 0.2, 1.15, 0.26, Math.max(k.glyph, k.rAmp), 1.4, P.ECHO_RUNE));
     return s;
   });
 }
@@ -1312,25 +1349,28 @@ function runeActivateFrames(): Surface[] {
 function insightBurstFrames(): Surface[] {
   const S = 64, c = 31.5;
   const r = rng(9907);
-  const rays = spreadAngles(12, r, 0.12).map((a) => ({ a, len: r.range(0.55, 1.0) }));
+  const rays = spreadAngles(9, r, 0.3).map((a) => ({ a, len: r.range(0.45, 1.0) }));
   const sparks = spreadAngles(9, r, 0.6).map((a) => ({ a, sp: r.range(0.75, 1.25) }));
+  // The ring always travels *outside* the ray tips. A ring crossing its own
+  // rays draws a wagon wheel, which is the one thing this must not look like.
   const keys = [
-    { core: 2.2, coreAmp: 1.30, ray: 0, rayW: 0, ring: 0, rAmp: 0, spark: 0, sparkAmp: 0 },
-    { core: 4.0, coreAmp: 1.55, ray: 8, rayW: 1.5, ring: 0, rAmp: 0, spark: 0, sparkAmp: 0 },
-    { core: 5.4, coreAmp: 1.70, ray: 19, rayW: 1.9, ring: 6, rAmp: 1.1, spark: 0, sparkAmp: 0 },
-    { core: 4.6, coreAmp: 1.45, ray: 26, rayW: 1.5, ring: 12, rAmp: 1.0, spark: 9, sparkAmp: 0.9 },
-    { core: 3.6, coreAmp: 1.15, ray: 28, rayW: 1.0, ring: 18, rAmp: 0.8, spark: 14, sparkAmp: 1.0 },
-    { core: 2.6, coreAmp: 0.85, ray: 26, rayW: 0.7, ring: 23, rAmp: 0.55, spark: 19, sparkAmp: 0.85 },
-    { core: 1.8, coreAmp: 0.55, ray: 20, rayW: 0.45, ring: 27, rAmp: 0.32, spark: 23, sparkAmp: 0.6 },
-    { core: 1.2, coreAmp: 0.32, ray: 12, rayW: 0.3, ring: 0, rAmp: 0, spark: 26, sparkAmp: 0.35 },
+    { core: 2.4, coreAmp: 1.35, ray: 0, rayW: 0, ring: 0, rAmp: 0, spark: 0, sparkAmp: 0 },
+    { core: 4.2, coreAmp: 1.60, ray: 14, rayW: 1.6, ring: 0, rAmp: 0, spark: 0, sparkAmp: 0 },
+    { core: 5.6, coreAmp: 1.78, ray: 26, rayW: 2.0, ring: 0, rAmp: 0, spark: 0, sparkAmp: 0 },
+    { core: 4.8, coreAmp: 1.50, ray: 21, rayW: 1.4, ring: 24, rAmp: 1.20, spark: 10, sparkAmp: 0.9 },
+    { core: 3.8, coreAmp: 1.20, ray: 15, rayW: 1.0, ring: 29, rAmp: 0.85, spark: 16, sparkAmp: 1.0 },
+    { core: 2.8, coreAmp: 0.90, ray: 10, rayW: 0.7, ring: 0, rAmp: 0, spark: 21, sparkAmp: 0.85 },
+    { core: 2.0, coreAmp: 0.60, ray: 6, rayW: 0.45, ring: 0, rAmp: 0, spark: 25, sparkAmp: 0.6 },
+    { core: 1.3, coreAmp: 0.35, ray: 3, rayW: 0.3, ring: 0, rAmp: 0, spark: 28, sparkAmp: 0.35 },
   ];
   return keys.map((k, i) => {
     const s = new Surface(S, S);
     const F = field(S, S);
     if (k.ring > 0) {
       fRing(F, {
-        cx: c, cy: c, r: k.ring, squash: 0.94, thick: 0.9, amp: k.rAmp,
-        broken: i >= 5 ? 9 : 0, brokenDepth: 0.5,
+        cx: c, cy: c, r: k.ring, squash: 0.94, thick: 0.9,
+        amp: k.rAmp * Math.max(0, Math.min(1, (30.5 - k.ring) / 2.5)),
+        broken: i >= 4 ? 9 : 0, brokenDepth: 0.5,
         ampAt: (p) => 0.84 + 0.16 * Math.cos(p * Math.PI * 2 - 0.9),
       });
     }
@@ -1345,13 +1385,14 @@ function insightBurstFrames(): Surface[] {
     if (k.spark > 0) {
       sparks.forEach((sp, j) => {
         const d = k.spark * sp.sp;
-        const x = c + Math.cos(sp.a) * d, y = c + Math.sin(sp.a) * d * 0.92;
+        // sparks drift down as they go: they settle rather than snap off
+        const x = c + Math.cos(sp.a) * d, y = c + Math.sin(sp.a) * d * 0.92 + i * 0.55;
         if (j % 3 === 0) fSparkle(F, x, y, 2.0, k.sparkAmp);
         else fDot(F, x, y, 1.15, k.sparkAmp * 0.95, 1.1);
       });
     }
     if (k.core > 0) fDot(F, c, c, k.core, k.coreAmp, 1.35);
-    paint(s, F, bandsAt(P.UI_GOLD, 0.16, 1.45, 0.26, k.coreAmp, 1.7));
+    paint(s, F, bandsAt(P.UI_GOLD, 0.16, 1.3, 0.26, k.coreAmp, 1.7, P.LANTERN[4]));
     if (i >= 1 && i <= 3) {
       s.pxOver(31, 31, P.SPECULAR); s.pxOver(32, 31, P.SPECULAR);
       s.pxOver(31, 32, P.SPECULAR); s.pxOver(32, 32, P.SPECULAR);
@@ -1372,13 +1413,15 @@ function vignette(): Surface {
       const nx = (x - cx) / (W * 0.56);
       const ny = (y - cy) / (H * 0.58);
       const d = Math.sqrt(nx * nx + ny * ny);
-      const t = Math.max(0, Math.min(1, (d - 0.62) / 0.52));
+      const t = Math.max(0, Math.min(1, (d - 0.68) / 0.56));
       if (t <= 0) continue;
       const cov = Math.pow(t, 1.35);
-      // coverage dithering: how many pixels are dark, not how dark each is
-      if (cov > 0.92) { s.px(x, y, P.OUTLINE, 0.86); continue; }
+      // coverage dithering: how many pixels are dark, not how dark each is.
+      // It never reaches opaque — a vignette frames the scene, it doesn't
+      // black it out.
+      if (cov > 0.92) { s.px(x, y, P.OUTLINE, 0.62); continue; }
       const b = bayer(x, y) * 0.75 + bayer(x >> 2, y >> 2) * 0.25;
-      if (cov > b) s.px(x, y, P.OUTLINE, cov > 0.6 ? 0.8 : 0.6);
+      if (cov > b) s.px(x, y, P.OUTLINE, cov > 0.6 ? 0.55 : 0.42);
     }
   }
   return s;
@@ -1397,12 +1440,14 @@ function softLight(size: number): Surface {
       fMax(F, x, y, Math.pow(1 - d, 2.0));
     }
   }
+  // Every step dithers into the next: an undithered falloff bands into visible
+  // rings once the runtime tints and adds it.
   return paint(s, F, [
-    [0.86, P.LIGHT_RAMP[4]],
-    [0.55, P.LIGHT_RAMP[3]],
-    [0.30, P.LIGHT_RAMP[2]],
-    [0.14, P.LIGHT_RAMP[1], 0.1],
-    [0.04, P.LIGHT_RAMP[0], 0.09],
+    [0.80, P.LIGHT_RAMP[4], 0.10],
+    [0.52, P.LIGHT_RAMP[3], 0.14],
+    [0.29, P.LIGHT_RAMP[2], 0.13],
+    [0.13, P.LIGHT_RAMP[1], 0.11],
+    [0.035, P.LIGHT_RAMP[0], 0.07],
   ]);
 }
 
@@ -1538,14 +1583,15 @@ const EMOTES: Record<string, { rows: string[]; ramp: readonly string[] }> = {
     ramp: P.LANTERN,
     rows: [
       '..X.X.X..',
+      '.........',
       '...XXX...',
-      '..X*XX...',
-      '.X*XXXX..',
-      '.X*XXXX..',
-      '.XXXXXX..',
-      '..XXXX...',
-      '..oXXo...',
-      '...oo....',
+      '..X*XXX..',
+      '.X*XXXXX.',
+      '.X*XXXXX.',
+      '..XXXXX..',
+      '...XXX...',
+      '...ooo...',
+      '...ooo...',
     ],
   },
 };

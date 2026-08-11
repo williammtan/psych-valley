@@ -8,7 +8,9 @@
     "preview": "vite preview --port 4178 --strictPort",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "shot": "tsx tools/shot.ts",
-    "play": "tsx tools/play.ts"
+    "play": "tsx tools/play.ts",
+    "workbench": "tsx tools/workbench.ts",
+    "playthrough": "tsx tools/playthrough.ts"
   },
   "author": "",
   "license": "ISC",

@@ -67,6 +67,10 @@ export interface CharSpec {
   heightAdj?: number;
   /** Put a blade in the leading hand on `attack` frames. Player only. */
   weapon?: boolean;
+  /** Feet pushed outwards, in px. Tavi stands wide; Nia stands narrow. */
+  stance?: number;
+  /** Resting hands pushed outwards, in px. Negative = arms held close. */
+  armGap?: number;
 }
 
 /** Frame count per pose. Walk is a true 6-frame cycle; idle breathes over 4. */
@@ -99,14 +103,14 @@ function pickRamp(v: string | Ramp, table: Record<string, Ramp>): Ramp {
 }
 
 /** Slide a ramp darker (n<0) or lighter (n>0) — used for far limbs and trim. */
-function shift(r: Ramp, n: number): Ramp {
+export function shift(r: Ramp, n: number): Ramp {
   return r.map((_, i) => r[clamp(i + n, 0, r.length - 1)]);
 }
 
 // ── Mask primitives ────────────────────────────────────────────────────────
 
-function mask(draw: (m: Surface) => void): Surface {
-  const m = new Surface(CW, CH);
+export function mask(draw: (m: Surface) => void, w = CW, h = CH): Surface {
+  const m = new Surface(w, h);
   draw(m);
   return m;
 }
@@ -116,7 +120,7 @@ function mask(draw: (m: Surface) => void): Surface {
  * perpendicular run, so there are never diagonal holes and the width can breathe
  * from shoulder to wrist.
  */
-function limb(m: Surface, x0: number, y0: number, x1: number, y1: number, w0: number, w1 = w0): void {
+export function limb(m: Surface, x0: number, y0: number, x1: number, y1: number, w0: number, w1 = w0): void {
   const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
   const vertical = Math.abs(y1 - y0) >= Math.abs(x1 - x0);
   for (let i = 0; i <= steps; i++) {
@@ -137,7 +141,7 @@ function limb(m: Surface, x0: number, y0: number, x1: number, y1: number, w0: nu
  * straight trapezoid, >1 keeps the shape narrow then flares late (skirts,
  * coat-tails), which is what stops garments looking like traffic cones.
  */
-function taper(
+export function taper(
   m: Surface, yTop: number, yBot: number,
   cxTop: number, halfTop: number, cxBot: number, halfBot: number, pow = 1,
 ): void {
@@ -153,7 +157,7 @@ function taper(
  * Ramp a mask with an upper-left key light, inside the mask's own bounding box
  * (or an explicit `box` when several parts must share one lighting solution).
  */
-function paint(
+export function paint(
   dst: Surface, m: Surface, r: Ramp,
   o: { kx?: number; ky?: number; bias?: number; box?: { x: number; y: number; w: number; h: number } } = {},
 ): void {
@@ -165,8 +169,8 @@ function paint(
   const dw = Math.max(1, b.w - 1);
   const dh = Math.max(1, b.h - 1);
   const last = r.length - 1;
-  for (let y = 0; y < CH; y++) {
-    for (let x = 0; x < CW; x++) {
+  for (let y = 0; y < m.h; y++) {
+    for (let x = 0; x < m.w; x++) {
       if (m.alphaAt(x, y) === 0) continue;
       const nx = (x - b.x) / dw;
       const ny = (y - b.y) / dh;
@@ -178,9 +182,9 @@ function paint(
 
 /** 1px darker lip down one side of a just-painted part — reads as a seam. */
 function rim(dst: Surface, m: Surface, side: 'l' | 'r', color: string, alpha = 1): void {
-  for (let y = 0; y < CH; y++) {
+  for (let y = 0; y < m.h; y++) {
     let first = -1, last = -1;
-    for (let x = 0; x < CW; x++) {
+    for (let x = 0; x < m.w; x++) {
       if (m.alphaAt(x, y) === 0) continue;
       if (first < 0) first = x;
       last = x;
@@ -215,11 +219,13 @@ function geom(spec: CharSpec, dir: Dir): Geom {
   const build = spec.build ?? 'normal';
   const rise = clamp(spec.heightAdj ?? 0, -2, 2);
   const east = dir === 'e';
+  const stance = clamp(spec.stance ?? 0, -1, 2);
+  const gap = clamp(spec.armGap ?? 0, -1, 2);
   const sh = (build === 'slim' ? 4 : build === 'stout' ? 6 : 5) - (east ? 1 : 0);
   const wh = (build === 'slim' ? 3 : build === 'stout' ? 5 : 4) - (east ? 1 : 0);
   return {
     hx: CX - 5 + (east ? 1 : 0),      // the head leads slightly in profile
-    hy: 3 - rise,
+    hy: Math.max(2, 3 - rise),        // never push the hair off the canvas
     neckY: 11 - rise,
     shoulderY: 14 - rise,
     waistY: 20 - rise,
@@ -230,13 +236,13 @@ function geom(spec: CharSpec, dir: Dir): Geom {
     legW: build === 'stout' ? 4 : 3,
     shA: east ? CX - 2 : CX - sh,
     shB: east ? CX + 1 : CX + sh,
-    handA: east ? CX - 4 : CX - sh - 1,
-    handB: east ? CX + 2 : CX + sh + 1,
+    handA: east ? CX - 4 : CX - sh - 1 - gap,
+    handB: east ? CX + 2 : CX + sh + 1 + gap,
     handY: 24 - Math.round(rise / 2),
     hipA: east ? CX - 1 : CX - 2,
     hipB: east ? CX + 1 : CX + 2,
-    footA: east ? CX - 3 : CX - 2,
-    footB: east ? CX + 1 : CX + 2,
+    footA: east ? CX - 3 : CX - 2 - stance,
+    footB: east ? CX + 1 : CX + 2 + stance,
   };
 }
 
@@ -520,7 +526,7 @@ function kinematics(dir: Dir, pose: Pose, f: number, spec: CharSpec): Kin {
     k.handB.y -= 5;
     k.elbowB = east ? 1 : 2;
   }
-  if (acc.includes('basket') && pose !== 'attack' && pose !== 'dash') {
+  if (acc.includes('basket') && pose === 'carry') {
     k.handA.x += east ? 3 : 2;
     k.handB.x += east ? 3 : -2;
     k.handA.y -= 5;
@@ -746,7 +752,7 @@ function drawHair(
     case 'bun': {
       if (dir === 'n') m.ellipse(CX - 3, hy + 1, 7, 6, MASK);
       else if (dir === 'e') m.ellipse(hx - 2, hy + 0, 6, 6, MASK);
-      else m.ellipse(CX - 2 + sway, hy - 3 + lift, 6, 5, MASK);
+      else { m.ellipse(CX - 2 + sway, hy - 4 + lift, 6, 5, MASK); m.rect(CX - 2 + sway, hy - 1, 5, 1, MASK); }
       break;
     }
     case 'wild': {
@@ -767,9 +773,10 @@ function drawHair(
       break;
     }
     case 'messy': {
-      limb(m, hx + 2, hy + 1, hx - 1 + sway, hy - 2 + lift, 2, 1);
-      limb(m, hx + 6, hy, hx + 8 + sway, hy - 3 + lift, 2, 1);
-      limb(m, hx + 9, hy + 2, hx + 12 + sway, hy + lift, 2, 1);
+      // Tousled, not horned: mostly sideways strays with a single short cowlick.
+      limb(m, hx + 2, hy + 1, hx - 2 + sway, hy + lift, 2, 1);
+      limb(m, hx + 5, hy, hx + 6 + sway, hy - 2 + lift, 2, 1);
+      limb(m, hx + 9, hy + 2, hx + 12 + sway, hy + 1 + lift, 2, 1);
       break;
     }
     default:
@@ -825,11 +832,11 @@ function drawGarment(
   switch (outfit) {
     case 'coat': hemY = hip + 6; hemHalf = g.sh + 1; pow = 1.4; break;
     case 'robe': hemY = 29; hemHalf = g.sh + 1.5; pow = 1.3; longSleeve = true; break;
-    case 'dress': hemY = hip + 6; hemHalf = g.sh + 1.5; pow = 2.1; break;
-    case 'jacket': hemY = hip + 1; hemHalf = g.wh + 0.5; break;
+    case 'dress': hemY = hip + 6; hemHalf = g.sh + 2.5; pow = 2.4; break;
+    case 'jacket': hemY = hip; hemHalf = g.wh; break;
     case 'vest': bodyRamp = c2; sleeve = c2; hemY = hip + 1; hemHalf = g.wh; break;
     case 'overalls': bodyRamp = c2; sleeve = c2; legs = c1; hemY = hip; hemHalf = g.wh - 0.5; break;
-    case 'apron': hemY = hip + 1; hemHalf = g.wh + 0.5; break;
+    case 'apron': hemY = hip + 5; hemHalf = g.sh + 1.5; pow = 2.0; break;
     case 'tunic': hemY = hip + 1; hemHalf = g.wh + 0.5; break;
   }
 
@@ -860,13 +867,22 @@ function drawGarment(
           limb(m, CX + 2 + lean, top + 1, CX + g.sh - 1 + lean, top + 3, 2, 2);
         });
         paint(b, lap, outfit === 'jacket' ? trim : shift(c1, 1), { ky: 0.5 });
+        if (outfit === 'jacket') {
+          // cuffs — the detail that separates a jacket from a tunic at 1x
+          const cuff = mask((m) => {
+            taper(m, hip - 1, hip, CX - g.wh - 1, 1, CX - g.wh - 1, 1);
+            taper(m, hip - 1, hip, CX + g.wh + 1, 1, CX + g.wh + 1, 1);
+          });
+          paint(b, cuff, trim, { ky: 0.5 });
+        }
       } else {
         for (let y = top + 2; y <= hemY; y++) b.pxOver(CX, y, c1[1], 0.7);
         for (let x = CX - g.sh + 1; x <= CX + g.sh - 1; x++) b.pxOver(x, top + 3, c1[1], 0.5);
       }
-      // belt
-      const belt = mask((m) => { taper(m, waist, waist, CX, g.wh - 0.5, CX, g.wh - 0.5); });
-      paint(b, belt, P.LEATHER, { ky: 0.6 });
+      if (outfit === 'coat') {
+        const belt = mask((m) => { taper(m, waist, waist, CX, g.wh - 0.5, CX, g.wh - 0.5); });
+        paint(b, belt, P.LEATHER, { ky: 0.6 });
+      }
       break;
     }
     case 'dress': {
@@ -886,8 +902,8 @@ function drawGarment(
     }
     case 'apron': {
       const ap = mask((m) => {
-        taper(m, top + 3, waist, CX, g.wh - 1, CX, g.wh - 0.5, 1);
-        taper(m, waist, hemY + k.hemLift + 1, CX, g.wh - 0.5, hemX, g.wh + 0.5, 1.2);
+        taper(m, top + 3, waist, CX, g.wh - 1.5, CX, g.wh - 1, 1);
+        taper(m, waist, hemY + k.hemLift - 1, CX, g.wh - 1, hemX, g.sh - 1.5, 1.8);
       });
       paint(b, ap, trim, { ky: 0.4 });
       if (front) {
@@ -1020,37 +1036,41 @@ function drawAccOver(
     const nx = CX + (east ? 2 : g.sh - 1) + k.handB.x;
     const ny = g.handY + k.handB.y - 1;
     const bk = mask((m) => { m.rect(nx - 2, ny - 1, 5, 6, MASK); });
-    paint(b, bk, P.LEATHER, { kx: 0.4, ky: 0.35 });
-    for (let y = ny - 1; y < ny + 5; y++) b.pxOver(nx + 2, y, P.UI_PARCHMENT[3]);
-    b.pxOver(nx + 2, ny + 1, P.UI_GOLD[3]);
+    paint(b, bk, P.UI_PARCHMENT, { kx: 0.4, ky: 0.35 });
+    for (let y = ny - 1; y < ny + 5; y++) b.pxOver(nx - 2, y, P.LEATHER[2]);   // spine
+    b.pxOver(nx - 2, ny - 1, P.LEATHER[3]);
+    b.pxOver(nx, ny + 1, P.UI_INK_SOFT);                                       // scribbles
+    b.pxOver(nx + 1, ny + 3, P.UI_INK_SOFT);
   }
-  if (acc.includes('basket')) {
+  if (acc.includes('basket') && pose === 'carry') {
     const bx = CX - 4 + (east ? 3 : 0);
     const by = g.handY + k.handB.y - 2;
-    const ba = mask((m) => { m.rect(bx, by, 9, 6, MASK); m.px(bx, by + 5, '#00000000'); m.px(bx + 8, by + 5, '#00000000'); });
+    const ba = mask((m) => { m.rect(bx, by, 8, 5, MASK); m.px(bx, by + 4, '#00000000'); m.px(bx + 7, by + 4, '#00000000'); });
     paint(b, ba, P.THATCH, { kx: 0.4, ky: 0.4 });
-    for (let y = by + 1; y < by + 6; y += 2) for (let x = bx; x < bx + 9; x += 2) b.pxOver(x, y, P.THATCH[1], 0.8);
-    for (let x = bx; x < bx + 9; x++) b.pxOver(x, by, P.THATCH[4]);
+    for (let y = by + 1; y < by + 5; y += 2) for (let x = bx; x < bx + 8; x += 2) b.pxOver(x, y, P.THATCH[1], 0.8);
+    for (let x = bx; x < bx + 8; x++) b.pxOver(x, by, P.THATCH[4]);
   }
   if (acc.includes('wide_hat')) {
-    const brim = mask((m) => { m.ellipse(CX - 8 + k.headX, hy + 1, 17, 5, MASK); });
+    const brim = mask((m) => { m.ellipse(CX - 8 + k.headX, hy - 1, 17, 4, MASK); });
     paint(b, brim, c2, { kx: 0.4, ky: 0.55 });
-    const crown = mask((m) => { taper(m, hy - 3, hy + 2, CX + k.headX, 3, CX + k.headX, 4.5, 1); });
+    const crown = mask((m) => { taper(m, hy - 4, hy, CX + k.headX, 3, CX + k.headX, 4.5, 1); });
     paint(b, crown, c2, { kx: 0.5, ky: 0.35 });
-    for (let x = CX - 4 + k.headX; x <= CX + 4 + k.headX; x++) b.pxOver(x, hy + 1, shift(c2, -2)[0], 0.9); // band
+    for (let x = CX - 4 + k.headX; x <= CX + 4 + k.headX; x++) b.pxOver(x, hy - 1, shift(c2, -2)[0], 0.9); // band
+    for (let x = CX - 7 + k.headX; x <= CX + 7 + k.headX; x++) b.pxOver(x, hy + 2, P.OUTLINE, 0.3);        // brim shadow
   }
   if (acc.includes('cap')) {
     const crown = mask((m) => {
-      m.ellipse(hx - 1, hy - 2, 13, 9, MASK);
+      m.ellipse(hx, hy - 2, 11, 8, MASK);
       for (let y = hy + 3; y < CH; y++) for (let x = 0; x < CW; x++) m.px(x, y, '#00000000');
     });
     paint(b, crown, c2, { kx: 0.5, ky: 0.4 });
     const peak = mask((m) => {
-      if (east) m.rect(hx + 8, hy + 2, 5, 2, MASK);
-      else if (dir === 's') m.rect(hx + 1, hy + 3, 9, 2, MASK);
+      if (east) m.rect(hx + 8, hy + 2, 4, 1, MASK);
+      else if (dir === 's') m.rect(hx + 2, hy + 3, 7, 1, MASK);
       else m.rect(hx + 3, hy + 1, 5, 1, MASK);
     });
     paint(b, peak, shift(c2, -1), { kx: 0.4, ky: 0.6 });
+    if (dir !== 'n') for (let x = hx + 2; x <= hx + 8; x++) b.pxOver(x, hy + 4, P.OUTLINE, 0.28);
   }
   if (acc.includes('goggles')) {
     const band = mask((m) => { m.rect(hx - 1, hy + 1, 13, 2, MASK); });

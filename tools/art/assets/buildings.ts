@@ -91,9 +91,8 @@ function groundShadow(s: Surface, x: number, y: number, w: number, rows = 6) {
 }
 
 /** Weeds and grass tufts growing against the base course. Kills "pasted on". */
-function baseWeeds(s: Surface, x: number, y: number, w: number, seed: number, density = 0.34) {
+function baseWeeds(s: Surface, x: number, y: number, w: number, seed: number, density = 0.34, ramp: R = P.GRASS) {
   const r = rng(seed);
-  const ramp = P.GRASS;
   for (let i = 0; i < w; i++) {
     if (!r.chance(density)) continue;
     const hgt = r.int(2, 5);
@@ -356,24 +355,37 @@ function roof(s: Surface, x: number, y: number, w: number, h: number, o: RoofOpt
   };
 
   if (mat === 'thatch') {
-    const courseH = Math.max(6, Math.round(h / Math.max(2, Math.round(h / 11))));
+    // Thatch is not shingles. It is a stack of thick straw courses, each one
+    // overhanging the next with a deep shadow under its ragged lip, striated
+    // vertically by the individual bundles. Get the lips wrong and it reads as
+    // a flat khaki slab, which is exactly what cheap procedural thatch does.
+    const courses = Math.max(2, Math.round(h / 10));
+    const courseH = h / courses;
     for (let yy = y; yy < y + h; yy++) {
       const [L, Rt] = boundsAt(yy);
-      const c = Math.floor((yy - y) / courseH);
+      const t = (yy - y) / h;
       for (let xx = L; xx < Rt; xx++) {
-        const jit = Math.round(h2(xx, c, seed) * 2.6);
-        const cbot = y + (c + 1) * courseH - jit;
-        const d = cbot - yy;
-        let k = 2;
-        if (h2(xx * 3, Math.floor(yy / 2), seed + 5) > 0.62) k += 0.8;
-        if ((xx * 5 + c * 3) % 7 === 0) k += 0.7;
-        if (h2(xx, yy, seed + 19) > 0.9) k -= 0.7;
-        if (d <= 1) k -= 2.2;
-        else if (d <= 3) k -= 1.1;
-        const t = (yy - y) / h;
-        k += t < 0.22 ? 0.7 : t > 0.8 ? -0.5 : 0;
+        const strand = Math.floor(xx / 2);
+        let c = Math.floor((yy - y) / courseH);
+        const jit = h2(strand, c, seed) * 3.2;
+        let cbot = y + (c + 1) * courseH - jit;
+        if (yy >= cbot) { c += 1; cbot = y + (c + 1) * courseH - h2(strand, c, seed) * 3.2; }
+        const d = cbot - yy;                 // px above this course's lip
+        const depth = Math.min(courseH, cbot - (y + c * courseH));
+        let k: number;
+        if (d <= 1.2) k = 0.4;               // the dark line under the overhang
+        else if (d <= 2.6) k = 1.2;
+        else if (d > depth - 2.2) k = 3.5;   // fresh straw on the course's crown
+        else k = 2.5 + (1 - d / depth) * 0.5;
+        // straw bundles: each 2px strand keeps its own tone down the whole course
+        const sv = h2(strand, c * 7, seed + 3);
+        k += sv > 0.66 ? 0.55 : sv < 0.3 ? -0.6 : 0;
+        // individual stalks
+        if ((xx * 3 + c * 5) % 7 === 0) k += 0.4;
+        if (h2(xx, yy, seed + 19) > 0.93) k -= 0.8;
+        k += t < 0.2 ? 0.6 : t > 0.82 ? -0.6 : 0;
         const lx = (xx - L) / Math.max(1, Rt - L);
-        k += lx < 0.14 ? 0.6 : lx > 0.86 ? -0.9 : 0;
+        k += lx < 0.12 ? 0.6 : lx > 0.88 ? -1.0 : lx > 0.74 ? -0.4 : 0;
         s.px(xx, yy, pick(ramp, k));
       }
     }
@@ -736,15 +748,19 @@ function door(s: Surface, x: number, y: number, w: number, h: number, style: Doo
         s.pxOver(x + i, y + j, pick(P.WINDOW_AMBER, 3.2 - t * 1.4));
       }
     }
-    // radial glazing bars springing from the transom
+    // radial glazing bars springing from the transom, clipped to the glass
     const cx0 = x + w / 2 - 0.5;
-    for (const ang of [-1.05, -0.5, 0, 0.5, 1.05]) {
-      for (let t = 1; t <= ah; t++) {
-        s.pxOver(Math.round(cx0 + Math.sin(ang) * t * 1.05), Math.round(y + ah - Math.cos(ang) * t), P.WOOD[1]);
+    for (const ang of [-0.85, 0, 0.85]) {
+      for (let t = 0; t <= ah * 1.2; t += 0.34) {
+        const bx = Math.round(cx0 + Math.sin(ang) * t);
+        const by = Math.round(y + ah - Math.cos(ang) * t);
+        const c = s.get(bx, by);
+        if (c[3] === 0 || c[0] < 120) continue;   // only paint on lit glass
+        s.px(bx, by, P.WOOD[1]);
       }
     }
-    s.px(x + 2, y + ah - 3, P.WINDOW_AMBER[4]);
-    s.px(x + 3, y + ah - 4, P.WINDOW_AMBER[4]);
+    s.pxOver(x + 2, y + ah - 3, P.WINDOW_AMBER[4]);
+    s.pxOver(x + 3, y + ah - 4, P.WINDOW_AMBER[4]);
     top = y + ah;
     // transom bar
     s.rect(x - 1, top, w + 2, 2, P.WOOD[2]);
@@ -769,14 +785,23 @@ function door(s: Surface, x: number, y: number, w: number, h: number, style: Doo
   wallPlank(s, x, top, w, dh, ramp, seed, style === 'panel' ? Math.floor(w / 2) : 4);
   if (style === 'stable') {
     const mid = top + Math.round(dh * 0.45);
-    // upper half stands open on a warm interior
+    // upper leaf stands open on a warm room
     for (let j = top; j < mid; j++) for (let i = 0; i < w; i++) {
       const t = (j - top) / (mid - top);
-      s.px(x + i, j, pick(P.WINDOW_AMBER, 0.4 + t * 1.4));
+      s.px(x + i, j, pick(P.WINDOW_AMBER, 0.6 + t * 1.6));
     }
-    shadeRect(s, x, top, w, 2, P.OUTLINE, 0.6);
+    // a shelf and a couple of jars silhouetted in the opening
+    s.hline(x + 1, mid - 4, w - 2, pick(P.WOOD, 0.6));
+    s.hline(x + 1, mid - 5, w - 2, pick(P.WOOD, 1.8));
+    for (let i = 2; i < w - 3; i += 4) {
+      s.rect(x + i, mid - 8, 3, 3, pick(P.WOOD, 0.4));
+      s.px(x + i, mid - 8, pick(P.WOOD, 1.6));
+    }
+    shadeRect(s, x, top, w, 3, P.OUTLINE, 0.62);
+    shadeRect(s, x, top, 2, mid - top, P.OUTLINE, 0.35);
     s.hline(x, mid, w, ramp[4]);
     s.hline(x, mid + 1, w, ramp[1]);
+    s.hline(x, mid + 2, w, ramp[0]);
   }
   if (style === 'panel') {
     for (const [py, ph] of [[3, Math.floor(dh * 0.36)], [Math.floor(dh * 0.5), Math.floor(dh * 0.4)]] as const) {
@@ -816,15 +841,18 @@ function door(s: Surface, x: number, y: number, w: number, h: number, style: Doo
     s.rect(gx - 1, top + 1, gw + 2, gh + 2, P.WOOD[1]);
     s.hline(gx - 1, top + 1, gw + 2, P.WOOD[3]);
     for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
-      let k = 2.4 - (j / gh) * 1.1;
-      if (i / gw < 0.3) k += 0.3;
-      if (h2(gx + i, top + j, seed) > 0.9) k += 0.5;
+      const k = 2.9 - (j / gh) * 1.2 + (i / gw < 0.3 ? 0.3 : 0);
       s.px(gx + i, top + 2 + j, pick(P.WINDOW_AMBER, k));
     }
-    s.vline(gx + Math.floor(gw / 2), top + 2, gh, P.WOOD[1]);
-    s.hline(gx, top + 2 + Math.floor(gh / 2), gw, P.WOOD[1]);
-    for (let j = 0; j < gh; j++) s.px(gx + Math.floor(gw / 2) + 1, top + 2 + j, P.WINDOW_AMBER[1], 0.5);
-    for (let i = 0; i < Math.min(3, gh - 1); i++) s.px(gx + 1 + i, top + 4 - i + 1, P.WINDOW_AMBER[4]);
+    const mx = gx + Math.floor(gw / 2);
+    const my = top + 2 + Math.floor(gh / 2);
+    s.vline(mx, top + 2, gh, P.WOOD[1]);
+    s.hline(gx, my, gw, P.WOOD[1]);
+    for (let j = 0; j < gh; j++) s.px(mx + 1, top + 2 + j, P.WINDOW_AMBER[1], 0.6);
+    for (let i = 0; i < gw; i++) s.px(gx + i, my + 1, P.WINDOW_AMBER[1], 0.6);
+    for (let i = 0; i < Math.min(4, mx - gx - 1, my - top - 3); i++) {
+      s.px(gx + 1 + i, my - 2 - i, P.WINDOW_AMBER[4]);
+    }
     shadeRect(s, gx, top + 2, gw, 1, P.OUTLINE, 0.3);
     s.hline(gx - 1, top + gh + 2, gw + 2, P.WOOD[0]);
     s.hline(gx - 1, top + gh + 3, gw + 2, P.WOOD[3]);
@@ -1529,7 +1557,1355 @@ function buildInn(): Surface {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// SERA'S WORKSHOP — part laboratory, part library. Tall and narrow where the
+// inn is broad, with an extension that does not quite line up, copper venting
+// bolted on as an afterthought, and a glazed cupola she watches the valley
+// from. It should read as clever and slightly out of control.
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildWorkshop(): Surface {
+  const W = 104, H = 124;
+  const s = new Surface(W, H);
+  const seed = 4201;
+
+  // ── right extension: lower, and deliberately a few pixels out of square
+  wallBoard(s, 76, 78, 22, 30, P.WOOD, seed + 5, 4);
+  roof(s, 74, 68, 26, 11, {
+    ramp: P.ROOF_TEAL, seed: seed + 7, hip: 4, rowH: 4, unitW: 5,
+    mat: 'shingle', ridge: false, pent: 'r', fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 76, 82, 22, 3);
+  win(s, 80, 88, 12, 14, { lit: true, cols: 2, rows: 2, seed: seed + 9, sill: 'wood', clutter: 'jars' });
+  foundation(s, 74, 108, 26, 8, seed + 11);
+
+  // ── left lean-to: an open clutter shed
+  roof(s, 4, 78, 28, 10, {
+    ramp: P.ROOF_TEAL, seed: seed + 13, hip: 0, rowH: 4, unitW: 5,
+    mat: 'shingle', ridge: false, pent: 'l', fascia: true, fasciaRamp: P.WOOD,
+  });
+  post(s, 6, 88, 3, 22, P.WOOD, false);
+  post(s, 26, 88, 3, 22, P.WOOD, false);
+  shadeRect(s, 8, 91, 19, 19, P.OUTLINE, 0.22);
+  crate(s, 8, 92, 12, 11, seed + 15);
+  crate(s, 9, 103, 10, 9, seed + 17);
+  crate(s, 20, 98, 10, 14, seed + 19);
+  barrel(s, 20, 88, 9, 10, seed + 21);
+  s.hline(4, 110, 26, P.OUTLINE, 0.7);
+
+  // ── main block
+  const wallX = 28, wallW = 48;
+  wallPlaster(s, wallX, 58, wallW, 50, P.PLASTER, { seed: seed + 23, damp: true });
+  timberFrame(s, wallX, 58, wallW, 50, seed + 25, {
+    bays: 3, braces: true, braceBays: [0, 2], midRail: true, ramp: P.WOOD, tone: 1.4,
+  });
+  foundation(s, wallX - 2, 108, wallW + 4, 8, seed + 27);
+
+  roof(s, 20, 24, 64, 32, {
+    ramp: P.ROOF_TEAL, seed: seed + 29, hip: 12, rowH: 4, unitW: 5,
+    mat: 'shingle', ridge: true, moss: 0.8, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, wallX, 58, wallW, 4);
+
+  // ── the cupola: her observation post, lit from within
+  s.rect(42, 14, 20, 14, P.WOOD[1]);
+  for (let j = 0; j < 12; j++) for (let i = 0; i < 16; i++) {
+    const k = 2.9 - (j / 12) * 1.3 + (i < 4 ? 0.4 : 0);
+    s.px(44 + i, 15 + j, pick(P.WINDOW_AMBER, k));
+  }
+  for (const mx of [48, 53, 58]) s.vline(mx, 15, 12, P.WOOD[1]);
+  s.hline(44, 21, 16, P.WOOD[1]);
+  s.px(45, 18, P.WINDOW_AMBER[4]); s.px(46, 17, P.WINDOW_AMBER[4]);
+  s.rectOutline(42, 14, 20, 14, P.WOOD[0]);
+  s.vline(42, 14, 14, P.WOOD[3]);
+  for (let d = 1; d <= 4; d++) {
+    for (let i = -d; i < 20 + d; i++) s.pxOver(42 + i, 14 - d, P.WINDOW_AMBER[3], [0, 0.15, 0.08, 0.04, 0.02][d]);
+  }
+  roof(s, 38, 7, 28, 8, {
+    ramp: P.COPPER_PATINA, seed: seed + 31, hip: 9, rowH: 3, unitW: 4,
+    mat: 'slate', ridge: true, fascia: true, fasciaRamp: P.WOOD,
+  });
+  // weathervane
+  s.vline(52, 0, 8, P.IRON[2]);
+  s.px(51, 1, P.IRON[3]);
+  s.hline(48, 2, 8, P.IRON[1]);
+  s.poly([[55, 0], [59, 2], [55, 4]], P.IRON[3]);
+  s.rect(46, 1, 3, 2, P.IRON[2]);
+  s.rect(42, 28, 20, 2, P.WOOD[1]);
+  s.hline(42, 28, 20, P.WOOD[3]);
+  shadeRect(s, 62, 30, 6, 12, P.OUTLINE, 0.25);
+
+  // ── copper venting bolted up the right flank
+  for (let j = 0; j < 42; j++) {
+    const y = 66 + j;
+    s.px(76, y, P.COPPER[4]); s.px(77, y, P.COPPER[3]);
+    s.px(78, y, P.COPPER[2]); s.px(79, y, P.COPPER[0]);
+    if (j % 13 === 5) {
+      s.hline(75, y, 6, P.COPPER[4]);
+      s.hline(75, y + 1, 6, P.COPPER[2]);
+      s.hline(75, y + 2, 6, P.COPPER[0]);
+    }
+  }
+  for (let i = 0; i < 14; i++) {
+    s.px(64 + i, 69, P.COPPER[4]); s.px(64 + i, 70, P.COPPER[3]);
+    s.px(64 + i, 71, P.COPPER[2]); s.px(64 + i, 72, P.COPPER[0]);
+  }
+  // pressure vessel bolted to the wall
+  s.ellipse(60, 64, 10, 12, P.COPPER[2]);
+  s.ellipse(61, 65, 6, 8, P.COPPER[3]);
+  s.ellipse(62, 66, 3, 4, P.COPPER[4]);
+  s.ellipseOutline(60, 64, 10, 12, P.COPPER[0]);
+  s.rect(63, 61, 4, 3, P.IRON[2]);
+  s.hline(63, 61, 4, P.IRON[4]);
+  chimney(s, 28, 18, 8, 28, 'flue', seed + 33);   // smoke anchor: (32, 14)
+
+  // ── tall library windows, book stacks silhouetted against the lamplight
+  for (const wx of [32, 60]) {
+    win(s, wx, 64, 12, 26, {
+      lit: true, cols: 2, rows: 4, frame: P.WOOD, sill: 'stone',
+      seed: seed + wx, clutter: 'books',
+    });
+  }
+  oculus(s, 52, 68, 13, true);
+
+  door(s, 45, 82, 14, 26, 'panel', {
+    ramp: P.ROOF_TEAL, seed: seed + 35, step: false, knocker: true, architrave: P.WOOD_LIGHT,
+  });
+
+  // occupancy
+  ivy(s, 29, 60, 6, 48, seed + 37);
+  bucket(s, 62, 100, seed + 39);
+  crate(s, 30, 96, 12, 12, seed + 43);
+
+  steps(s, 52, 108, 18, 3);
+  baseWeeds(s, 4, 115, 96, seed + 41, 0.32);
+  return finish(s, 24, 116, 78, 7);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// COURIER OFFICE — wide and low, all counter and no ceremony. A service hatch
+// with the shutter propped open, a route board bristling with pins, a pigeon
+// loft on the ridge, and parcels stacked wherever they fit.
+// ════════════════════════════════════════════════════════════════════════════
+
+function routeBoard(s: Surface, x: number, y: number, w: number, h: number, seed: number) {
+  // frame
+  s.rect(x, y, w, h, P.WOOD[2]);
+  s.hline(x, y, w, P.WOOD[4]); s.vline(x, y, h, P.WOOD[3]);
+  s.hline(x, y + h - 1, w, P.WOOD[0]); s.vline(x + w - 1, y, h, P.WOOD[0]);
+  // parchment
+  const px0 = x + 2, py0 = y + 2, pw = w - 4, ph = h - 4;
+  for (let j = 0; j < ph; j++) for (let i = 0; i < pw; i++) {
+    let k = 3;
+    if (h2(px0 + i, py0 + j, seed) > 0.82) k -= 0.6;
+    if (i > pw - 3 || j > ph - 3) k -= 0.7;
+    s.px(px0 + i, py0 + j, pick(P.UI_PARCHMENT, k));
+  }
+  // valley outline and roads
+  const r = rng(seed);
+  s.line(px0 + 2, py0 + ph - 4, px0 + Math.floor(pw / 2), py0 + 3, P.WOOD[1], 0.7);
+  s.line(px0 + Math.floor(pw / 2), py0 + 3, px0 + pw - 3, py0 + ph - 5, P.WOOD[1], 0.7);
+  s.line(px0 + 3, py0 + 4, px0 + pw - 4, py0 + 6, P.UI_INK_SOFT, 0.55);
+  for (let i = 0; i < 5; i++) {
+    const cx = px0 + r.int(2, pw - 3), cy = py0 + r.int(2, ph - 3);
+    const col = [P.FLOWER_ROSE, P.FLOWER_GOLD, P.FLOWER_VIOLET][i % 3];
+    s.px(cx, cy, col[2]); s.px(cx, cy + 1, P.OUTLINE);
+  }
+  // pinned notes curling off the frame
+  for (let i = 0; i < 3; i++) {
+    const nx = px0 + 2 + i * Math.floor(pw / 3), ny = py0 + ph - 8 + (i % 2);
+    s.rect(nx, ny, 6, 7, P.LINEN[3]);
+    s.hline(nx, ny, 6, P.LINEN[4]);
+    s.hline(nx, ny + 6, 6, P.OUTLINE, 0.5);
+    for (let k = 1; k < 5; k += 2) s.hline(nx + 1, ny + k, 4, P.UI_INK_SOFT, 0.5);
+    s.px(nx + 3, ny, P.IRON[4]);
+  }
+  shadeRect(s, x + 1, y + h, w, 1, P.OUTLINE, 0.35);
+}
+
+function buildCourier(): Surface {
+  const W = 104, H = 104;
+  const s = new Surface(W, H);
+  const seed = 6301;
+
+  const wallX = 10, wallW = 84;   // 10..93
+  wallPlaster(s, wallX, 46, wallW, 38, P.PLASTER, { seed, damp: true });
+  timberFrame(s, wallX, 46, wallW, 38, seed + 3, {
+    bays: 5, braces: true, braceBays: [0, 4], ramp: P.WOOD, tone: 1.5,
+  });
+  wallStone(s, wallX, 72, wallW, 12, P.STONE_WALL, seed + 5, 4);
+  foundation(s, wallX - 2, 84, wallW + 4, 8, seed + 7);
+
+  roof(s, 4, 14, 96, 30, {
+    ramp: P.ROOF_BLUE, seed: seed + 9, hip: 22, rowH: 4, unitW: 6,
+    mat: 'slate', ridge: true, moss: 0.3, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, wallX, 46, wallW, 4);
+
+  // ── pigeon loft straddling the ridge
+  s.rect(24, 4, 20, 14, P.WOOD_LIGHT[2]);
+  wallPlank(s, 24, 4, 20, 14, P.WOOD_LIGHT, seed + 11, 4);
+  s.rectOutline(24, 4, 20, 14, P.WOOD[0]);
+  for (const [hx, hy] of [[28, 8], [36, 8], [32, 13]] as const) {
+    s.ellipse(hx, hy, 5, 5, P.OUTLINE);
+    s.ellipse(hx + 1, hy + 1, 3, 3, '#1a1526');
+    s.ellipseOutline(hx, hy, 5, 5, P.WOOD_LIGHT[4], 0.6);
+  }
+  s.hline(22, 18, 24, P.WOOD[2]); s.hline(22, 19, 24, P.WOOD[0]);
+  roof(s, 21, -2, 26, 7, {
+    ramp: P.ROOF_BLUE, seed: seed + 13, hip: 7, rowH: 3, unitW: 4,
+    mat: 'slate', ridge: true, fascia: true, fasciaRamp: P.WOOD,
+  });
+  // two birds on the perch
+  for (const bx of [26, 40]) {
+    s.ellipse(bx, 14, 5, 4, P.FEATHER[2]);
+    s.ellipse(bx + 1, 13, 3, 3, P.FEATHER[3]);
+    s.px(bx + (bx === 26 ? 0 : 4), 14, P.FEATHER[1]);
+    s.px(bx + 2, 13, P.OUTLINE);
+    s.px(bx + 2, 18, P.BRONZE[2]);
+  }
+  chimney(s, 68, 18, 10, 24, 'brick', seed + 15);   // smoke anchor: (73, 14)
+
+  // ── route board
+  routeBoard(s, 13, 50, 28, 24, seed + 17);
+  // a lantern to read it by
+  lanternHanging(s, 44, 50, 4, 4);
+
+  // ── service counter: awning, propped hatch, warm interior, parcels on the sill
+  awning(s, 58, 46, 38, 11, P.CANVAS, P.ROOF_BLUE, seed + 19, true, 6);
+  shadeRect(s, 58, 57, 38, 3, P.OUTLINE, 0.3);
+  const hx0 = 62, hy0 = 58, hw = 30, hh = 16;
+  s.rect(hx0 - 2, hy0 - 2, hw + 4, hh + 4, P.WOOD[2]);
+  s.hline(hx0 - 2, hy0 - 2, hw + 4, P.WOOD[4]);
+  s.vline(hx0 - 2, hy0 - 2, hh + 4, P.WOOD[3]);
+  s.hline(hx0 - 2, hy0 + hh + 1, hw + 4, P.WOOD[0]);
+  for (let j = 0; j < hh; j++) for (let i = 0; i < hw; i++) {
+    let k = 1.6 + (1 - j / hh) * 1.4;
+    if (i < 5) k += 0.4;
+    if (h2(hx0 + i, hy0 + j, seed) > 0.9) k += 0.6;
+    s.px(hx0 + i, hy0 + j, pick(P.WINDOW_AMBER, k));
+  }
+  shadeRect(s, hx0, hy0, hw, 2, P.OUTLINE, 0.5);
+  // clerk's shelf silhouettes
+  for (let i = 0; i < 4; i++) {
+    const bx = hx0 + 2 + i * 7;
+    s.rect(bx, hy0 + hh - 7 - (i % 2) * 2, 5, 7 + (i % 2) * 2, pick(P.WOOD, 0.6));
+    s.hline(bx, hy0 + hh - 7 - (i % 2) * 2, 5, pick(P.WOOD, 1.6));
+  }
+  // counter slab jutting out
+  s.rect(hx0 - 4, hy0 + hh, hw + 8, 4, P.WOOD_LIGHT[2]);
+  s.hline(hx0 - 4, hy0 + hh, hw + 8, P.WOOD_LIGHT[4]);
+  s.hline(hx0 - 4, hy0 + hh + 3, hw + 8, P.WOOD[0]);
+  shadeRect(s, hx0 - 3, hy0 + hh + 4, hw + 8, 2, P.OUTLINE, 0.3);
+  // a parcel and a bell on the counter
+  s.rect(hx0 + 1, hy0 + hh - 6, 9, 6, P.PARCEL_WRAP.kraft[2]);
+  s.hline(hx0 + 1, hy0 + hh - 6, 9, P.PARCEL_WRAP.kraft[4]);
+  s.vline(hx0 + 5, hy0 + hh - 6, 6, P.TWINE);
+  s.ellipse(hx0 + hw - 8, hy0 + hh - 5, 5, 5, P.BRONZE[2]);
+  s.ellipse(hx0 + hw - 7, hy0 + hh - 5, 3, 3, P.BRONZE[4]);
+  s.px(hx0 + hw - 6, hy0 + hh - 7, P.BRONZE[3]);
+
+  // ── door
+  door(s, 45, 60, 14, 24, 'panel', {
+    ramp: P.ROOF_BLUE, seed: seed + 21, step: false, architrave: P.WOOD_LIGHT,
+  });
+  // letter slot
+  s.rect(48, 74, 8, 2, P.IRON[1]);
+  s.hline(48, 74, 8, P.IRON[3]);
+
+  // ── parcel pile and sacks against the corner
+  crate(s, 90, 68, 12, 11, seed + 23);
+  s.rect(89, 79, 13, 5, P.PARCEL_WRAP.slate[2]);
+  s.hline(89, 79, 13, P.PARCEL_WRAP.slate[4]);
+  s.hline(89, 83, 13, P.PARCEL_WRAP.slate[0]);
+  s.vline(95, 79, 5, P.TWINE);
+  s.rect(90, 62, 11, 6, P.PARCEL_WRAP.rose[2]);
+  s.hline(90, 62, 11, P.PARCEL_WRAP.rose[4]);
+  s.vline(95, 62, 6, P.TWINE);
+  s.hline(90, 65, 11, P.TWINE, 0.85);
+
+  // a parcel plaque bolted over the door instead of a swinging sign — the
+  // courier office is too wide for a bracket to clear the eave.
+  signBoard(s, 42, 48, 20, 11, 'parcel', seed + 25, P.CANVAS);
+  drainpipe(s, 92, 48, 36, 0);
+
+  steps(s, 52, 84, 20, 3);
+  baseWeeds(s, 6, 91, 92, seed + 27, 0.3);
+  return finish(s, 6, 92, 90, 6);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GENERAL STORE — a shopfront. Two big glazed display bays full of goods, a
+// striped awning the width of the building, produce out front, plum roof.
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildStore(): Surface {
+  const W = 104, H = 112;
+  const s = new Surface(W, H);
+  const seed = 5501;
+
+  const wallX = 8, wallW = 88;   // 8..95
+  wallPlaster(s, wallX, 46, wallW, 50, P.PLASTER, { seed, damp: true });
+  timberFrame(s, wallX, 46, wallW, 50, seed + 3, {
+    bays: 4, braces: false, midRail: false, ramp: P.WOOD, tone: 1.5,
+  });
+  foundation(s, wallX - 2, 96, wallW + 4, 8, seed + 5);
+
+  roof(s, 2, 12, 100, 32, {
+    ramp: P.ROOF_PLUM, seed: seed + 7, hip: 16, rowH: 4, unitW: 6,
+    mat: 'tile', ridge: true, moss: 0.3, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, wallX, 46, wallW, 4);
+  chimney(s, 18, 16, 11, 24, 'brick', seed + 9);   // smoke anchor: (23, 12)
+
+  // ── the shop's fascia board, then the awning below it
+  s.rect(20, 48, 56, 10, P.WOOD[2]);
+  wallPlank(s, 20, 48, 56, 10, P.WOOD, seed + 11, 7);
+  s.hline(20, 48, 56, P.WOOD_LIGHT[4]);
+  s.hline(20, 57, 56, P.WOOD[0]);
+  s.rectOutline(21, 49, 54, 8, P.UI_GOLD[2], 0.6);
+  // a painted basket of goods instead of a name
+  const bcx = 48;
+  s.poly([[bcx - 9, 51], [bcx + 9, 51], [bcx + 6, 56], [bcx - 6, 56]], P.WOOD_LIGHT[2]);
+  s.hline(bcx - 9, 51, 19, P.WOOD_LIGHT[4]);
+  for (let i = 0; i < 5; i++) s.px(bcx - 6 + i * 3, 50, P.VEG_LEAF[3]);
+  s.ellipse(bcx - 5, 48, 5, 4, P.FLOWER_ROSE[1]);
+  s.ellipse(bcx + 1, 47, 5, 5, P.TREE_AUTUMN[3]);
+  s.ellipse(bcx + 5, 49, 4, 4, P.VEG_LEAF[3]);
+
+  awning(s, 8, 58, 88, 12, P.CANVAS, P.ROOF_PLUM, seed + 13, true, 8);
+  shadeRect(s, 10, 70, 84, 4, P.OUTLINE, 0.28);
+  eaveShadow(s, 10, 70, 84, 4);
+
+  // ── display bays
+  win(s, 12, 72, 28, 22, {
+    lit: true, cols: 3, rows: 2, frame: P.WOOD, sill: 'stone',
+    seed: seed + 15, clutter: 'goods',
+  });
+  win(s, 64, 72, 28, 22, {
+    lit: true, cols: 3, rows: 2, frame: P.WOOD, sill: 'stone',
+    seed: seed + 17, clutter: 'jars',
+  });
+
+  // ── centre door, glazed, between the bays. Honey timber so it separates
+  //    from the plum awning directly above it.
+  door(s, 44, 72, 16, 24, 'panel', {
+    ramp: P.WOOD_LIGHT, seed: seed + 19, step: false, glazed: true, architrave: P.PLASTER,
+  });
+
+  // ── produce crates on the pavement
+  const produce = (x: number, y: number, sd: number, colors: R) => {
+    crate(s, x, y, 14, 11, sd);
+    const r = rng(sd + 3);
+    for (let i = 0; i < 7; i++) {
+      const px0 = x + 1 + r.int(0, 11), py0 = y - 1 - r.int(0, 2);
+      s.ellipse(px0, py0, 4, 4, colors[1]);
+      s.ellipse(px0 + 1, py0, 2, 2, colors[3]);
+      s.px(px0 + 2, py0 + 3, P.VEG_LEAF[1]);
+    }
+  };
+  produce(6, 85, seed + 21, P.TREE_AUTUMN);
+  produce(84, 85, seed + 23, P.FLOWER_ROSE);
+  barrel(s, 26, 84, 11, 12, seed + 25);
+  // brooms for sale
+  broom(s, 78, 74, 16, -1);
+  broom(s, 81, 76, 14, 1);
+
+  hangingSign(s, 92, 48, 8, 'loaf', 18, 18, seed + 27, 1, P.CANVAS);
+  ivy(s, 8, 50, 6, 46, seed + 29);
+
+  steps(s, 52, 96, 22, 3);
+  baseWeeds(s, 4, 103, 94, seed + 31, 0.26);
+  return finish(s, 4, 104, 94, 6);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE BELL TOWER — the tallest thing in Lumen Vale, and the anchor of the
+// first quest. Battered stone base, timber upper stage, an open belfry with
+// the bronze bell hanging in plain sight, slate spire, weathervane.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** The bell itself, drawn at a swing offset. Shared by the tower and overlay. */
+function bronzeBell(s: Surface, cx: number, topY: number, tilt: number) {
+  const t = Math.round(tilt);
+  // headstock + yoke
+  s.rect(cx - 8, topY, 16, 3, P.WOOD[2]);
+  s.hline(cx - 8, topY, 16, P.WOOD[4]);
+  s.hline(cx - 8, topY + 2, 16, P.WOOD[0]);
+  s.px(cx - 9, topY + 1, P.IRON[2]); s.px(cx + 8, topY + 1, P.IRON[2]);
+  // crown loop
+  s.rect(cx - 2 + t, topY + 3, 4, 3, P.BRONZE[2]);
+  s.hline(cx - 2 + t, topY + 3, 4, P.BRONZE[4]);
+  s.px(cx - 1 + t, topY + 4, P.OUTLINE);
+  s.px(cx + t, topY + 4, P.OUTLINE);
+  /**
+   * A bell silhouette is a straight shoulder, a concave waist, then a fast
+   * flare into the sound bow. Interpolate it linearly and you get a cone,
+   * which is what the first attempt at this looked like.
+   */
+  const bh = 17;
+  const half = (p: number) => 3.6 + 6.6 * Math.pow(Math.max(0, p - 0.12) / 0.88, 2.1);
+  for (let j = 0; j < bh; j++) {
+    const p = j / (bh - 1);
+    const halfW = Math.round(half(p));
+    const off = Math.round(t * (0.3 + p * 0.8));
+    for (let i = -halfW; i <= halfW; i++) {
+      const lx = (i + halfW) / (halfW * 2 || 1);
+      let k = 2.4;
+      k += lx < 0.16 ? 0.9 : lx < 0.34 ? 1.5 : lx < 0.5 ? 0.5 : lx > 0.88 ? -1.6 : lx > 0.7 ? -0.8 : 0;
+      k -= p * 0.4;
+      if (j === 0) k += 0.5;
+      s.px(cx + i + off, topY + 6 + j, pick(P.BRONZE, k));
+    }
+    // the two incised bands above the sound bow
+    if (j === bh - 5 || j === bh - 3) {
+      for (let i = -halfW + 1; i <= halfW - 1; i++) s.px(cx + i + off, topY + 6 + j, pick(P.BRONZE, 0.7));
+    }
+  }
+  // sound bow: thicker and wider than the body, so the lip reads
+  const lipHalf = Math.round(half(1)) + 2;
+  const lipOff = Math.round(t * 1.1);
+  for (let j = 0; j < 3; j++) {
+    for (let i = -lipHalf + (j === 2 ? 1 : 0); i <= lipHalf - (j === 2 ? 1 : 0); i++) {
+      const lx = (i + lipHalf) / (lipHalf * 2);
+      const k = j === 0 ? (lx < 0.35 ? 4 : lx > 0.8 ? 1.6 : 3.2) : j === 1 ? (lx < 0.3 ? 2.6 : 1.6) : 0.4;
+      s.px(cx + i + lipOff, topY + 6 + bh + j, pick(P.BRONZE, k));
+    }
+  }
+  // clapper peeking under the mouth
+  s.px(cx + lipOff - 1, topY + 9 + bh, P.IRON[1]);
+  s.px(cx + lipOff, topY + 9 + bh, P.IRON[2]);
+  s.px(cx + lipOff, topY + 10 + bh, P.IRON[3]);
+  // rope falling from the yoke
+  for (let j = 0; j < 8; j++) s.px(cx - 6 - Math.round(t * 0.4), topY + 22 + j, pick(P.ROPE, j % 2 ? 3 : 2));
+}
+
+function belfryInterior(s: Surface, x: number, y: number, w: number, h: number) {
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const t = j / h;
+    s.px(x + i, y + j, pick(P.SHRINE_FLOOR, 1.4 - t * 1.2));
+  }
+  shadeRect(s, x, y, w, 3, P.OUTLINE, 0.6);
+  shadeRect(s, x, y, 2, h, P.OUTLINE, 0.4);
+}
+
+function buildBellTower(): Surface {
+  const W = 80, H = 176;
+  const s = new Surface(W, H);
+  const seed = 9101;
+  const cx = 40;
+
+  // ── battered stone base (wider at the bottom)
+  for (let j = 0; j < 46; j++) {
+    const y = 124 + j;
+    const inset = Math.round((1 - j / 45) * 3);
+    wallStone(s, 8 + inset, y, 64 - inset * 2, 1, P.STONE_WALL, seed + y, 5);
+  }
+  wallStone(s, 8, 124, 64, 46, P.STONE_WALL, seed + 3, 6);
+  foundation(s, 6, 160, 68, 8, seed + 5);
+
+  // ── stone cornice under the timber stage
+  s.rect(6, 118, 68, 6, P.STONE_WALL[2]);
+  s.hline(6, 118, 68, P.STONE_WALL[4]);
+  s.hline(6, 119, 68, P.STONE_WALL[3]);
+  s.hline(6, 123, 68, P.STONE_WALL[0]);
+  eaveShadow(s, 9, 124, 62, 3);
+
+  // ── timber upper stage
+  wallPlaster(s, 12, 86, 56, 32, P.PLASTER, { seed: seed + 7, damp: false });
+  timberFrame(s, 12, 86, 56, 32, seed + 9, {
+    bays: 3, braces: true, braceBays: [0, 2], ramp: P.WOOD, tone: 1.3,
+  });
+  oculus(s, 40, 101, 15, false);
+  s.rect(10, 82, 60, 5, P.WOOD[2]);
+  s.hline(10, 82, 60, P.WOOD_LIGHT[4]);
+  s.hline(10, 86, 60, P.WOOD[0]);
+  eaveShadow(s, 12, 87, 56, 3);
+
+  // ── the belfry: three open arches, the bell hanging in the centre one
+  wallStone(s, 10, 44, 60, 38, P.STONE_WALL, seed + 11, 6);
+  const arches: Array<[number, number]> = [[14, 12], [30, 20], [54, 12]];
+  for (const [ax, aw] of arches) {
+    const ay = 52, ah = 30;
+    belfryInterior(s, ax, ay, aw, ah);
+    s.ellipse(ax, ay - Math.floor(aw / 2), aw, aw, '#141225');
+    s.ellipseOutline(ax - 1, ay - Math.floor(aw / 2) - 1, aw + 2, aw + 2, P.STONE_WALL[3]);
+    s.ellipseOutline(ax, ay - Math.floor(aw / 2), aw, aw, P.STONE_WALL[0], 0.7);
+    for (let j = 0; j < ah; j++) {
+      s.px(ax - 1, ay + j, P.STONE_WALL[3]);
+      s.px(ax + aw, ay + j, P.STONE_WALL[0]);
+    }
+    // louvre slats in the side arches
+    if (aw < 16) {
+      for (let j = 2; j < ah; j += 4) {
+        s.hline(ax, ay + j, aw, P.WOOD[2], 0.85);
+        s.hline(ax, ay + j + 1, aw, P.WOOD[0], 0.85);
+      }
+    }
+  }
+  bronzeBell(s, cx, 50, 0);
+  // sill the arches sit on
+  s.rect(8, 82, 64, 3, P.STONE_WALL[2]);
+  s.hline(8, 82, 64, P.STONE_WALL[4]);
+  s.hline(8, 84, 64, P.STONE_WALL[0]);
+
+  // ── slate spire + weathervane
+  roof(s, 4, 14, 72, 30, {
+    ramp: P.ROOF_SLATE, seed: seed + 13, hip: 32, rowH: 4, unitW: 5,
+    mat: 'slate', ridge: true, moss: 0.3, fascia: true, fasciaRamp: P.WOOD,
+  });
+  s.rect(2, 44, 76, 4, P.STONE_WALL[2]);
+  s.hline(2, 44, 76, P.STONE_WALL[4]);
+  s.hline(2, 47, 76, P.STONE_WALL[0]);
+  s.vline(cx, 2, 14, P.IRON[2]);
+  s.vline(cx - 1, 3, 12, P.IRON[3]);
+  s.ellipse(cx - 3, 10, 7, 7, P.COPPER_PATINA[2]);
+  s.ellipse(cx - 2, 11, 4, 4, P.COPPER_PATINA[4]);
+  s.hline(cx - 12, 6, 25, P.IRON[1]);
+  s.hline(cx - 12, 5, 25, P.IRON[3]);
+  s.poly([[cx + 7, 2], [cx + 15, 6], [cx + 7, 10]], P.IRON[3]);
+  s.poly([[cx + 8, 4], [cx + 12, 6], [cx + 8, 8]], P.IRON[1]);
+  s.rect(cx - 13, 3, 4, 2, P.IRON[2]);
+  s.rect(cx - 13, 7, 4, 2, P.IRON[2]);
+
+  // ── base: arched door, slit window, ivy, a bench
+  s.ellipse(31, 122, 18, 18, P.STONE_WALL[1]);
+  s.ellipseOutline(31, 122, 18, 18, P.STONE_WALL[4], 0.7);
+  door(s, 33, 132, 14, 28, 'arch', {
+    ramp: P.WOOD, seed: seed + 15, step: false, knocker: true,
+  });
+  for (let j = 0; j < 3; j++) {
+    // voussoir ring over the door
+    const r0 = 20 + j * 2;
+    s.ellipseOutline(cx - Math.floor(r0 / 2), 132 - Math.floor(r0 / 2), r0, r0, pick(P.STONE_WALL, j === 0 ? 4 : 2), 0.55);
+  }
+  win(s, 14, 132, 10, 20, { lit: false, cols: 1, rows: 3, frame: P.STONE_WALL, sill: 'stone', seed: seed + 17 });
+  win(s, 56, 132, 10, 20, { lit: false, cols: 1, rows: 3, frame: P.STONE_WALL, sill: 'stone', seed: seed + 19 });
+  ivy(s, 62, 120, 10, 44, seed + 21);
+  // a stone bench against the base
+  s.rect(12, 150, 20, 4, P.PATH_STONE[2]);
+  s.hline(12, 150, 20, P.PATH_STONE[4]);
+  s.hline(12, 153, 20, P.PATH_STONE[0]);
+  s.rect(14, 154, 3, 6, P.PATH_STONE[1]);
+  s.rect(27, 154, 3, 6, P.PATH_STONE[1]);
+  shadeRect(s, 13, 154, 18, 2, P.OUTLINE, 0.3);
+
+  steps(s, cx, 160, 20, 4);
+  baseWeeds(s, 4, 167, 72, seed + 23, 0.34);
+  return finish(s, 4, 168, 70, 7);
+}
+
+/** 3-frame swinging overlay. Draw at (tower.x + 20, tower.y + 44). */
+function bellFrames(): Surface[] {
+  return [-4, 0, 4].map((tilt) => {
+    const s = new Surface(40, 40);
+    belfryInterior(s, 10, 8, 20, 30);
+    s.ellipse(10, 8 - 10, 20, 20, '#141225');
+    s.ellipseOutline(10, -2, 20, 20, P.STONE_WALL[0], 0.7);
+    bronzeBell(s, 20, 6, tilt);
+    // motion smear on the leading edge
+    if (tilt !== 0) {
+      const dir = tilt > 0 ? 1 : -1;
+      for (let j = 0; j < 18; j++) {
+        s.pxOver(20 + dir * (11 + Math.round(j * 0.3)), 14 + j, P.BRONZE[4], 0.22);
+      }
+    }
+    return s;
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// COTTAGES — five of them, and no two share a roof material, a storey count,
+// a chimney position or a wall treatment. Cover the colours and you can still
+// tell them apart.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** A: squat plaster cottage under a heavy thatch hip. Chimney dead centre. */
+function buildHouseA(): Surface {
+  const W = 76, H = 100;
+  const s = new Surface(W, H);
+  const seed = 3101;
+
+  wallPlaster(s, 10, 48, 56, 36, P.PLASTER, { seed, damp: true });
+  timberFrame(s, 10, 48, 56, 36, seed + 3, { bays: 3, braces: false, ramp: P.WOOD, tone: 1.6 });
+  foundation(s, 8, 84, 60, 8, seed + 5);
+
+  roof(s, 2, 10, 72, 36, {
+    ramp: P.THATCH, seed: seed + 7, hip: 16, rowH: 6, unitW: 6,
+    mat: 'thatch', ridge: true, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 10, 48, 56, 4);
+  chimney(s, 32, 2, 12, 26, 'stone', seed + 9);   // smoke anchor: (38, -2)
+
+  win(s, 14, 54, 14, 16, { lit: true, cols: 2, rows: 2, seed: seed + 11, curtain: true, sill: 'wood' });
+  win(s, 48, 54, 14, 16, { lit: true, cols: 2, rows: 2, seed: seed + 13, sill: 'wood', clutter: 'plant' });
+  flowerBox(s, 13, 72, 16, seed + 15, P.FLOWER_ROSE);
+  door(s, 31, 60, 14, 24, 'plank', { ramp: P.WOOD_LIGHT, seed: seed + 17, step: false, catflap: true });
+
+  woodpile(s, 48, 72, 18, 12, seed + 19);
+  bucket(s, 10, 76, seed + 21);
+  laundryHook(s, 66, 54);
+  drainpipe(s, 66, 52, 32, 0);
+
+  steps(s, 38, 84, 18, 3);
+  baseWeeds(s, 6, 91, 64, seed + 23, 0.34);
+  return finish(s, 6, 92, 62, 6);
+}
+
+/** B: narrow two-storey townhouse, jettied upper floor, blue slate. */
+function buildHouseB(): Surface {
+  const W = 64, H = 120;
+  const s = new Surface(W, H);
+  const seed = 3201;
+
+  wallPlaster(s, 4, 41, 56, 30, P.PLASTER, { seed, damp: false });
+  timberFrame(s, 4, 41, 56, 30, seed + 3, { bays: 3, braces: true, braceBays: [0, 2], ramp: P.WOOD, tone: 1.2 });
+  beamH(s, 2, 70, 60, 4, P.WOOD, seed + 5, 2);
+  s.hline(2, 70, 60, P.WOOD_LIGHT[4]);
+  eaveShadow(s, 7, 74, 50, 3);
+  for (let x = 8; x < 56; x += 12) {
+    s.px(x, 74, P.WOOD[2]); s.px(x + 1, 74, P.WOOD[3]); s.px(x, 75, P.WOOD[0]);
+  }
+
+  wallBoard(s, 7, 74, 50, 32, P.WOOD_LIGHT, seed + 7, 4);
+  foundation(s, 5, 106, 54, 8, seed + 9);
+
+  roof(s, 0, 10, 64, 28, {
+    ramp: P.ROOF_BLUE, seed: seed + 11, hip: 12, rowH: 4, unitW: 5,
+    mat: 'shingle', ridge: true, moss: 0.4, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 4, 41, 56, 4);
+  chimney(s, 44, 0, 11, 26, 'brick', seed + 13);   // smoke anchor: (49, -4)
+
+  win(s, 8, 46, 12, 16, { lit: true, cols: 2, rows: 2, seed: seed + 15, sill: 'wood', curtain: true });
+  win(s, 44, 46, 12, 16, { lit: false, cols: 2, rows: 2, seed: seed + 17, sill: 'wood' });
+  flowerBox(s, 43, 64, 14, seed + 19, P.FLOWER_VIOLET);
+
+  win(s, 9, 80, 13, 17, { lit: true, cols: 2, rows: 2, seed: seed + 21, sill: 'stone', shutters: P.ROOF_RED, clutter: 'jars' });
+  door(s, 25, 80, 14, 26, 'panel', { ramp: P.ROOF_RED, seed: seed + 23, step: false, knocker: true, architrave: P.WOOD_LIGHT });
+
+  barrel(s, 44, 94, 11, 12, seed + 25);
+  ivy(s, 55, 76, 6, 30, seed + 27);
+  bootScraper(s, 41, 100);
+
+  steps(s, 32, 106, 18, 3);
+  baseWeeds(s, 3, 113, 58, seed + 29, 0.32);
+  return finish(s, 3, 114, 56, 6);
+}
+
+/** C: broad stone-based cottage with a full-width covered porch, plum pantiles. */
+function buildHouseC(): Surface {
+  const W = 92, H = 108;
+  const s = new Surface(W, H);
+  const seed = 3301;
+
+  wallPlaster(s, 8, 41, 76, 30, P.PLASTER, { seed, damp: false });
+  wallStone(s, 8, 68, 76, 22, P.STONE_WALL, seed + 3, 5);
+  foundation(s, 6, 90, 80, 8, seed + 5);
+
+  roof(s, 0, 8, 92, 32, {
+    ramp: P.ROOF_PLUM, seed: seed + 7, hip: 20, rowH: 5, unitW: 5,
+    mat: 'tile', ridge: true, moss: 0.5, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 8, 41, 76, 4);
+  chimney(s, 10, 0, 12, 26, 'brick', seed + 9);   // smoke anchor: (16, -4)
+
+  win(s, 14, 46, 14, 16, { lit: true, cols: 2, rows: 2, seed: seed + 11, sill: 'wood', curtain: true });
+  win(s, 62, 46, 14, 16, { lit: true, cols: 2, rows: 2, seed: seed + 13, sill: 'wood' });
+  flowerBox(s, 13, 64, 16, seed + 15, P.FLOWER_GOLD);
+  flowerBox(s, 61, 64, 16, seed + 17, P.FLOWER_WHITE);
+
+  // full-width porch
+  roof(s, 6, 62, 80, 9, {
+    ramp: P.ROOF_PLUM, seed: seed + 19, hip: 0, rowH: 4, unitW: 5,
+    mat: 'tile', ridge: false, fascia: true, fasciaRamp: P.WOOD,
+  });
+  shadeRect(s, 8, 74, 76, 16, P.OUTLINE, 0.16);
+  eaveShadow(s, 8, 74, 76, 3);
+  post(s, 10, 74, 3, 16, P.WOOD);
+  post(s, 44, 74, 3, 16, P.WOOD);
+  post(s, 78, 74, 3, 16, P.WOOD);
+  lanternHanging(s, 18, 76, 2, 3);
+
+  door(s, 39, 72, 14, 18, 'plank', {
+    ramp: P.ROOF_RED, seed: seed + 21, step: false, catflap: true, architrave: P.WOOD_LIGHT,
+  });
+  broom(s, 56, 76, 11, 1);
+  crate(s, 63, 80, 11, 10, seed + 25);
+  woodpile(s, 14, 78, 18, 12, seed + 27);
+  ivy(s, 82, 44, 6, 46, seed + 29);
+
+  steps(s, 46, 90, 20, 3);
+  baseWeeds(s, 4, 97, 84, seed + 31, 0.3);
+  return finish(s, 4, 98, 82, 6);
+}
+
+/** D: gable-front cottage. Steep teal roof, shuttered windows, entry hood. */
+function buildHouseD(): Surface {
+  const W = 72, H = 104;
+  const s = new Surface(W, H);
+  const seed = 3401;
+
+  wallPlank(s, 8, 52, 56, 38, P.WOOD_LIGHT, seed, 7);
+  foundation(s, 6, 90, 60, 8, seed + 3);
+
+  roof(s, 2, 6, 68, 44, {
+    ramp: P.ROOF_TEAL, seed: seed + 5, hip: 28, rowH: 4, unitW: 5,
+    mat: 'shingle', ridge: true, moss: 0.5, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 8, 52, 56, 4);
+  oculus(s, 36, 26, 12, true);
+  chimney(s, 14, 20, 10, 26, 'brick', seed + 7);   // smoke anchor: (19, 16)
+
+  win(s, 12, 58, 12, 16, { lit: true, cols: 2, rows: 2, seed: seed + 9, sill: 'wood', shutters: P.ROOF_RED });
+  win(s, 48, 58, 12, 16, { lit: false, cols: 2, rows: 2, seed: seed + 11, sill: 'wood', shutters: P.ROOF_RED });
+
+  // entry hood on brackets
+  roof(s, 24, 58, 24, 7, {
+    ramp: P.ROOF_TEAL, seed: seed + 13, hip: 0, rowH: 4, unitW: 5,
+    mat: 'shingle', ridge: false, fascia: true, fasciaRamp: P.WOOD,
+  });
+  for (const bx of [25, 44]) {
+    for (let i = 0; i < 4; i++) {
+      s.px(bx + (bx === 25 ? i : -i), 68 + i, P.WOOD[2]);
+      s.px(bx + (bx === 25 ? i : -i), 69 + i, P.WOOD[0]);
+    }
+  }
+  shadeRect(s, 26, 68, 20, 22, P.OUTLINE, 0.14);
+  door(s, 29, 68, 14, 22, 'plank', { ramp: P.WOOD, seed: seed + 15, step: false, glazed: true });
+
+  bucket(s, 46, 82, seed + 17);
+  barrel(s, 54, 78, 10, 12, seed + 19);
+  drainpipe(s, 61, 54, 34, 2);
+  ivy(s, 9, 60, 6, 30, seed + 21);
+
+  steps(s, 36, 90, 18, 3);
+  baseWeeds(s, 4, 97, 64, seed + 23, 0.34);
+  return finish(s, 4, 98, 62, 6);
+}
+
+/** E: long low cottage with a log lean-to bolted on the right. Dry thatch. */
+function buildHouseE(): Surface {
+  const W = 92, H = 92;
+  const s = new Surface(W, H);
+  const seed = 3501;
+
+  // lean-to first, so the main block overlaps it
+  wallPlank(s, 72, 50, 18, 24, P.WOOD, seed + 3, 5);
+  roof(s, 70, 42, 22, 9, {
+    ramp: P.THATCH, seed: seed + 5, hip: 0, rowH: 6, unitW: 5,
+    mat: 'thatch', ridge: false, pent: 'r', fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 72, 51, 18, 3);
+  woodpile(s, 73, 58, 16, 16, seed + 7);
+
+  wallBoard(s, 8, 40, 66, 34, P.WOOD_LIGHT, seed + 9, 4);
+  foundation(s, 6, 74, 70, 8, seed + 11);
+
+  roof(s, 2, 8, 76, 30, {
+    ramp: P.THATCH, seed: seed + 13, hip: 15, rowH: 6, unitW: 6,
+    mat: 'thatch', ridge: true, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 8, 40, 66, 4);
+  chimney(s, 56, 0, 11, 24, 'stone', seed + 15);   // smoke anchor: (61, -4)
+
+  win(s, 12, 46, 13, 16, { lit: true, cols: 2, rows: 2, seed: seed + 17, sill: 'wood', curtain: true });
+  win(s, 56, 46, 13, 16, { lit: true, cols: 2, rows: 2, seed: seed + 19, sill: 'wood', clutter: 'plant' });
+  flowerBox(s, 11, 64, 15, seed + 21, P.FLOWER_WHITE);
+  door(s, 39, 50, 14, 24, 'stable', { ramp: P.WOOD_LIGHT, seed: seed + 23, step: false });
+
+  bucket(s, 32, 66, seed + 25);
+  crate(s, 26, 62, 11, 12, seed + 27);
+  laundryHook(s, 10, 44);
+  laundryHook(s, 70, 44);
+  ivy(s, 8, 44, 6, 30, seed + 29);
+
+  steps(s, 46, 74, 18, 3);
+  baseWeeds(s, 4, 81, 74, seed + 31, 0.34);
+  return finish(s, 4, 82, 72, 6);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SMALL STRUCTURES — the things that fill the gaps between the landmarks.
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildShed(): Surface {
+  const W = 52, H = 60;
+  const s = new Surface(W, H);
+  const seed = 2101;
+
+  wallPlank(s, 6, 24, 40, 26, P.WOOD, seed, 6);
+  foundation(s, 4, 50, 44, 6, seed + 3, P.PATH_STONE);
+  roof(s, 2, 6, 48, 16, {
+    ramp: P.ROOF_SLATE, seed: seed + 5, hip: 6, rowH: 4, unitW: 5,
+    mat: 'slate', ridge: true, moss: 0.7, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 6, 24, 40, 3);
+
+  // double doors with a diagonal brace on each leaf
+  door(s, 17, 28, 18, 22, 'plank', { ramp: P.WOOD_LIGHT, seed: seed + 7, step: false });
+  s.vline(26, 28, 22, P.WOOD[0]);
+  s.vline(25, 28, 22, P.WOOD[3], 0.6);
+  beamDiag(s, 18, 47, 24, 30, P.WOOD, 2, 1.8);
+  beamDiag(s, 28, 30, 33, 47, P.WOOD, 2, 1.8);
+
+  win(s, 8, 30, 8, 9, { lit: false, cols: 2, rows: 1, seed: seed + 9, sill: 'wood', glow: false });
+  // tools leaning against the corner
+  broom(s, 38, 30, 16, 1);
+  for (let j = 0; j < 18; j++) { s.px(43 + Math.round(j * 0.15), 32 + j, P.WOOD_LIGHT[3]); s.px(44 + Math.round(j * 0.15), 32 + j, P.WOOD[1]); }
+  s.rect(44, 30, 4, 3, P.IRON[2]);
+  s.hline(44, 30, 4, P.IRON[4]);
+  bucket(s, 38, 43, seed + 11);
+
+  baseWeeds(s, 3, 55, 46, seed + 13, 0.34);
+  return finish(s, 3, 56, 44, 4);
+}
+
+function buildBarnSmall(): Surface {
+  const W = 92, H = 84;
+  const s = new Surface(W, H);
+  const seed = 2201;
+
+  wallPlank(s, 8, 44, 76, 28, P.ROOF_RED, seed, 7);
+  foundation(s, 6, 72, 80, 7, seed + 3, P.PATH_STONE);
+
+  // gambrel: shallow cap over a steep lower slope
+  roof(s, 4, 22, 84, 20, {
+    ramp: P.ROOF_SLATE, seed: seed + 5, hip: 0, rowH: 4, unitW: 5,
+    mat: 'slate', ridge: false, moss: 0.6, fascia: true, fasciaRamp: P.WOOD,
+  });
+  roof(s, 16, 6, 60, 16, {
+    ramp: P.ROOF_SLATE, seed: seed + 7, hip: 14, rowH: 4, unitW: 5,
+    mat: 'slate', ridge: true, moss: 0.4,
+  });
+  // the gambrel kink line
+  s.hline(4, 22, 84, P.ROOF_SLATE[4], 0.7);
+  s.hline(4, 23, 84, P.ROOF_SLATE[0], 0.5);
+  eaveShadow(s, 8, 44, 76, 4);
+
+  // hayloft door + hoist beam
+  s.rect(38, 26, 16, 14, P.WOOD[1]);
+  wallPlank(s, 39, 27, 14, 12, P.WOOD_LIGHT, seed + 9, 5);
+  s.rectOutline(38, 26, 16, 14, P.WOOD[0]);
+  shadeRect(s, 39, 27, 14, 2, P.OUTLINE, 0.45);
+  for (let i = 0; i < 10; i++) { s.px(46 + i, 20, P.WOOD[3]); s.px(46 + i, 21, P.WOOD[1]); s.px(46 + i, 22, P.WOOD[0]); }
+  for (let j = 0; j < 7; j++) s.px(54, 22 + j, pick(P.ROPE, j % 2 ? 3 : 2));
+  s.px(54, 29, P.IRON[2]); s.px(53, 30, P.IRON[3]); s.px(55, 30, P.IRON[1]);
+
+  // big braced doors
+  door(s, 34, 46, 24, 26, 'plank', { ramp: P.WOOD_LIGHT, seed: seed + 11, step: false });
+  s.vline(46, 46, 26, P.WOOD[0]);
+  s.vline(45, 46, 26, P.WOOD[3], 0.6);
+  beamDiag(s, 35, 69, 43, 48, P.WOOD, 3, 1.6);
+  beamDiag(s, 49, 48, 55, 69, P.WOOD, 3, 1.6);
+
+  win(s, 14, 50, 12, 12, { lit: true, cols: 2, rows: 1, seed: seed + 13, sill: 'wood' });
+  win(s, 66, 50, 12, 12, { lit: false, cols: 2, rows: 1, seed: seed + 15, sill: 'wood' });
+  // hay bales and a trough
+  for (const [bx, by] of [[12, 62], [22, 64], [66, 62]] as const) {
+    s.rect(bx, by, 12, 9, P.THATCH[2]);
+    for (let j = 0; j < 9; j++) for (let i = 0; i < 12; i++) {
+      if (h2(bx + i, by + j, seed) > 0.6) s.px(bx + i, by + j, pick(P.THATCH, j < 2 ? 4 : 3));
+    }
+    s.rectOutline(bx, by, 12, 9, P.THATCH[0], 0.7);
+    s.hline(bx, by + 3, 12, P.ROPE[1]); s.hline(bx, by + 6, 12, P.ROPE[1]);
+  }
+  // weathervane on the ridge
+  s.vline(46, 0, 8, P.IRON[2]);
+  s.poly([[47, 0], [53, 3], [47, 6]], P.IRON[3]);
+  s.hline(41, 4, 8, P.IRON[1]);
+
+  baseWeeds(s, 4, 78, 82, seed + 17, 0.36);
+  return finish(s, 4, 79, 80, 5);
+}
+
+function buildOuthouse(): Surface {
+  const W = 32, H = 52;
+  const s = new Surface(W, H);
+  const seed = 2301;
+
+  wallPlank(s, 4, 14, 24, 30, P.WOOD, seed, 6);
+  foundation(s, 3, 44, 26, 4, seed + 3, P.PATH_STONE);
+  roof(s, 1, 5, 30, 8, {
+    ramp: P.ROOF_SLATE, seed: seed + 5, hip: 0, rowH: 4, unitW: 5,
+    mat: 'slate', ridge: false, pent: 'r', moss: 1.2, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 4, 14, 24, 3);
+
+  door(s, 10, 18, 12, 26, 'plank', { ramp: P.WOOD_LIGHT, seed: seed + 7, step: false });
+  // crescent vent
+  s.ellipse(13, 22, 7, 7, P.OUTLINE);
+  s.ellipse(15, 22, 5, 6, P.WOOD_LIGHT[2]);
+  s.ellipseOutline(13, 22, 7, 7, P.WOOD[0], 0.6);
+  // it leans, very slightly
+  s.px(3, 20, P.WOOD[1]); s.px(28, 42, P.WOOD[0]);
+  ivy(s, 25, 26, 5, 18, seed + 9);
+  baseWeeds(s, 2, 47, 28, seed + 11, 0.4);
+  return finish(s, 2, 48, 26, 4);
+}
+
+function buildWellhouse(): Surface {
+  const W = 56, H = 68;
+  const s = new Surface(W, H);
+  const seed = 2401;
+
+  // stone drum
+  wallStone(s, 12, 40, 32, 18, P.STONE_WALL, seed, 5);
+  s.ellipse(11, 36, 34, 9, P.STONE_WALL[3]);
+  s.ellipse(12, 37, 32, 7, P.STONE_WALL[1]);
+  s.ellipse(15, 38, 26, 5, '#141225');
+  s.ellipseOutline(11, 36, 34, 9, P.STONE_WALL[4], 0.8);
+  // water glint down the shaft
+  s.ellipse(20, 39, 14, 3, P.WATER[1], 0.85);
+  s.px(24, 40, P.WATER[4], 0.8);
+  s.hline(12, 57, 32, P.OUTLINE, 0.7);
+
+  post(s, 8, 22, 4, 34, P.WOOD, false);
+  post(s, 44, 22, 4, 34, P.WOOD, false);
+  roof(s, 2, 6, 52, 16, {
+    ramp: P.ROOF_SLATE, seed: seed + 3, hip: 12, rowH: 4, unitW: 5,
+    mat: 'shingle', ridge: true, moss: 0.8, fascia: true, fasciaRamp: P.WOOD,
+  });
+  // winding drum, crank and bucket
+  s.rect(12, 26, 32, 5, P.WOOD_LIGHT[2]);
+  s.hline(12, 26, 32, P.WOOD_LIGHT[4]);
+  s.hline(12, 30, 32, P.WOOD[0]);
+  for (let i = 14; i < 42; i += 3) s.vline(i, 27, 3, P.WOOD[1], 0.5);
+  s.ellipse(44, 25, 7, 7, P.IRON[2]);
+  s.ellipse(45, 26, 5, 5, P.IRON[3]);
+  s.px(50, 28, P.WOOD_LIGHT[3]); s.px(51, 29, P.WOOD_LIGHT[2]);
+  for (let j = 0; j < 6; j++) s.px(28, 31 + j, pick(P.ROPE, j % 2 ? 3 : 2));
+  bucket(s, 25, 37, seed + 5);
+
+  baseWeeds(s, 8, 58, 40, seed + 7, 0.4);
+  return finish(s, 10, 58, 36, 6);
+}
+
+function buildStallFrame(): Surface {
+  const W = 68, H = 60;
+  const s = new Surface(W, H);
+  const seed = 2501;
+
+  post(s, 4, 16, 4, 34, P.WOOD, false);
+  post(s, 60, 16, 4, 34, P.WOOD, false);
+  awning(s, 0, 4, 68, 13, P.CANVAS, P.ROOF_RED, seed, true, 7);
+  // ridge pole and ties
+  s.hline(0, 3, 68, P.WOOD[2]);
+  s.hline(0, 2, 68, P.WOOD[4]);
+  for (let x = 4; x < 64; x += 7) s.px(x, 17, P.ROPE[2]);
+  shadeRect(s, 6, 18, 56, 4, P.OUTLINE, 0.28);
+
+  // counter
+  s.rect(6, 34, 56, 5, P.WOOD_LIGHT[2]);
+  wallBoard(s, 6, 34, 56, 5, P.WOOD_LIGHT, seed + 3, 5);
+  s.hline(6, 34, 56, P.WOOD_LIGHT[4]);
+  s.hline(6, 38, 56, P.WOOD[0]);
+  wallPlank(s, 8, 39, 52, 11, P.WOOD, seed + 5, 6);
+  shadeRect(s, 8, 39, 52, 3, P.OUTLINE, 0.35);
+  // back shelf
+  s.rect(10, 24, 48, 3, P.WOOD[2]);
+  s.hline(10, 24, 48, P.WOOD[4]);
+  s.hline(10, 26, 48, P.WOOD[0]);
+  for (const bx of [12, 26, 44]) {
+    s.px(bx, 23, P.WOOD[1]); s.px(bx + 1, 23, P.WOOD[1]);
+  }
+  foundation(s, 4, 50, 60, 4, seed + 7, P.PATH_STONE);
+  baseWeeds(s, 3, 53, 62, seed + 9, 0.3);
+  return finish(s, 3, 54, 60, 5);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SOUTH GATE — where Lumen Vale stops and Whisper Woods starts. Stone piers,
+// a timber lintel, a slate cap, and a lantern on each side.
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildGate(closed: boolean): Surface {
+  const W = 96, H = 108;
+  const s = new Surface(W, H);
+  const seed = 7101 + (closed ? 17 : 0);
+
+  // piers
+  for (const px0 of [8, 66]) {
+    wallStone(s, px0, 40, 22, 54, P.STONE_WALL, seed + px0, 6);
+    s.rect(px0 - 2, 36, 26, 4, P.STONE_WALL[2]);
+    s.hline(px0 - 2, 36, 26, P.STONE_WALL[4]);
+    s.hline(px0 - 2, 39, 26, P.STONE_WALL[0]);
+    foundation(s, px0 - 2, 94, 26, 8, seed + px0 + 3, P.PATH_STONE);
+    beamV(s, px0 + 3, 30, 4, 8, P.WOOD, seed + px0, 2);
+    beamV(s, px0 + 15, 30, 4, 8, P.WOOD, seed + px0 + 1, 2);
+  }
+
+  // the gap
+  if (closed) {
+    wallPlank(s, 30, 46, 36, 48, P.WOOD, seed + 5, 6);
+    s.vline(48, 46, 48, P.WOOD[0]);
+    s.vline(47, 46, 48, P.WOOD[3], 0.5);
+    beamDiag(s, 31, 90, 45, 50, P.WOOD, 3, 1.4);
+    beamDiag(s, 51, 50, 63, 90, P.WOOD, 3, 1.4);
+    // the heavy crossbar
+    beamH(s, 26, 62, 44, 7, P.WOOD_LIGHT, seed + 7, 2.2);
+    for (const bx of [30, 40, 54, 64]) {
+      s.px(bx, 63, P.IRON[4]); s.px(bx, 64, P.IRON[2]); s.px(bx + 1, 64, P.IRON[0]);
+    }
+    s.rect(44, 60, 8, 11, P.IRON[2]);
+    s.hline(44, 60, 8, P.IRON[4]);
+    s.hline(44, 70, 8, P.IRON[0]);
+    s.px(47, 65, P.OUTLINE); s.px(48, 65, P.OUTLINE);
+    shadeRect(s, 30, 46, 36, 3, P.OUTLINE, 0.45);
+    foundation(s, 28, 94, 40, 8, seed + 9, P.PATH_STONE);
+  } else {
+    // the road running through, seen in the gap
+    for (let j = 0; j < 20; j++) {
+      for (let i = 0; i < 36; i++) {
+        if (h2(30 + i, 82 + j, seed) > 0.55) s.px(30 + i, 82 + j, pick(P.PATH_STONE, 2 + (j % 3 === 0 ? 1 : 0)));
+        else s.px(30 + i, 82 + j, pick(P.PATH_STONE, 1.4));
+      }
+    }
+    shadeRect(s, 30, 82, 36, 4, P.OUTLINE, 0.35);
+    s.hline(30, 101, 36, P.OUTLINE, 0.5);
+  }
+
+  // lintel + cap roof
+  beamH(s, 4, 26, 88, 8, P.WOOD, seed + 11, 2);
+  s.hline(4, 26, 88, P.WOOD_LIGHT[4]);
+  for (let x = 10; x < 86; x += 12) {
+    s.px(x, 34, P.WOOD[2]); s.px(x + 1, 34, P.WOOD[3]); s.px(x, 35, P.WOOD[0]);
+  }
+  roof(s, 0, 8, 96, 18, {
+    ramp: P.ROOF_SLATE, seed: seed + 13, hip: 24, rowH: 4, unitW: 5,
+    mat: 'slate', ridge: true, moss: 0.5, fascia: true, fasciaRamp: P.WOOD,
+  });
+  eaveShadow(s, 6, 26, 84, 3);
+
+  // town crest board bolted to the lintel
+  signBoard(s, 38, 14, 20, 14, 'herb', seed + 15, P.CANVAS);
+  lanternHanging(s, 24, 38, 2, 4);
+  lanternHanging(s, 65, 38, 3, 4);
+  ivy(s, 8, 42, 8, 52, seed + 17);
+  ivy(s, 82, 46, 6, 48, seed + 19);
+
+  baseWeeds(s, 4, 101, 88, seed + 21, 0.4);
+  return finish(s, 5, 102, 86, 6);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ECHO SHRINE ENTRANCE — where town warmth ends. Same palette, no amber, no
+// timber, no lived-in clutter. Cracked megaliths half-eaten by roots, cold
+// cyan carving light, and a doorway with nothing behind it.
+// ════════════════════════════════════════════════════════════════════════════
+
+function runeGlyph(s: Surface, x: number, y: number, kind: number, alpha: number) {
+  const g = P.ECHO_RUNE;
+  const strokes: Array<Array<[number, number, number, number]>> = [
+    [[0, 0, 0, 6], [0, 0, 4, 0], [0, 3, 3, 3]],
+    [[2, 0, 2, 6], [0, 2, 4, 2], [0, 5, 4, 5]],
+    [[0, 0, 4, 4], [4, 0, 0, 4], [2, 5, 2, 6]],
+    [[0, 1, 0, 5], [4, 1, 4, 5], [0, 0, 4, 0], [2, 2, 2, 4]],
+    [[0, 6, 2, 0], [2, 0, 4, 6], [1, 4, 3, 4]],
+  ];
+  for (const [ax, ay, bx, by] of strokes[kind % strokes.length]) {
+    s.line(x + ax, y + ay, x + bx, y + by, g, alpha);
+  }
+  s.pxOver(x + 2, y + 3, P.ECHO_SPARK, alpha * 0.7);
+}
+
+function buildShrineEntrance(): Surface {
+  const W = 104, H = 108;
+  const s = new Surface(W, H);
+  const seed = 8101;
+  const stone = P.SHRINE_OUTER;
+
+  // ── the two jambs, leaning very slightly inward
+  for (const [jx, jw] of [[12, 26], [66, 26]] as const) {
+    wallStone(s, jx, 30, jw, 66, stone, seed + jx, 8);
+    // deep vertical fluting
+    for (let fx = jx + 4; fx < jx + jw - 3; fx += 8) {
+      for (let j = 0; j < 62; j++) {
+        s.pxOver(fx, 32 + j, stone[0], 0.4);
+        s.pxOver(fx + 1, 32 + j, stone[3], 0.25);
+      }
+    }
+    // carved rune column
+    for (let i = 0; i < 5; i++) {
+      runeGlyph(s, jx + Math.floor(jw / 2) - 2, 40 + i * 11, i + (jx > 40 ? 2 : 0), 0.5);
+    }
+  }
+
+  // ── cracked lintel
+  wallStone(s, 6, 14, 92, 20, stone, seed + 3, 7);
+  s.hline(6, 14, 92, stone[4], 0.75);
+  s.hline(6, 15, 92, stone[3], 0.4);
+  s.hline(6, 33, 92, P.OUTLINE, 0.6);
+  // the crack running down through it
+  let crackX = 62;
+  for (let j = 0; j < 20; j++) {
+    s.pxOver(crackX, 14 + j, P.OUTLINE, 0.85);
+    s.pxOver(crackX + 1, 14 + j, stone[1], 0.5);
+    if (h2(crackX, j, seed) > 0.55) crackX += h2(j, crackX, seed + 1) > 0.5 ? 1 : -1;
+  }
+  for (let i = 0; i < 4; i++) runeGlyph(s, 18 + i * 17, 20, i, 0.42);
+
+  // ── tympanum: the solid block the arch is cut out of
+  wallStone(s, 36, 30, 32, 62, stone, seed + 51, 7);
+  // ── the carved arch over the doorway: concentric voussoir courses
+  for (let ring = 0; ring < 4; ring++) {
+    const rw = 24 + ring * 6;
+    const rx = 52 - Math.floor(rw / 2);
+    const ry = 46 - Math.floor(rw / 2);
+    for (let j = 0; j < Math.floor(rw / 2) + 2; j++) {
+      for (let i = 0; i < rw; i++) {
+        const nx = (i - rw / 2 + 0.5) / (rw / 2);
+        const ny = (j - rw / 2 + 0.5) / (rw / 2);
+        const d = nx * nx + ny * ny;
+        if (d > 1 || d < 0.62) continue;
+        let k = 2.2 - ring * 0.25;
+        if (nx < -0.25 && ny < -0.1) k += 1.2;
+        else if (nx > 0.35) k -= 1.1;
+        if ((i + j * 3) % 7 === 0) k -= 0.9;
+        s.pxOver(rx + i, ry + j, pick(stone, k));
+      }
+    }
+  }
+  // keystone
+  s.rect(48, 28, 9, 9, stone[2]);
+  s.hline(48, 28, 9, stone[4]);
+  s.vline(56, 28, 9, stone[0]);
+  runeGlyph(s, 50, 30, 2, 0.85);
+
+  // ── the doorway: cold, empty, and slightly wrong. Its head is a true arch
+  //    cut through the tympanum, not a rectangle.
+  for (let j = 0; j < 9; j++) {
+    for (let i = 0; i < 16; i++) {
+      const nx = (i - 7.5) / 8, ny = (j - 8) / 8.5;
+      if (nx * nx + ny * ny > 1) continue;
+      s.px(44 + i, 38 + j, pick(P.SHRINE_FLOOR, 1.2 - j * 0.08));
+    }
+  }
+  shadeRect(s, 44, 38, 16, 4, P.OUTLINE, 0.55);
+  // crisp carved edge: lit on the upper-left of the arch, cut dark on the right
+  for (let a = 0; a <= 64; a++) {
+    const th = Math.PI * (a / 64);
+    const ex = Math.round(51.5 - Math.cos(th) * 8.6);
+    const ey = Math.round(46.5 - Math.sin(th) * 9.2);
+    s.pxOver(ex, ey, th < 1.9 ? stone[4] : stone[1], 0.85);
+    s.pxOver(ex, ey + 1, th < 1.9 ? stone[3] : stone[0], 0.5);
+  }
+  s.vline(43, 46, 50, stone[4], 0.7);
+  s.vline(60, 46, 50, stone[0], 0.8);
+  door(s, 44, 46, 16, 50, 'shrine', { seed: seed + 5, step: false });
+  // faint violet breath leaking out of it
+  for (let j = 0; j < 16; j++) {
+    for (let i = 0; i < 20; i++) {
+      if (h2(42 + i, 46 + j, seed + 7) > 0.7) s.pxOver(42 + i, 48 + j, P.ECHO_VIOLET[3], 0.11);
+    }
+  }
+  for (let d = 1; d <= 4; d++) {
+    for (let i = -d; i < 16 + d; i++) s.pxOver(44 + i, 46 - d, P.ECHO_VIOLET[2], [0, 0.1, 0.06, 0.03, 0.02][d]);
+    for (let j = 0; j < 50; j++) {
+      s.pxOver(44 - d, 46 + j, P.ECHO_VIOLET[2], [0, 0.08, 0.05, 0.02, 0.01][d]);
+      s.pxOver(59 + d, 46 + j, P.ECHO_VIOLET[2], [0, 0.08, 0.05, 0.02, 0.01][d]);
+    }
+  }
+  // threshold slab, sunk and cracked
+  s.rect(36, 92, 32, 6, P.SHRINE_STONE[1]);
+  s.hline(36, 92, 32, P.SHRINE_STONE[3]);
+  s.hline(37, 93, 30, P.SHRINE_STONE[2]);
+  s.hline(36, 97, 32, P.OUTLINE, 0.85);
+  s.vline(50, 92, 6, P.OUTLINE, 0.7);
+  s.vline(58, 92, 6, P.OUTLINE, 0.5);
+
+  // ── roots. The forest is taking this back, and it started at the top.
+  const r = rng(seed + 9);
+  const root = (x0: number, y0: number, len: number, dx: number, thick = 3) => {
+    let x = x0, y = y0;
+    for (let i = 0; i < len; i++) {
+      for (let t = 0; t < thick; t++) {
+        s.pxOver(x + t, y, pick(P.WOODS_BARK, t === 0 ? 3.4 : t === thick - 1 ? 0.5 : 2));
+      }
+      y += 1;
+      if (r.chance(0.5)) x += dx > 0 ? 1 : -1;
+      // tendrils branching off
+      if (r.chance(0.1)) {
+        let bx = x + (dx > 0 ? thick : -1);
+        for (let k = 0; k < r.int(3, 8); k++) {
+          s.pxOver(bx, y + k, P.WOODS_BARK[3]);
+          s.pxOver(bx + 1, y + k, P.WOODS_BARK[1]);
+          bx += dx > 0 ? 1 : -1;
+        }
+      }
+    }
+  };
+  // heavy roots spilling over the lintel and down the left jamb
+  for (let i = 0; i < 4; i++) root(8 + i * 7, 8 + r.int(0, 4), 34 + r.int(0, 38), -1, 3 + (i % 2));
+  for (let i = 0; i < 3; i++) root(70 + i * 9, 4 + r.int(0, 5), 20 + r.int(0, 22), 1, 3);
+  // a root running along the top of the lintel like a knuckle
+  for (let i = 0; i < 78; i++) {
+    const rx = 10 + i;
+    const ry = 12 + Math.round(Math.sin(i * 0.22) * 2.2);
+    s.pxOver(rx, ry, P.WOODS_BARK[3]);
+    s.pxOver(rx, ry + 1, P.WOODS_BARK[2]);
+    s.pxOver(rx, ry + 2, P.WOODS_BARK[0]);
+    if (h2(rx, ry, seed) > 0.85) s.pxOver(rx, ry - 1, P.MOSS[2], 0.7);
+  }
+  for (let i = 0; i < 70; i++) {
+    const mx = r.int(4, 98), my = r.int(14, 96);
+    if (s.alphaAt(mx, my) === 0) continue;
+    if (h2(mx, my, seed + 11) < 0.5) continue;
+    s.pxOver(mx, my, r.chance(0.5) ? P.MOSS[1] : P.MOSS[2], 0.6);
+    s.pxOver(mx, my - 1, P.MOSS[3], 0.3);
+  }
+
+  // ── fallen blocks and grass at the base
+  for (const [bx, by, bw, bh] of [[6, 88, 14, 9], [84, 90, 16, 8], [22, 92, 11, 6]] as const) {
+    wallStone(s, bx, by, bw, bh, stone, seed + bx, 5);
+    s.hline(bx, by, bw, stone[4], 0.7);
+    s.hline(bx, by + bh - 1, bw, P.OUTLINE, 0.8);
+  }
+  // the growth here is the woods' colour, not the town's
+  baseWeeds(s, 4, 98, 96, seed + 13, 0.45, P.WOODS_GRASS);
+  // broken stones missing from the top edge, so the silhouette is not a box
+  const gone = rng(seed + 17);
+  for (let i = 0; i < 7; i++) {
+    const bx = 8 + gone.int(0, 84), bw = gone.int(3, 8), bh = gone.int(1, 3);
+    for (let j = 0; j < bh; j++) for (let k = 0; k < bw; k++) {
+      const idx = ((14 + j) * s.w + bx + k) * 4;
+      s.data[idx + 3] = 0;
+    }
+  }
+  return finish(s, 6, 98, 92, 8);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// OVERLAYS — awnings, signs, smoke and doors that map authors layer onto
+// walls to make a street look like it was built by different people.
+// ════════════════════════════════════════════════════════════════════════════
+
+function awningSprite(w: number, h: number, a: R, bStripe: R, seed: number, period: number): Surface {
+  const s = new Surface(w, h + 4);
+  // mounting rail
+  s.rect(0, 0, w, 2, P.WOOD[2]);
+  s.hline(0, 0, w, P.WOOD[4]);
+  s.hline(0, 1, w, P.WOOD[0]);
+  awning(s, 0, 2, w, h, a, bStripe, seed, true, period);
+  // stay bars folding back to the wall
+  for (const bx of [1, w - 2]) {
+    for (let j = 0; j < h - 3; j++) s.px(bx, 2 + j, P.IRON[j < 2 ? 3 : 1], 0.8);
+  }
+  outlineDownRight(s, P.OUTLINE, 0.7);
+  return s;
+}
+
+function signSprite(kind: SignKind, seed: number, face: R): Surface {
+  const s = new Surface(34, 40);
+  hangingSign(s, 2, 4, 14, kind, 22, 24, seed, 1, face);
+  outlineDownRight(s, P.OUTLINE, 0.8);
+  rimLight(s, P.PLASTER[4], 0.14);
+  return s;
+}
+
+/** Four-frame chimney smoke: puffs rising, drifting right, thinning out. */
+function smokeFrames(): Surface[] {
+  const W = 28, H = 40;
+  return [0, 1, 2, 3].map((f) => {
+    const s = new Surface(W, H);
+    const r = rng(6600 + f * 131);
+    for (let p = 0; p < 5; p++) {
+      // each puff's age within the loop
+      const age = ((p * 0.25 + f * 0.25) % 1);
+      const y = H - 4 - age * 34;
+      const x = 8 + age * age * 12 + Math.sin(age * 6 + p) * 2;
+      const rad = 3 + age * 7;
+      const alpha = 0.92 * (1 - age * 0.85);
+      const tone = 2 + Math.round(age * 2);
+      for (let j = -rad; j <= rad; j++) {
+        for (let i = -rad; i <= rad; i++) {
+          const d = (i * i) / (rad * rad) + (j * j) / (rad * rad * 0.62);
+          if (d > 1) continue;
+          // ragged edge, solid core — a puff, not a gradient blob
+          if (d > 0.55 && h2(Math.round(x + i), Math.round(y + j), 77 + p) < 0.42) continue;
+          const k = tone + (i < 0 && j < 0 ? 1.2 : i > rad * 0.4 ? -0.9 : 0);
+          s.px(Math.round(x + i), Math.round(y + j), pick(P.SMOKE_PUFF, k), alpha * (d > 0.7 ? 0.55 : 1));
+        }
+      }
+      if (age < 0.5) {
+        s.px(Math.round(x - 1), Math.round(y - rad + 1), P.SMOKE_PUFF[4], alpha * 0.9);
+        s.px(Math.round(x - 2), Math.round(y - rad + 2), P.SMOKE_PUFF[4], alpha * 0.6);
+      }
+      void r;
+    }
+    return s;
+  });
+}
+
+function doorSprite(style: DoorStyle, ramp: R, seed: number): Surface {
+  const s = new Surface(20, 30);
+  // a scrap of wall so the door has a jamb to sit in
+  wallPlaster(s, 0, 0, 20, 30, P.PLASTER, { seed: seed + 1, damp: false, grad: 0.6 });
+  door(s, 3, 4, 14, 24, style, {
+    ramp, seed, step: true, catflap: style === 'plank',
+    knocker: style === 'panel', glazed: style === 'stable' ? false : style === 'panel',
+    architrave: P.WOOD_LIGHT,
+  });
+  outlineDownRight(s, P.OUTLINE, 0.8);
+  return s;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 
 export function registerBuildings(b: ArtBuild): void {
+  // landmarks
   b.add('prop/build/inn', buildInn());
+  b.add('prop/build/workshop', buildWorkshop());
+  b.add('prop/build/courier', buildCourier());
+  b.add('prop/build/store', buildStore());
+  b.add('prop/build/belltower', buildBellTower());
+
+  // the swinging-bell overlay, aligned to (belltower.x + 20, belltower.y + 44)
+  b.addStrip('prop/build/belltower_bell', bellFrames(), {
+    key: 'belltower_ring', frameRate: 6, repeat: -1,
+  });
+
+  // cottages
+  b.add('prop/build/house_a', buildHouseA());
+  b.add('prop/build/house_b', buildHouseB());
+  b.add('prop/build/house_c', buildHouseC());
+  b.add('prop/build/house_d', buildHouseD());
+  b.add('prop/build/house_e', buildHouseE());
+
+  // outbuildings
+  b.add('prop/build/shed', buildShed());
+  b.add('prop/build/barn_small', buildBarnSmall());
+  b.add('prop/build/outhouse', buildOuthouse());
+  b.add('prop/build/wellhouse', buildWellhouse());
+  b.add('prop/build/stall_frame', buildStallFrame());
+
+  // gate + shrine
+  b.add('prop/build/south_gate', buildGate(false));
+  b.add('prop/build/south_gate_closed', buildGate(true));
+  b.add('prop/build/shrine_entrance', buildShrineEntrance());
+
+  // ── overlays ─────────────────────────────────────────────────────────────
+  b.add('prop/build/awning_wide_red', awningSprite(48, 13, P.CANVAS, P.ROOF_RED, 101, 8));
+  b.add('prop/build/awning_wide_teal', awningSprite(48, 13, P.CANVAS, P.ROOF_TEAL, 103, 6));
+  b.add('prop/build/awning_wide_blue', awningSprite(48, 13, P.CANVAS, P.ROOF_BLUE, 105, 8));
+  b.add('prop/build/awning_small_plum', awningSprite(32, 11, P.CANVAS, P.ROOF_PLUM, 107, 6));
+  b.add('prop/build/awning_small_gold', awningSprite(32, 11, P.CANVAS, P.UI_GOLD, 109, 8));
+
+  b.add('prop/build/sign_inn', signSprite('lantern', 201, P.CANVAS));
+  b.add('prop/build/sign_bakery', signSprite('loaf', 203, P.CANVAS));
+  b.add('prop/build/sign_smith', signSprite('anvil', 205, P.PLASTER));
+  b.add('prop/build/sign_herbalist', signSprite('herb', 207, P.CANVAS));
+  b.add('prop/build/sign_tailor', signSprite('spool', 209, P.PLASTER));
+  b.add('prop/build/sign_fishmonger', signSprite('fish', 211, P.CANVAS));
+  b.add('prop/build/sign_books', signSprite('book', 213, P.PLASTER));
+  b.add('prop/build/sign_courier', signSprite('parcel', 215, P.CANVAS));
+  b.add('prop/build/sign_cobbler', signSprite('boot', 217, P.PLASTER));
+
+  b.addStrip('prop/build/chimney_smoke', smokeFrames(), {
+    key: 'chimney_smoke', frameRate: 4, repeat: -1,
+  });
+
+  b.add('prop/build/door_plank', doorSprite('plank', P.WOOD_LIGHT, 301));
+  b.add('prop/build/door_panel', doorSprite('panel', P.ROOF_TEAL, 303));
+  b.add('prop/build/door_arch', doorSprite('arch', P.WOOD, 305));
+  b.add('prop/build/door_stable', doorSprite('stable', P.WOOD_LIGHT, 307));
 }

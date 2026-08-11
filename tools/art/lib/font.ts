@@ -1546,55 +1546,100 @@ function scaled(src: Surface, factor: number): Surface {
   return s;
 }
 
+const PANGRAM = 'Sphinx of black quartz, judge my vow!';
+const DIALOGUE = 'The bell wasn’t frightening him — he learned what it meant.';
+
 export function buildSpecimen(body: BuiltFont, display: BuiltFont): Surface {
-  const W = 520;
   const ink = P.UI_INK;
   const gold = P.UI_GOLD[2];
-
-  // Everything is composed at 1x into strips, then some strips are blown up.
-  const strip = (h: number) => new Surface(W, h);
   const parts: Array<{ s: Surface; scale: number; bg: string }> = [];
 
   const line = (text: string, f: BuiltFont, tint: string, scale: number, bg: string) => {
-    const s = strip(f.spec.lineHeight + 2);
+    const w = textWidth(f, text) + 8;
+    const s = new Surface(w, f.spec.lineHeight + 2);
     drawText(s, f, 4, 1, text, tint);
     parts.push({ s, scale, bg });
   };
+  const gap = () => parts.push({ s: new Surface(1, 2), scale: 1, bg: P.UI_PARCHMENT[1] });
 
-  const PANGRAM = 'Sphinx of black quartz, judge my vow!';
-  const PANGRAM2 = 'THE QUICK BROWN FOX JUMPS OVER A LAZY DOG';
-  const DIALOGUE = 'The bell wasn’t frightening him — he learned what it meant.';
-
-  line('font_body  cap 7  —  1x on parchment', body, ink, 1, P.UI_PARCHMENT[3]);
+  // 1x is the only scale that matters for shipping; the blown-up rows exist so
+  // a critic can see *why* a 1x row does or doesn't work.
+  line('font_body — cap 7, x-height 5, 2px descender. 1x:', body, ink, 1, P.UI_PARCHMENT[3]);
   line(PANGRAM, body, ink, 1, P.UI_PARCHMENT[3]);
-  line(PANGRAM2, body, ink, 1, P.UI_PARCHMENT[3]);
+  line('THE QUICK BROWN FOX JUMPS OVER A LAZY DOG', body, ink, 1, P.UI_PARCHMENT[3]);
   line(DIALOGUE, body, ink, 1, P.UI_PARCHMENT[3]);
   line('SERA: 0123456789 (12/30) 45% #3 [ok] a@b &c *d +e <f> …', body, ink, 1, P.UI_PARCHMENT[3]);
-  line('illIl1 rn m cl d vv w O0 Q@ jump quiz gy pq', body, ink, 1, P.UI_PARCHMENT[3]);
+  line('illIl1 rn/m cl/d vv/w O/0 “quoted” it’s — long-ish', body, ink, 1, P.UI_PARCHMENT[3]);
   line(DIALOGUE, body, P.UI_PARCHMENT[4], 1, P.UI_PANEL[1]);
   line('Insight unlocked: CLASSICAL CONDITIONING', body, gold, 1, P.UI_PANEL[1]);
-
-  line('2x', body, ink, 2, P.UI_PARCHMENT[3]);
+  gap();
+  line(PANGRAM, body, ink, 2, P.UI_PARCHMENT[3]);
   line(DIALOGUE, body, ink, 2, P.UI_PARCHMENT[3]);
+  gap();
+  line(PANGRAM, body, ink, 4, P.UI_PARCHMENT[3]);
   line('illIl1 rn m cl d Whisper Woods', body, ink, 4, P.UI_PARCHMENT[3]);
+  gap();
 
+  line('font_display — cap 11, wedge stems, 1px inner highlight. 1x:', body, ink, 1, P.UI_PARCHMENT[3]);
   line('LUMEN VALE — FESTIVAL PLAZA', display, gold, 1, P.UI_PANEL[1]);
   line('MEMORY THREADS 0123456789', display, gold, 1, P.UI_PANEL[1]);
-  line('WHY?! (X) “OK”, …', display, P.UI_PARCHMENT[4], 1, P.UI_PANEL[1]);
-  line('ECHO SHRINE', display, gold, 2, P.UI_PANEL[1]);
-  line('AVA TOY', display, gold, 4, P.UI_PANEL[1]);
+  line('WHY?! (X) ’OK’, … CLASSICAL CONDITIONING', display, P.UI_PARCHMENT[4], 1, P.UI_PANEL[1]);
+  gap();
+  line('ECHO SHRINE 2x', display, gold, 2, P.UI_PANEL[1]);
+  line('AVA TOY 4x', display, gold, 4, P.UI_PANEL[1]);
 
   let h = 8;
-  for (const p of parts) h += p.s.h * p.scale + 3;
-  const out = new Surface(W, h, P.UI_PARCHMENT[2]);
+  let w = 0;
+  for (const p of parts) { h += p.s.h * p.scale + 3; w = Math.max(w, p.s.w * p.scale); }
+  const out = new Surface(w, h, P.UI_PARCHMENT[1]);
   let y = 4;
   for (const p of parts) {
     const sh = p.s.h * p.scale;
-    out.rect(0, y, W, sh, p.bg);
+    out.rect(0, y, w, sh, p.bg);
     out.blit(p.scale === 1 ? p.s : scaled(p.s, p.scale), 0, y);
     y += sh + 3;
   }
   return out;
+}
+
+/**
+ * A 480x270 mock at 1x: exactly what the player sees. Dialogue set in
+ * font_body inside a real-width box, a location banner in font_display.
+ * If it doesn't read here it doesn't read.
+ */
+export function buildInGameMock(body: BuiltFont, display: BuiltFont): Surface {
+  const s = new Surface(480, 270, P.GRASS[2]);
+  for (let y = 0; y < 270; y++) for (let x = 0; x < 480; x++) {
+    if ((x * 7 + y * 13) % 11 === 0) s.px(x, y, P.GRASS[1]);
+    if ((x * 5 + y * 3) % 23 === 0) s.px(x, y, P.GRASS[3]);
+  }
+
+  // Location banner, top centre.
+  const bw = textWidth(display, 'WHISPER WOODS') + 24;
+  s.rect(240 - bw / 2, 14, bw, 21, P.UI_PANEL[1]);
+  s.rectOutline(240 - bw / 2, 14, bw, 21, P.UI_GOLD[1]);
+  drawTextCentered(s, display, 240, 18, 'WHISPER WOODS', P.UI_GOLD[3]);
+
+  // Dialogue box, bottom, at the size the runtime will actually use.
+  const bx = 24, by = 186, bwid = 432, bh = 62;
+  s.rect(bx, by, bwid, bh, P.UI_PARCHMENT[3]);
+  s.rectOutline(bx, by, bwid, bh, P.UI_INK);
+  s.rectOutline(bx + 1, by + 1, bwid - 2, bh - 2, P.UI_GOLD[2]);
+  s.rect(bx + 8, by - 10, textWidth(body, 'SERA') + 12, 14, P.UI_PANEL[1]);
+  drawText(s, body, bx + 14, by - 8, 'SERA', P.UI_GOLD[3]);
+  const lines = [
+    'The bell wasn’t frightening him.',
+    'Somewhere along the way he learned what it meant —',
+    'and now he can’t hear it without bracing for the crash.',
+  ];
+  lines.forEach((t, i) => drawText(s, body, bx + 10, by + 10 + i * body.spec.lineHeight, t, P.UI_INK));
+
+  // HUD-scale numerals and a heading, the other two places type appears.
+  drawText(s, body, 8, 8, 'HP 6/6   Insights 2/3   Quests 1', P.UI_PARCHMENT[4]);
+  drawTextCentered(s, display, 240, 96, 'PROACTIVE INTERFERENCE', P.UI_GOLD[4]);
+  drawTextCentered(s, body, 240, 116,
+    'Older information interferes with newer information.', P.UI_PARCHMENT[4]);
+  return s;
 }
 
 export function writeSpecimen(path: string, body: BuiltFont, display: BuiltFont): void {

@@ -127,6 +127,8 @@ async function capture(page: Page, spec: ShotSpec, base: string): Promise<{ erro
 
   mkdirSync(OUT, { recursive: true });
   await page.screenshot({ path: join(OUT, `${spec.name}.png`) });
+  // A compressed copy for the workbench page, which embeds images inline.
+  await page.screenshot({ path: join(OUT, `${spec.name}.jpg`), type: 'jpeg', quality: 74 });
 
   const state = await page.evaluate(() => {
     const p = (window as any).__psyche;

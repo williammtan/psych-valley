@@ -1,0 +1,35 @@
+{
+  "updated": "2026-08-11T21:00:00Z",
+  "phase": "Wave 1 — art production",
+  "headline": "Engine, art pipeline and capture harness are online. Eleven art modules are in production in parallel; maps, quests and the dungeon follow once art lands.",
+  "areas": [
+    { "name": "Art pipeline", "state": "good", "note": "Code-generated tiles + atlas, blob autotiler, inspection sheets" },
+    { "name": "Player movement", "state": "building", "note": "Corner-assist collision, input buffering, dash i-frames" },
+    { "name": "Town terrain", "state": "critiqued", "note": "Seamless tone-matched grass; path/cobble still mechanical" },
+    { "name": "Characters", "state": "building" },
+    { "name": "Buildings", "state": "building" },
+    { "name": "Town props", "state": "building" },
+    { "name": "Interiors", "state": "building" },
+    { "name": "Echo Shrine art", "state": "building" },
+    { "name": "Enemies + boss art", "state": "building" },
+    { "name": "VFX", "state": "building" },
+    { "name": "UI + fonts", "state": "building" },
+    { "name": "Whisper Woods art", "state": "building" },
+    { "name": "Festival art", "state": "building" },
+    { "name": "Lumen Vale map", "state": "not-started", "note": "Scaffold only — full composition pass pending" },
+    { "name": "Quest 1 — Pip", "state": "not-started" },
+    { "name": "Quest 2 — Oren", "state": "not-started" },
+    { "name": "Quest 3 — Lantern Trial", "state": "not-started" },
+    { "name": "Echo Shrine dungeon", "state": "not-started" },
+    { "name": "The Echo boss", "state": "not-started" },
+    { "name": "Audio", "state": "not-started" }
+  ],
+  "findings": [
+    { "area": "Rendering", "severity": "blocker", "status": "fixed", "text": "Phaser getFrame() returns the __BASE frame for unknown names, so every missing-art guard was drawing the entire 2048px atlas across the scene." },
+    { "area": "Terrain", "severity": "major", "status": "fixed", "text": "Tile families were keyed by leaf name, so tile/woods/grass_* merged with tile/town/grass_* and the town field rendered as a two-tone checkerboard." },
+    { "area": "Terrain", "severity": "major", "status": "fixed", "text": "Grass variants were tone-mismatched and non-periodic, producing visible per-tile seams and brightness checkerboarding." },
+    { "area": "Terrain", "severity": "minor", "status": "open", "text": "Flagstone path pattern is mechanical and too light against the grass; needs irregular stone shapes and a warmer, dirtier tone." },
+    { "area": "Lumen Vale", "severity": "major", "status": "open", "text": "Scaffold map only: large empty grass fields, no landmark hierarchy, buildings not yet integrated into terrain." }
+  ],
+  "comparisons": []
+}

@@ -57,7 +57,7 @@ function volume(s: Surface, lit: string, dark: string, litA = 0.45, darkA = 0.5)
 }
 
 /** Hit flash — used by every hurt frame so damage feedback is uniform. */
-function flashed(s: Surface, amount: number, color = '#ffe6dc'): Surface {
+function flashed(s: Surface, amount: number, color = P.HIT_FLASH): Surface {
   return s.clone().tint(color, amount);
 }
 
@@ -297,7 +297,7 @@ function brambleFrame(
   const body = brambleBody(p);
   // Flash the body *before* sealing, so a hit frame keeps its dark silhouette
   // instead of turning into a white smear.
-  if (fl) body.tint(fl.col ?? '#ffe6dc', fl.amt);
+  if (fl) body.tint(fl.col ?? P.HIT_FLASH, fl.amt);
   seal(body, P.ECHO_GLOW, 0.34, false);
   const out = new Surface(BR_W, BR_H);
   contact(out, 11 + (p.dx ?? 0) * 0.5, BR_GROUND + 2, 13 + Math.round(((p.rx ?? 6.2) - 6.2) * 2), 4, 0.32);
@@ -1126,23 +1126,70 @@ interface EcPose {
   seed?: number;
 }
 
+/**
+ * The layout is a *figure*: wide skirt, narrower waist, a shoulder line, a
+ * small head. Small lumps ride the boundary rather than the interior — that
+ * is what makes the outline boil instead of the inside wobbling invisibly.
+ */
 function echoBalls(p: EcPose): Ball[] {
   const t = p.t;
   const up = p.upright ?? 0;
   const slump = p.slump ?? 0;
-  const churn = (1 - (p.hard ?? 0)) * (1 - up * 0.65);
+  const churn = (1 - (p.hard ?? 0)) * (1 - up * 0.6);
   const lean = (p.lean ?? 0) + slump * 5;
-  const sag = slump * 6;
-  return [
-    { x: EC_CX + lean * 0.2, y: 56 + sag * 0.4, rx: 21 - up * 5 + slump * 4, ry: 11 - up + slump * 2 },
-    { x: EC_CX + lean * 0.5, y: 42 + sag * 0.6, rx: 15 - up * 3, ry: 14 + up * 2 - slump * 3 },
-    { x: EC_CX - 1 + lean + Math.sin(t) * churn * 2, y: 24 - up * 5 + sag, rx: 10 - up * 2, ry: 11 - slump * 2 },
-    { x: 21 + lean * 0.6 + Math.sin(t * 1.3) * churn * 2.5, y: 34 + sag * 0.8, rx: 8 - up * 3, ry: 7, w: 0.85 },
-    { x: 43 + lean * 0.6 + Math.cos(t * 1.1) * churn * 2.5, y: 34 + sag * 0.5, rx: 8 - up * 3, ry: 7, w: 0.85 },
-    { x: EC_CX + Math.cos(t * 0.9) * 11 * churn + lean, y: 47 + Math.sin(t * 1.4) * 7 * churn, rx: 4 + 4 * churn, ry: 4 + 3 * churn, w: 0.6 },
-    { x: EC_CX + Math.cos(t * 1.7 + 2) * 13 * churn + lean, y: 32 + Math.sin(t * 0.8 + 1) * 9 * churn, rx: 3 + 4 * churn, ry: 3 + 3 * churn, w: 0.55 },
-    { x: EC_CX + Math.cos(t * 2.1 + 4) * 9 * churn + lean, y: 20 + Math.sin(t * 1.9 + 3) * 6 * churn, rx: 2 + 3.5 * churn, ry: 2 + 3 * churn, w: 0.45 },
+  const sag = slump * 7;
+  const balls: Ball[] = [
+    // skirt pooling on the floor
+    { x: EC_CX + lean * 0.15, y: 59 + sag * 0.3, rx: 24 - up * 6 + slump * 5, ry: 9 - up + slump * 2 },
+    // hips / lower body
+    { x: EC_CX + lean * 0.4, y: 48 + sag * 0.5, rx: 17 - up * 4, ry: 11 - slump },
+    // chest — deliberately narrower than the hips, so there is a waist
+    { x: EC_CX + lean * 0.8, y: 34 + sag * 0.8, rx: 12 - up * 2, ry: 10 - slump * 2 },
+    // shoulders
+    { x: 21 + lean + Math.sin(t * 1.3) * churn * 2.5, y: 30 + sag, rx: 8 - up * 3, ry: 5, w: 0.8 },
+    { x: 43 + lean + Math.cos(t * 1.1) * churn * 2.5, y: 30 + sag * 0.7, rx: 8 - up * 3, ry: 5, w: 0.8 },
+    // head: small, so the shoulders read as shoulders
+    { x: EC_CX + lean * 1.2 + Math.sin(t) * churn * 1.5, y: 19 - up * 3 + sag, rx: 7 - up, ry: 8 - slump * 2, w: 0.95 },
+    // arms hanging at the sides — bulges that keep the outline from being a bell
+    { x: 15 + lean + Math.sin(t * 0.7) * churn * 2, y: 44 + sag * 0.6, rx: 5, ry: 8 - up, w: 0.6 },
+    { x: 49 + lean + Math.cos(t * 0.9) * churn * 2, y: 45 + sag * 0.4, rx: 5, ry: 8 - up, w: 0.6 },
   ];
+  // lumps riding the boundary — the mass is never the same shape twice
+  for (let i = 0; i < 4; i++) {
+    const a = t * (0.5 + i * 0.17) + i * 1.9;
+    const rr = 15 + i * 2;
+    balls.push({
+      x: EC_CX + lean * 0.5 + Math.cos(a) * rr * (1 - up * 0.35),
+      y: 40 + Math.sin(a * 0.8 + i) * (rr * 0.9) + sag * 0.5,
+      rx: 3 + 3.5 * churn,
+      ry: 3 + 3 * churn,
+      w: 0.45,
+    });
+  }
+  return balls;
+}
+
+/** Smoke tendrils rising off the mass — the top of the silhouette must never
+ *  be a clean dome, or the boss reads as an egg. */
+function echoTendrils(s: Surface, p: EcPose) {
+  const t = p.t;
+  const churn = 1 - (p.hard ?? 0) * 0.6;
+  const lean = p.lean ?? 0;
+  const roots: Array<[number, number, number]> = [
+    [EC_CX - 10 + lean, 22, 0.9], [EC_CX + 9 + lean, 24, 0.75], [EC_CX - 3 + lean, 13, 0.8],
+    [EC_CX + 4 + lean, 14, 0.6], [EC_CX - 18 + lean, 31, 0.6], [EC_CX + 17 + lean, 32, 0.55],
+  ];
+  roots.forEach(([rx0, ry0, sc], i) => {
+    const len = Math.round((6 + (i % 2) * 3) * sc * churn) + 2;
+    let x = rx0, y = ry0;
+    for (let k = 0; k < len; k++) {
+      const wob = Math.sin(t * 1.4 + i * 2 + k * 0.55) * (1 + k * 0.22) * churn;
+      x = rx0 + wob;
+      y = ry0 - k * 1.05;
+      s.px(x, y, k > len - 3 ? P.ECHO_VIOLET[2] : P.ECHO_DEEP[3]);
+      if (k < len - 3) s.px(x + 1, y, P.ECHO_DEEP[1]);
+    }
+  });
 }
 
 // ── the stolen shapes ──────────────────────────────────────────────────────
@@ -1152,58 +1199,57 @@ type Stolen = 'cat' | 'cap' | 'lantern' | 'face' | 'bell';
  *  else, so it reads as pressing *out* of the mass rather than painted on. */
 function stolenShape(kind: Stolen, x: number, y: number, scale = 1): Surface {
   const s = new Surface(EC_W, EC_H);
-  const A0 = P.STOLEN_AMBER[0], A1 = P.STOLEN_AMBER[1], A3 = P.STOLEN_AMBER[3], A4 = P.STOLEN_AMBER[4];
-  const k = (v: number) => Math.round(v * scale);
+  // Bas-relief, not a sticker. Everything is drawn in violet a step or two
+  // lighter than the mass; the amber arrives afterwards as *light on the
+  // upper-left edges only*, which is what makes it read as a form pressing
+  // out of the shadow instead of a decal floating on it.
+  const A0 = P.ECHO_DEEP[1], A1 = P.ECHO_VIOLET[2];
+  const k = (v: number) => Math.max(1, Math.round(v * scale));
   if (kind === 'cat') {
     // ears + the top of a small head, with two slit eyes
-    s.poly([[x - k(8), y], [x - k(6), y - k(8)], [x - k(2), y - k(1)]], A1);
-    s.poly([[x + k(8), y], [x + k(6), y - k(8)], [x + k(2), y - k(1)]], A1);
-    s.ellipse(x - k(9), y - k(2), k(18), k(13), A1);
-    s.ellipseOutline(x - k(9), y - k(2), k(18), k(13), A3);
-    s.line(x - k(8), y - k(7), x - k(6), y - k(1), A4);
-    s.line(x + k(6), y - k(7), x + k(4), y - k(1), A3);
-    for (const ex of [-k(5), k(3)]) {
-      s.rect(x + ex, y + k(3), k(3), 1, P.OUTLINE);
-      s.px(x + ex, y + k(2), A4);
+    s.poly([[x - k(9), y + k(1)], [x - k(7), y - k(9)], [x - k(1), y - k(1)]], A1);
+    s.poly([[x + k(9), y + k(1)], [x + k(7), y - k(9)], [x + k(1), y - k(1)]], A1);
+    s.ellipse(x - k(9), y - k(3), k(19), k(15), A1);
+    for (const ex of [-k(6), k(2)]) {
+      s.rect(x + ex, y + k(3), k(4), k(2), A0);
+      s.px(x + ex + k(1), y + k(3), P.ECHO_CYAN[3]);
     }
+    s.px(x, y + k(6), A0);
   } else if (kind === 'cap') {
     // a courier's peaked cap
-    s.ellipse(x - k(8), y - k(7), k(16), k(11), A1);
-    s.rect(x - k(8), y - k(2), k(16), k(3), A1);
-    s.rect(x - k(13), y + k(1), k(13), k(2), A0);      // brim
-    s.hline(x - k(13), y + k(1), k(13), A3);
-    s.ellipseOutline(x - k(8), y - k(7), k(16), k(11), A3);
-    s.line(x - k(6), y - k(6), x - k(1), y - k(7), A4);
+    s.ellipse(x - k(9), y - k(8), k(18), k(13), A1);
+    s.rect(x - k(9), y - k(3), k(18), k(4), A1);
+    s.rect(x - k(15), y + k(1), k(16), k(3), A1);      // brim
+    s.rect(x - k(15), y + k(3), k(16), k(1), A0);
   } else if (kind === 'lantern') {
-    s.line(x - k(4), y - k(9), x, y - k(12), A3);       // bail
-    s.line(x, y - k(12), x + k(4), y - k(9), A3);
-    s.rect(x - k(6), y - k(9), k(12), k(2), A1);        // cap
-    s.poly([[x - k(5), y - k(7)], [x + k(5), y - k(7)], [x + k(6), y + k(5)], [x - k(6), y + k(5)]], A0);
-    s.rect(x - k(3), y - k(5), k(6), k(8), A4);         // the pane still alight
-    s.rect(x - k(2), y - k(4), k(4), k(6), P.LANTERN[4]);
-    s.rect(x - k(6), y + k(5), k(12), k(2), A1);
-    s.vline(x - k(5), y - k(7), k(12), A3);
-    s.vline(x + k(5), y - k(7), k(12), A0);
+    s.line(x - k(4), y - k(10), x, y - k(13), A1);      // bail
+    s.line(x, y - k(13), x + k(4), y - k(10), A1);
+    s.rect(x - k(7), y - k(10), k(14), k(3), A1);       // cap
+    s.poly([[x - k(6), y - k(7)], [x + k(6), y - k(7)], [x + k(7), y + k(6)], [x - k(7), y + k(6)]], A1);
+    s.rect(x - k(4), y - k(5), k(8), k(9), P.STOLEN_AMBER[1]);
+    s.rect(x - k(3), y - k(4), k(6), k(7), P.LANTERN[3]);  // the pane still alight
+    s.rect(x - k(2), y - k(3), k(4), k(4), P.LANTERN[4]);
+    s.rect(x - k(8), y + k(6), k(16), k(3), A1);
   } else if (kind === 'face') {
     // a shrine statue's blank mask
-    s.ellipse(x - k(8), y - k(10), k(16), k(21), A1);
-    s.ellipseOutline(x - k(8), y - k(10), k(16), k(21), A3);
-    s.hline(x - k(6), y - k(4), k(12), A0);             // brow
-    s.rect(x - k(5), y - k(3), k(4), k(3), P.OUTLINE);  // hollow eyes
-    s.rect(x + k(1), y - k(3), k(4), k(3), P.OUTLINE);
-    s.vline(x, y - k(2), k(5), A0);                     // nose
-    s.hline(x - k(3), y + k(5), k(6), A0);              // mouth
-    s.line(x - k(7), y - k(8), x - k(4), y - k(9), A4);
+    s.ellipse(x - k(9), y - k(11), k(18), k(23), A1);
+    s.rect(x - k(6), y - k(4), k(5), k(4), A0);        // hollow eyes
+    s.rect(x + k(1), y - k(4), k(5), k(4), A0);
+    s.px(x - k(4), y - k(3), P.ECHO_CYAN[2]);
+    s.px(x + k(3), y - k(3), P.ECHO_CYAN[2]);
+    s.vline(x, y - k(2), k(6), A0);                     // nose
+    s.rect(x - k(4), y + k(6), k(8), k(2), A0);         // mouth
   } else {
     // the bell from the first quest
-    s.poly([[x - k(8), y + k(6)], [x - k(6), y - k(4)], [x, y - k(8)], [x + k(6), y - k(4)], [x + k(8), y + k(6)]], A1);
-    s.rect(x - k(9), y + k(6), k(18), k(2), A0);
-    s.hline(x - k(9), y + k(6), k(18), A3);
-    s.px(x, y + k(9), A4);
-    s.px(x, y + k(10), A3);
-    s.line(x - k(5), y - k(3), x - k(2), y - k(7), A4);
-    s.px(x, y - k(9), A3);
+    s.poly([[x - k(9), y + k(6)], [x - k(7), y - k(4)], [x, y - k(9)], [x + k(7), y - k(4)], [x + k(9), y + k(6)]], A1);
+    s.rect(x - k(10), y + k(6), k(20), k(3), A1);
+    s.rect(x - k(2), y + k(9), k(3), k(3), A1);         // clapper
+    s.rect(x - k(2), y - k(12), k(3), k(3), A1);        // crown
   }
+  // relief lighting: amber catches the upper-left, the lower-right sinks back
+  s.innerShade(P.ECHO_DEEP[0], 0.65, [[0, 1], [1, 0]]);
+  s.innerShade(P.STOLEN_AMBER[3], 0.8, [[0, -1], [-1, 0]]);
+  s.innerShade(P.STOLEN_AMBER[4], 0.55, [[-1, -1]]);
   return s;
 }
 
@@ -1236,18 +1282,20 @@ function echoMass(p: EcPose, stolen: StolenPlace[] = []): Surface {
         const c = n1(x, y - p.t * 4, 7) * 0.65 + n2(x + p.t * 2, y, 3.5) * 0.35;
         if (c > 0.72) s.px(x, y, P.ECHO_VIOLET[1], 0.55 * (1 - hard * 0.6));
         else if (c < 0.3) s.px(x, y, P.ECHO_DEEP[0], 0.5);
-        // internal light, pooling around the heart
-        const d = Math.hypot((x - EC_CX) / 15, (y - 44) / 16);
+        // internal light, pooling in a vertical core rather than a puddle
+        const d = Math.hypot((x - EC_CX - (p.lean ?? 0) * 0.5) / 9, (y - 40) / 15);
         if (d < 1) {
           const g = (1 - d) * light;
           const cc = n2(x, y - p.t * 6, 5);
-          if (cc > 0.62 - g * 0.25) {
-            s.px(x, y, cc > 0.8 ? P.ECHO_CYAN[3] : P.ECHO_CYAN[2], Math.min(0.9, g * 1.1));
+          if (cc > 0.58 - g * 0.3) {
+            s.px(x, y, g > 0.62 ? P.ECHO_CYAN[4] : cc > 0.8 ? P.ECHO_CYAN[3] : P.ECHO_CYAN[2], Math.min(0.95, g * 1.3));
           }
         }
       }
     }
   }
+
+  echoTendrils(s, p);
 
   // borrowed shapes, clipped to the mass
   for (const st of stolen) {
@@ -1259,8 +1307,9 @@ function echoMass(p: EcPose, stolen: StolenPlace[] = []): Surface {
   }
 
   // form light, then the hard silhouette
-  s.innerShade(P.ECHO_DEEP[0], 0.5, [[0, 1], [1, 0]]);
-  s.innerShade(P.ECHO_VIOLET[3], 0.5, [[0, -1], [-1, 0]]);
+  s.innerShade(P.ECHO_DEEP[0], 0.7, [[0, 1], [1, 0], [1, 1]]);
+  s.innerShade(P.ECHO_VIOLET[3], 0.7, [[0, -1], [-1, 0]]);
+  s.innerShade(P.ECHO_VIOLET[4], 0.4, [[-1, -1]]);
   if (hard > 0.5) {
     // hardened: the rim becomes a crisp bright line rather than a soft edge
     s.innerShade(P.ECHO_CYAN[4], 0.5 * hard, [[0, -1], [-1, 0]]);
@@ -1296,11 +1345,11 @@ function echoFrame(
 
 /** The five things it took from the town, and where each one likes to surface. */
 const STOLEN_CYCLE: Array<{ kind: Stolen; x: number; y: number; scale: number }> = [
-  { kind: 'cat', x: 24, y: 30, scale: 0.85 },
-  { kind: 'cap', x: 42, y: 36, scale: 0.85 },
-  { kind: 'lantern', x: 26, y: 47, scale: 0.9 },
-  { kind: 'face', x: 33, y: 26, scale: 0.9 },
-  { kind: 'bell', x: 40, y: 50, scale: 0.85 },
+  { kind: 'cat', x: 23, y: 30, scale: 0.72 },
+  { kind: 'cap', x: 44, y: 44, scale: 0.72 },
+  { kind: 'lantern', x: 25, y: 47, scale: 0.72 },
+  { kind: 'face', x: 33, y: 29, scale: 0.7 },
+  { kind: 'bell', x: 39, y: 50, scale: 0.68 },
 ];
 
 /** Which shapes are visible on a given frame, and how far surfaced. */
@@ -1369,24 +1418,26 @@ function registerEcho(b: ArtBuild) {
         }
       },
       (m) => {
-        // a faceted plate hardens across the front
-        const w = Math.round(16 + t * 20), h = Math.round(20 + t * 20);
-        const cx = EC_CX, cy = 42;
+        // a faceted plate sets across the front — armour, not a purple pane
+        const w = Math.round(14 + t * 16), h = Math.round(18 + t * 14);
+        const cx = EC_CX, cy = 40;
         const sh = new Surface(EC_W, EC_H);
         const pts: Array<[number, number]> = [
           [cx - w / 2, cy - h / 4], [cx - w / 4, cy - h / 2], [cx + w / 4, cy - h / 2],
           [cx + w / 2, cy - h / 4], [cx + w / 2, cy + h / 4], [cx, cy + h / 2], [cx - w / 2, cy + h / 4],
         ];
         sh.poly(pts, P.ECHO_VIOLET[1]);
+        // three facets, each a different value, lit from the upper-left
+        sh.poly([[cx - w / 2, cy - h / 4], [cx - w / 4, cy - h / 2], [cx, cy], [cx - w / 2, cy + h / 4]], P.ECHO_VIOLET[2]);
+        sh.poly([[cx - w / 4, cy - h / 2], [cx + w / 4, cy - h / 2], [cx, cy]], P.ECHO_VIOLET[3]);
+        sh.poly([[cx + w / 4, cy - h / 2], [cx + w / 2, cy - h / 4], [cx + w / 2, cy + h / 4], [cx, cy]], P.ECHO_VIOLET[0]);
+        sh.poly([[cx - w / 2, cy + h / 4], [cx, cy], [cx + w / 2, cy + h / 4], [cx, cy + h / 2]], P.ECHO_DEEP[2]);
         for (let i2 = 0; i2 < pts.length; i2++) {
           const a2 = pts[i2], b2 = pts[(i2 + 1) % pts.length];
-          sh.line(a2[0], a2[1], b2[0], b2[1], i2 < 3 ? P.ECHO_CYAN[4] : P.ECHO_VIOLET[3]);
+          sh.line(a2[0], a2[1], b2[0], b2[1], i2 < 3 ? P.ECHO_CYAN[4] : P.ECHO_DEEP[0]);
         }
-        // facets
-        sh.line(cx, cy - h / 2, cx, cy + h / 2, A(P.ECHO_VIOLET[3], 0.6));
-        sh.line(cx - w / 2, cy - h / 4, cx, cy + h / 2, A(P.ECHO_VIOLET[0], 0.6));
-        sh.line(cx + w / 2, cy - h / 4, cx, cy + h / 2, A(P.ECHO_VIOLET[0], 0.6));
-        m.blitInside(sh, 0, 0, 0.55 + t * 0.45);
+        sh.px(cx - 1, cy - 1, P.ECHO_SPARK);
+        m.blitInside(sh, 0, 0, 0.6 + t * 0.4);
       }));
   }
   b.addStrip('enemy/echo/phase1_counter', counter, { key: 'echo_phase1_counter', frameRate: 6, repeat: 0 });
@@ -1395,17 +1446,21 @@ function registerEcho(b: ArtBuild) {
   const split: Surface[] = [];
   for (let i = 0; i < 6; i++) {
     const t = Math.sin((i / 5) * Math.PI); // separate, then recombine
-    const off = Math.round(t * 9);
+    const off = Math.round(t * 5);
     split.push(echoFrame({ t: 3 + i * 0.8, light: 0.9 }, stolenAt(i, 6, 1), (out) => {
-      // trailing copy (stale, violet) and leading copy (live, cyan)
-      const ghostA = echoMass({ t: 3 + i * 0.8 - 1.2, light: 0.4 }, []);
-      ghostA.tint(P.ECHO_PALE[2], 0.55);
-      ghost(ghostA, 0.5, 0);
-      out.blit(ghostA, -off, Math.round(t * 2), 0.6);
-      const ghostB = echoMass({ t: 3 + i * 0.8 + 1.2, light: 0.6 }, []);
-      ghostB.tint(P.ECHO_CYAN[3], 0.45);
-      ghost(ghostB, 0.55, 1);
-      out.blit(ghostB, off, -Math.round(t * 2), 0.6);
+      // Trailing copy (stale, pale violet) and leading copy (live, cyan). Both
+      // get their own outline, because an after-image the player cannot
+      // separate from the body is just mush.
+      const ghostA = echoMass({ t: 3 + i * 0.8 - 1.4, light: 0.3 }, []);
+      ghostA.tint(P.ECHO_PALE[3], 0.8);
+      ghostA.outline(A(P.ECHO_PALE[4], 0.85), false);
+      ghost(ghostA, 0.4, 0);
+      out.blit(ghostA, -off - 2, Math.round(t * 3), 0.85);
+      const ghostB = echoMass({ t: 3 + i * 0.8 + 1.4, light: 0.5 }, []);
+      ghostB.tint(P.ECHO_CYAN[2], 0.75);
+      ghostB.outline(A(P.ECHO_CYAN[4], 0.9), false);
+      ghost(ghostB, 0.45, 1);
+      out.blit(ghostB, off + 2, -Math.round(t * 3), 0.85);
     }));
   }
   b.addStrip('enemy/echo/phase2_split', split, { key: 'echo_phase2_split', frameRate: 8, repeat: -1 });
@@ -1427,14 +1482,19 @@ function registerEcho(b: ArtBuild) {
       },
       undefined,
       (m) => {
-        // a crown of light, and vertical bands: statue, not creature
-        for (let k = -3; k <= 3; k++) {
-          const h = 6 - Math.abs(k) * 1.2;
-          for (let y = 0; y < h; y++) m.px(EC_CX + k * 3, 14 - y, y > h - 2 ? P.ECHO_RUNE : P.ECHO_CYAN[3], 0.9);
+        // a crown of light, and shallow fluting: statue, not creature
+        for (let k = -2; k <= 2; k++) {
+          const h = 7 - Math.abs(k) * 2;
+          for (let y = 0; y < h; y++) {
+            m.px(EC_CX + k * 3, 13 - y, y >= h - 1 ? P.ECHO_SPARK : y > h - 3 ? P.ECHO_RUNE : P.ECHO_CYAN[3]);
+            if (y < h - 2) m.px(EC_CX + k * 3 + 1, 13 - y, P.ECHO_CYAN[1], 0.7);
+          }
         }
+        m.hline(EC_CX - 7, 14, 15, P.ECHO_CYAN[2], 0.7);
         const bands = new Surface(EC_W, EC_H);
         for (let k = -2; k <= 2; k++) {
-          bands.vline(EC_CX + k * 5, 26, 30, A(P.ECHO_CYAN[2], 0.4 + (k === 0 ? 0.3 : 0)));
+          bands.vline(EC_CX + k * 6, 30, 22, A(P.ECHO_VIOLET[3], 0.32));
+          bands.vline(EC_CX + k * 6 + 1, 30, 22, A(P.ECHO_DEEP[0], 0.3));
         }
         m.blitInside(bands);
       }));
@@ -1516,7 +1576,10 @@ function registerEcho(b: ArtBuild) {
       },
       (out) => {
         for (const f of falling) {
+          // released: as each borrowed thing falls it goes back to the town's
+          // own warm colour instead of the Echo's violet
           const sh = stolenShape(f.kind, f.x, f.y, (f.scale ?? 1) * 0.85);
+          sh.tint(P.STOLEN_AMBER[2], 0.55);
           sh.outline(A(P.OUTLINE, 0.8), false);
           out.blit(sh, 0, 0, Math.max(0, f.a));
         }
@@ -1590,21 +1653,24 @@ function registerEchoTells(b: ArtBuild) {
   const sweep: Surface[] = [];
   for (let i = 0; i < 4; i++) {
     const t = i / 3;
-    const s = new Surface(64, 34);
-    const cx = 32, cy = 40, R = 30;
-    for (let k = 0; k <= 46; k++) {
-      const a = Math.PI + 0.55 + (k / 46) * (Math.PI - 1.1);
-      const lead = k / 46;
-      const on = lead <= t + 0.28;
-      if (!on) continue;
-      const near = Math.abs(lead - t) < 0.16;
-      const thick = near ? 3 : 1 + Math.round(t * 1.5);
+    const s = new Surface(64, 36);
+    const cx = 32, cy = 42, R = 31;
+    for (let k = 0; k <= 60; k++) {
+      const a = Math.PI + 0.5 + (k / 60) * (Math.PI - 1.0);
+      const lead = k / 60;
+      // the whole path is always shown faintly — a sweep you cannot see the
+      // end of is not a telegraph
+      const guide = k % 3 !== 2;
+      const on = lead <= t + 0.3;
+      const near = Math.abs(lead - t) < 0.15;
+      const thick = near ? 4 : on ? 2 + Math.round(t * 1.5) : guide ? 1 : 0;
       for (let d = 0; d < thick; d++) {
         const rr = R - d;
         const x = cx + Math.cos(a) * rr;
-        const y = cy + Math.sin(a) * rr * 0.86;
-        s.px(x, y, near ? P.ECHO_SPARK : d === 0 ? P.ECHO_RUNE : P.ECHO_CYAN[3], near ? 1 : 0.55 + t * 0.35);
-        s.px(x, y + 1, P.OUTLINE, 0.55);
+        const y = cy + Math.sin(a) * rr * 0.9;
+        const col = near ? P.ECHO_SPARK : !on ? P.ECHO_CYAN[2] : d === 0 ? P.ECHO_RUNE : P.ECHO_CYAN[3];
+        s.px(x, y, col, near ? 1 : on ? 0.6 + t * 0.35 : 0.4);
+        if (on || near) s.px(x, y + 1, P.OUTLINE, 0.6);
       }
     }
     sweep.push(s);
@@ -1660,23 +1726,206 @@ function registerEchoTells(b: ArtBuild) {
       const s = new Surface(34, 22);
       const cx = 17, cy = 11, rx = 15, ry = 9;
       const body = new Surface(34, 22);
-      body.ellipse(cx - rx, cy - ry, rx * 2, ry * 2, A(P.ECHO_PALE[1], 0.5));
-      body.ellipseOutline(cx - rx, cy - ry, rx * 2, ry * 2, A(P.ECHO_PALE[3], 0.8));
+      body.ellipse(cx - rx, cy - ry, rx * 2, ry * 2, A(P.ECHO_PALE[2], 0.85));
+      body.ellipseOutline(cx - rx, cy - ry, rx * 2, ry * 2, P.ECHO_PALE[4]);
       // doubled, offset ghost edge — it does not know where it is any more
-      body.ellipseOutline(cx - rx + 1 + Math.round(t), cy - ry - 1, rx * 2 - 2, ry * 2 + 1, A(P.ECHO_PALE[2], 0.45));
-      body.ellipseOutline(cx - rx - 1, cy - ry + 1 - Math.round(t), rx * 2 + 2, ry * 2, A(P.ECHO_PALE[2], 0.3));
-      ghost(body, 0.42, i);
-      s.blit(body, 0, 0, 0.8 - t * 0.35);
+      body.ellipseOutline(cx - rx + 1 + Math.round(t), cy - ry - 1, rx * 2 - 2, ry * 2 + 1, A(P.ECHO_PALE[3], 0.7));
+      body.ellipseOutline(cx - rx - 1, cy - ry + 1 - Math.round(t), rx * 2 + 2, ry * 2, A(P.ECHO_PALE[3], 0.5));
+      ghost(body, 0.5, i);
+      s.blit(body, 0, 0, 0.95 - t * 0.2);
       // a smeared, unreadable sigil
       for (let k = 0; k < 4; k++) {
         const a = (k / 4) * Math.PI * 2 + Math.PI / 4 + t;
-        s.px(cx + Math.cos(a) * 4, cy + Math.sin(a) * 4 * 0.62, P.ECHO_PALE[4], 0.5 - t * 0.2);
+        s.px(cx + Math.cos(a) * 4, cy + Math.sin(a) * 4 * 0.62, P.ECHO_PALE[4], 0.85 - t * 0.2);
+        s.px(cx + Math.cos(a) * 5.5, cy + Math.sin(a) * 5.5 * 0.62, P.ECHO_PALE[3], 0.5 - t * 0.15);
       }
       stale.push(s);
     }
   }
   b.addStrip('enemy/echo/indicator_live', live, { key: 'echo_indicator_live', frameRate: 10, repeat: -1 });
   b.addStrip('enemy/echo/indicator_stale', stale, { key: 'echo_indicator_stale', frameRate: 6, repeat: -1 });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 6. SHARED COMBAT FEEDBACK
+//    These sit on top of every enemy, so they are warm and near-white: they
+//    have to read against grass, shrine floor, and the violet creatures
+//    themselves. Warm also keeps them out of the Echo's reserved hues, so a
+//    hit spark is never mistaken for puzzle state.
+// ══════════════════════════════════════════════════════════════════════════
+
+function registerCombatFx(b: ArtBuild) {
+  // ── hit: a struck-flint burst, four frames ──────────────────────────────
+  const hit: Surface[] = [];
+  for (let i = 0; i < 4; i++) {
+    const s = new Surface(18, 18);
+    const cx = 9, cy = 9;
+    const t = i / 3;
+    const spokes = i === 0 ? 4 : 8;
+    for (let k = 0; k < spokes; k++) {
+      const a = (k / spokes) * Math.PI * 2 + (i === 0 ? 0.4 : 0.15) + i * 0.12;
+      const inner = i === 0 ? 1 : 1 + t * 4;
+      const outer = (i === 0 ? 5.5 : i === 1 ? 8 : i === 2 ? 8.5 : 8) * (k % 2 ? 0.7 : 1);
+      for (let d = inner; d < outer; d++) {
+        const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
+        const f = (d - inner) / Math.max(1, outer - inner);
+        const col = f < 0.35 ? P.LANTERN[4] : f < 0.7 ? P.LANTERN[3] : P.LANTERN[1];
+        s.px(x, y, col, 1 - t * 0.55);
+        if (f < 0.5 && i < 2) s.px(x + (Math.abs(Math.cos(a)) > 0.5 ? 0 : 1), y + (Math.abs(Math.cos(a)) > 0.5 ? 1 : 0), P.LANTERN[2], 0.8 - t * 0.5);
+      }
+    }
+    if (i < 2) {
+      s.ellipse(cx - 2 + i, cy - 2 + i, 4 - i * 2, 4 - i * 2, P.LANTERN[4], 1 - i * 0.3);
+      s.px(cx, cy, P.LANTERN[4]);
+      s.px(cx - 1, cy, P.LANTERN[4]);
+    }
+    if (i >= 2) {
+      const r = rng(600 + i);
+      for (let k = 0; k < 6; k++) {
+        const x = cx + r.int(-8, 8), y = cy + r.int(-8, 8);
+        s.px(x, y, P.LANTERN[4], 1 - t * 0.3);
+        s.px(x + 1, y, P.LANTERN[2], 0.7 - t * 0.3);
+      }
+    }
+    s.outline(A(P.OUTLINE, 0.7), false);
+    hit.push(s);
+  }
+  b.addStrip('enemy/fx/hit', hit, { key: 'fx_hit', frameRate: 16, repeat: 0 });
+
+  // ── stun: three stars orbiting overhead ─────────────────────────────────
+  const stun: Surface[] = [];
+  for (let i = 0; i < 4; i++) {
+    const s = new Surface(22, 12);
+    const cx = 11, cy = 6;
+    const stars: Array<[number, number, number]> = [];
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2 + (i / 4) * Math.PI * 2;
+      stars.push([cx + Math.cos(a) * 8, cy + Math.sin(a) * 3.2, Math.sin(a)]);
+    }
+    // draw the far ones first so the near ones overlap correctly
+    stars.sort((p, q) => p[2] - q[2]);
+    for (const [x, y, depth] of stars) {
+      const big = depth > 0;
+      const c1 = big ? P.LANTERN[4] : P.LANTERN[2];
+      const c2 = big ? P.LANTERN[3] : P.LANTERN[1];
+      s.px(x, y, c1);
+      s.px(x - 1, y, c2); s.px(x + 1, y, c2);
+      s.px(x, y - 1, c2); s.px(x, y + 1, c2);
+      if (big) {
+        s.px(x - 2, y, P.LANTERN[1]); s.px(x + 2, y, P.LANTERN[1]);
+        s.px(x, y - 2, P.LANTERN[1]);
+      }
+    }
+    s.outline(A(P.OUTLINE, 0.75), false);
+    stun.push(s);
+  }
+  b.addStrip('enemy/fx/stun', stun, { key: 'fx_stun', frameRate: 10, repeat: -1 });
+
+  // ── aggro: a spiked alert glyph. Not an exclamation mark — a barbed shard
+  //    with a diamond beneath it, so it belongs to this game and no other. ──
+  const aggro: Surface[] = [];
+  for (let i = 0; i < 3; i++) {
+    const s = new Surface(12, 16);
+    const cx = 6;
+    const scale = i === 0 ? 0.6 : i === 1 ? 1.15 : 1;
+    const squash = i === 0 ? 0.7 : i === 1 ? 1.1 : 1;
+    const top = Math.round(8 - 7 * scale * squash);
+    const bodyBot = Math.round(top + 9 * scale * squash);
+    const hwAt = (y: number) => Math.max(0, Math.round((2.2 - ((y - top) / Math.max(1, bodyBot - top)) * 1.8) * scale));
+    for (let y = top; y <= bodyBot; y++) {
+      const hw = hwAt(y);
+      for (let x = -hw; x <= hw; x++) {
+        s.px(cx + x, y, x < 0 ? P.LANTERN[4] : x === 0 ? P.LANTERN[3] : P.LANTERN[2]);
+      }
+    }
+    // barbs — swept upward off the shoulders of the shard, biggest at the top
+    for (let k = 0; k < 3; k++) {
+      const y = Math.round(top + (1 + k * 3) * scale * squash);
+      const reach = Math.round((3 - k) * scale);
+      const hw = hwAt(y);
+      for (let d = 1; d <= reach; d++) {
+        s.px(cx - hw - d, y - Math.round(d * 0.8), d < 2 ? P.LANTERN[4] : P.LANTERN[2]);
+        s.px(cx + hw + d, y - Math.round(d * 0.8), d < 2 ? P.LANTERN[3] : P.LANTERN[1]);
+      }
+    }
+    // the diamond below the shard
+    const dy = Math.round(bodyBot + 3 * scale);
+    s.px(cx, dy - 1, P.LANTERN[4]);
+    s.px(cx - 1, dy, P.LANTERN[3]); s.px(cx, dy, P.LANTERN[4]); s.px(cx + 1, dy, P.LANTERN[2]);
+    s.px(cx, dy + 1, P.LANTERN[1]);
+    s.outline(P.OUTLINE, false);
+    if (i === 2) {
+      s.px(cx - 4, top + 1, P.LANTERN[4], 0.8);
+      s.px(cx + 4, top + 3, P.LANTERN[3], 0.7);
+    }
+    aggro.push(s);
+  }
+  b.addStrip('enemy/fx/aggro', aggro, { key: 'fx_aggro', frameRate: 14, repeat: 0 });
+
+  // ── spawn: an Echo creature pushing up out of the floor ─────────────────
+  const spawn: Surface[] = [];
+  const GY = 15;
+  for (let i = 0; i < 6; i++) {
+    const s = new Surface(26, 22);
+    const cx = 13;
+    const t = i / 5;
+    // the crack in the ground, opening then closing
+    const open = i < 4 ? 0.25 + i * 0.25 : Math.max(0, 1 - (i - 3) * 0.45);
+    const halfW = Math.round(3 + open * 8);
+    const cr = rng(4400);
+    for (let x = -halfW; x <= halfW; x++) {
+      const e = Math.abs(x) / halfW;
+      const jag = cr.int(-1, 1);                       // the crack is jagged
+      const h = Math.round((1 - e * e) * (1 + open * 2.4)) + (Math.abs(x) % 3 === 0 ? 1 : 0);
+      for (let y = 0; y <= h; y++) {
+        s.px(cx + x, GY + y - Math.round(h / 2) + jag, y === 0 ? P.ECHO_VIOLET[2] : P.ECHO_VIOLET[0]);
+      }
+      if (e > 0.5 && Math.abs(x) % 2 === 0) s.px(cx + x, GY - Math.round(open * 2) + jag, P.ECHO_VIOLET[3], 0.6);
+    }
+    // splinter cracks running out of the main one
+    for (let k = 0; k < 4; k++) {
+      const side = k % 2 ? 1 : -1;
+      const len = Math.round(2 + open * 4);
+      for (let d = 0; d < len; d++) {
+        s.px(cx + side * (halfW - 1 + d), GY + Math.round(d * (k < 2 ? 0.5 : -0.4)), P.ECHO_VIOLET[1], 0.8 - d * 0.12);
+      }
+    }
+    bloom(s, cx, GY, 6 + open * 6, P.ECHO_VIOLET[2], 0.45 * open);
+
+    // the column of light
+    if (i >= 1 && i <= 4) {
+      const hgt = [0, 5, 12, 14, 9][i] ?? 0;
+      for (let y = 0; y < hgt; y++) {
+        const f = y / hgt;
+        const w = Math.max(1, Math.round((3 - f * 2) * (i === 4 ? 0.6 : 1)));
+        for (let x = -w; x <= w; x++) {
+          s.px(cx + x, GY - y, Math.abs(x) < 1 ? P.ECHO_RUNE : P.ECHO_CYAN[3], (0.85 - f * 0.5) * (i === 4 ? 0.5 : 1));
+        }
+      }
+    }
+    // the shape rising inside the light
+    if (i >= 2 && i <= 4) {
+      const rise = [0, 0, 4, 8, 10][i];
+      const body = new Surface(26, 22);
+      body.ellipse(cx - 5, GY - rise, 10, rise + 3, P.ECHO_DEEP[1]);
+      body.ellipse(cx - 4, GY - rise, 8, Math.max(2, rise), P.ECHO_DEEP[2]);
+      body.innerShade(P.ECHO_VIOLET[3], 0.5, [[0, -1], [-1, 0]]);
+      body.outline(P.OUTLINE, false);
+      // clip below the floor: it is still coming through
+      for (let y = GY + 1; y < 22; y++) for (let x = 0; x < 26; x++) body.data[(y * 26 + x) * 4 + 3] = 0;
+      s.blit(body);
+    }
+    // dust and motes
+    const r = rng(880 + i * 13);
+    for (let k = 0; k < 5; k++) {
+      const d = 4 + k * 2 + i;
+      const side = k % 2 ? 1 : -1;
+      s.px(cx + side * d, GY - Math.round(open * 3) - r.int(0, 2), P.SHRINE_STONE[3], 0.6 * open);
+    }
+    if (i >= 3) for (let k = 0; k < 3; k++) mote(s, cx - 5 + k * 5, GY - 8 - k * 3 - i, 0, 0.7 - t * 0.4, k % 2 === 0);
+    spawn.push(s);
+  }
+  b.addStrip('enemy/fx/spawn', spawn, { key: 'fx_spawn', frameRate: 10, repeat: 0 });
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1687,4 +1936,5 @@ export function registerEnemies(b: ArtBuild): void {
   registerMimicling(b);
   registerEchomote(b);
   registerEcho(b);
+  registerCombatFx(b);
 }
