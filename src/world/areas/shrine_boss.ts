@@ -89,7 +89,20 @@ function onEnter(w: WorldScene): void {
     w.time.delayedCall(200, () => emit('ui:toast', { text: `The Echo is still here.` }));
   }));
 
-  installQaHook(w);
+  // Tally the events that only happen to one kind of player. This is the
+  // evidence the playtest uses to say *why* one bot was faster, rather than
+  // just that it was.
+  const tally = { blocked: 0, punished: 0, deflected: 0, broken: 0, learned: 0, waves: 0 };
+  const count = (event: string, key: keyof typeof tally) =>
+    room!.unsubscribe.push(on(event, () => { tally[key]++; }));
+  count('boss:blocked', 'blocked');
+  count('boss:punished', 'punished');
+  count('boss:deflected', 'deflected');
+  count('boss:unanimity_broken', 'broken');
+  count('boss:learned', 'learned');
+  count('boss:wave', 'waves');
+
+  installQaHook(w, tally);
 
   // Entering the chamber is an autosave point (§68). The flag is picked up by
   // GameFlow's autosave list.
@@ -444,9 +457,11 @@ async function titleCard(w: WorldScene, title: string, subtitle?: string): Promi
  * which follower is out of step — because the whole measurement is "does
  * knowing that make you faster". A bot that cannot see it cannot be informed.
  */
-function installQaHook(w: WorldScene): void {
+function installQaHook(w: WorldScene, tally: Record<string, number>): void {
   (window as unknown as { __boss: unknown }).__boss = {
     state: () => room?.boss.snapshot() ?? null,
+    /** Counts of blocks, punishes, deflects and unanimity breaks so far. */
+    tally: () => ({ ...tally }),
     /** Jump straight into a phase, skipping the wake cutscene. */
     phase: (p: Phase) => {
       if (!room) return;

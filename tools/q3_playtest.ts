@@ -263,6 +263,10 @@ async function main(): Promise<void> {
     const s3 = await snap(page);
     check('a wrong private answer still completes the trial', s3.finished === true);
 
+    // ── the tones themselves ────────────────────────────────────────────────
+    console.log('\nAUDIO — the reference must be the lantern it points at');
+    await checkTones(page);
+
     // ── the terminology rule ────────────────────────────────────────────────
     console.log('\nTERMINOLOGY');
     checkTerminology();
@@ -282,6 +286,63 @@ async function main(): Promise<void> {
     failures.forEach((f) => console.log(`  - ${f}`));
     process.exitCode = 1;
   }
+}
+
+/**
+ * The one thing in this act that must never silently drift.
+ *
+ * `lantern_tone_ref` is a pointer that defaults to lantern A, so a reference
+ * struck without aiming it first plays the wrong pitch in every round whose
+ * answer is not the first lantern — and the perceptual task the whole quest
+ * rests on becomes unsolvable by listening, silently, with no error anywhere.
+ *
+ * This renders the tones offline and compares their fundamentals directly.
+ */
+async function checkTones(page: Page): Promise<void> {
+  const hz = await page.evaluate(async () => {
+    const audio = (window as any).__audio;
+    if (!audio) return null;
+    const pitch = (head: string, sampleRate: number): number => {
+      // Autocorrelation over the attack-free body of the tone.
+      const bin = atob(head);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const f = new Float32Array(bytes.buffer);
+      const from = Math.min(1024, f.length >> 2);
+      const n = Math.min(8192, f.length - from);
+      let best = 0;
+      let bestLag = 0;
+      const minLag = Math.floor(sampleRate / 900);
+      const maxLag = Math.floor(sampleRate / 150);
+      for (let lag = minLag; lag <= maxLag; lag++) {
+        let sum = 0;
+        for (let i = 0; i < n - lag; i++) sum += f[from + i] * f[from + i + lag];
+        if (sum > best) { best = sum; bestLag = lag; }
+      }
+      return bestLag ? sampleRate / bestLag : 0;
+    };
+    const out: Record<string, number> = {};
+    for (const name of ['lantern_tone_a', 'lantern_tone_b', 'lantern_tone_c',
+      'lantern_tone_ref:a', 'lantern_tone_ref:b', 'lantern_tone_ref:c']) {
+      const a = await audio.renderSfx(name, 1.2);
+      out[name] = pitch(a.head, a.sampleRate);
+    }
+    return out;
+  });
+
+  if (!hz) { check('audio QA surface is available', false); return; }
+  check('audio QA surface is available', true);
+  const close = (a: number, b: number) => a > 0 && b > 0 && Math.abs(a - b) / b < 0.03;
+  for (const id of ['a', 'b', 'c'] as L[]) {
+    check(`the reference aimed at lantern ${id} rings at lantern ${id}'s pitch`,
+      close(hz[`lantern_tone_ref:${id}`], hz[`lantern_tone_${id}`]),
+      { ref: hz[`lantern_tone_ref:${id}`], lantern: hz[`lantern_tone_${id}`] });
+  }
+  check('the three lanterns are clearly different pitches',
+    !close(hz.lantern_tone_a, hz.lantern_tone_b)
+    && !close(hz.lantern_tone_b, hz.lantern_tone_c)
+    && !close(hz.lantern_tone_a, hz.lantern_tone_c),
+    { a: hz.lantern_tone_a, b: hz.lantern_tone_b, c: hz.lantern_tone_c });
 }
 
 /**

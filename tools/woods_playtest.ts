@@ -135,15 +135,26 @@ window.__wt = {
       tick();
     });
   },
-  /** Dismiss any dialogue that has opened, so a beat cannot stall the walk. */
-  async clearDialogue() {
-    for (let i = 0; i < 30 && window.__psyche.scene.cutscene.active; i++) {
-      window.__psyche.press('interact');
-      await new Promise((r) => setTimeout(r, 120));
-    }
-  },
+  busy() { return window.__psyche.scene.cutscene.active; },
 };
 `;
+
+/**
+ * Dismiss any dialogue that has opened.
+ *
+ * This has to be a real key press. The dialogue box listens for `keydown` on
+ * the UI scene, while `__psyche.press` injects into the *world* scene's input
+ * manager — so driving it through the debug API silently does nothing and the
+ * walk deadlocks behind a scene the harness cannot see.
+ */
+async function clearDialogue(page: Page, tries = 40): Promise<void> {
+  for (let i = 0; i < tries; i++) {
+    const busy = await page.evaluate(() => (window as unknown as { __wt: { busy(): boolean } }).__wt.busy());
+    if (!busy) return;
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(110);
+  }
+}
 
 async function walkTo(page: Page, tx: number, ty: number): Promise<{ ok: boolean; tiles: number; ms: number }> {
   const t0 = Date.now();
@@ -167,7 +178,7 @@ async function walkTo(page: Page, tx: number, ty: number): Promise<{ ok: boolean
     tiles++;
     if (!arrived) {
       // Blocked mid-route: a cutscene may have taken control. Clear and retry.
-      await page.evaluate(() => (window as unknown as { __wt: { clearDialogue(): Promise<void> } }).__wt.clearDialogue());
+      await clearDialogue(page);
       const retry = await page.evaluate(
         (xy: number[]) => (window as unknown as { __wt: { stepTo(a: number, b: number, c: number): Promise<boolean> } })
           .__wt.stepTo(xy[0], xy[1], 6000),
@@ -175,7 +186,7 @@ async function walkTo(page: Page, tx: number, ty: number): Promise<{ ok: boolean
       );
       if (!retry) return { ok: false, tiles, ms: Date.now() - t0 };
     }
-    await page.evaluate(() => (window as unknown as { __wt: { clearDialogue(): Promise<void> } }).__wt.clearDialogue());
+    await clearDialogue(page);
   }
   return { ok: true, tiles, ms: Date.now() - t0 };
 }
@@ -259,7 +270,7 @@ async function main(): Promise<void> {
     const r = await walkTo(page, WOODS.shrine[0], WOODS.shrine[1]);
     ok(r.ok, `reached the shrine trigger`);
     await page.waitForTimeout(2600);
-    await page.evaluate(() => (window as unknown as { __wt: { clearDialogue(): Promise<void> } }).__wt.clearDialogue());
+    await clearDialogue(page);
     await page.waitForTimeout(1200);
     const after = await page.evaluate(() => {
       const wt = (window as unknown as { __wt: { map(): string; flag(f: string): boolean } }).__wt;
@@ -319,7 +330,9 @@ async function main(): Promise<void> {
       p.press('interact');
       await new Promise((r2) => setTimeout(r2, 500));
     });
-    await page.evaluate(() => (window as unknown as { __wt: { clearDialogue(): Promise<void> } }).__wt.clearDialogue());
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(300);
+    await clearDialogue(page);
     const gotChest = await page.evaluate(() => (window as unknown as { __wt: { flag(f: string): boolean } }).__wt.flag('woods_chest'));
     ok(gotChest, 'the chest opens');
 
@@ -344,7 +357,7 @@ async function main(): Promise<void> {
       p.press('interact');
       await new Promise((r2) => setTimeout(r2, 1600));
     });
-    await page.evaluate(() => (window as unknown as { __wt: { clearDialogue(): Promise<void> } }).__wt.clearDialogue());
+    await clearDialogue(page);
     const fordOk = await page.evaluate(() => (window as unknown as { __wt: { flag(f: string): boolean } }).__wt.flag('woods_ford_open'));
     ok(fordOk, 'the boulder can be shoved into the ford');
     const toCamp = await walkTo(page, WOODS.camp[0], WOODS.camp[1]);

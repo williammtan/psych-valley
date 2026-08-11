@@ -75,7 +75,8 @@ await page.waitForFunction(() => !!(window as any).__psyche?.ready, undefined, {
 for (let i = 0; i < 60; i++) {
   const busy = await page.evaluate(() => (window as any).__psyche?.state()?.cutscene !== false);
   if (!busy) break;
-  await page.evaluate(() => (window as any).__psyche?.press('interact'));
+  // The dialogue box listens for real keydowns, not injected actions.
+  await page.keyboard.press('Space');
   await page.waitForTimeout(320);
 }
 await page.evaluate(() => (window as any).__psyche?.jump('town'));

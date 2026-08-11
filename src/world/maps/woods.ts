@@ -367,6 +367,27 @@ export function buildWoods(): MapDef {
   overlay(g, 'F', (t) => { t.blob(21, 111, 8, 5, '*', 73, 0.14); });
   overlay(g, 'F', (t) => { t.blob(21, 106, 5, 2, '*', 79, 0.4); });
 
+  // ── 6b. moss on the seams ─────────────────────────────────────────────────
+  // Cut stone and forest floor are two base families with no shared autotile,
+  // so where they meet they meet on a hard rectangular tile edge — which is the
+  // one thing that reliably makes a hand-built map look machine-built. A ring
+  // of moss along the boundary is soft-edged (it IS an autotile) and is also
+  // the correct answer in fiction: this is stone the forest is taking back.
+  {
+    const stone = (c: string) => c === 'S' || c === 'F';
+    const seam: Array<[number, number, string]> = [];
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const c = g.get(x, y);
+        if (!stone(c)) continue;
+        const edge = !stone(g.get(x - 1, y)) || !stone(g.get(x + 1, y))
+          || !stone(g.get(x, y - 1)) || !stone(g.get(x, y + 1));
+        if (edge && h01(x, y, 401) < 0.8) seam.push([x, y, c === 'S' ? 'G' : 'g']);
+      }
+    }
+    for (const [x, y, ch] of seam) g.set(x, y, ch);
+  }
+
   // ── 7. texture ────────────────────────────────────────────────────────────
   g.scatter(',', ['.'], 0.44, 83);
   g.scatter('"', ['.', ','], 0.11, 89);
@@ -636,7 +657,9 @@ export function buildWoods(): MapDef {
       'd': { base: 'woods/soil' },
       'p': { base: 'woods/grass', blob: 'woods_path' },
       'S': { base: 'woods/shrine_stone' },
+      'G': { base: 'woods/shrine_stone', blob: 'woods_moss' },
       'F': { base: 'shrine_ext/flag' },
+      'g': { base: 'shrine_ext/flag', blob: 'woods_moss' },
       '#': { base: 'woods/grass', blob: 'woods_bramble', solid: true },
       '~': { base: 'woods/grass', blob: 'woods_water', solid: true },
       '_': { base: 'woods/grass', blob: 'woods_water' },
