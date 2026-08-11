@@ -40,6 +40,10 @@ export interface ProbeCtx {
   hp(n: number): Promise<void>;
   spawnEnemy(kind: string, tx: number, ty: number): Promise<void>;
   press(a: string): Promise<void>;
+  /** Fire a gameplay action only (no dialogue advance). */
+  act(a: string): Promise<void>;
+  /** Advance a dialogue line only (no gameplay action). */
+  advance(): Promise<void>;
   move(x: number, y: number): Promise<void>;
   stop(): Promise<void>;
   wait(ms: number): Promise<void>;
@@ -182,6 +186,13 @@ function makeCtx(page: Page, out: string, errBuf: string[], logPath: string, bas
       }
       await page.waitForTimeout(90);
     },
+    // The two halves of a SPACE press, separable.
+    //
+    // A real press feeds the dialogue box (raw keydown) *and* the InputManager
+    // (polled JustDown). Splitting them lets the probe keep playing past a beat
+    // where doing both at once traps the player.
+    act: async (a) => { await ev('(a) => window.__psyche.press(a)', a); await page.waitForTimeout(90); },
+    advance: async () => { await page.keyboard.press('Space'); await page.waitForTimeout(60); },
     move: async (x, y) => { await ev('(x,y) => window.__psyche.move(x,y)', x, y); },
     stop: async () => { await ev('() => window.__psyche.stop()'); },
     wait: (ms) => page.waitForTimeout(ms),
