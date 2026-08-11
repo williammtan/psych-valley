@@ -247,6 +247,10 @@ function build(): MapDef {
     [30, 41, 4, 3, 401], [50, 53, 4, 3, 403], [39, 25, 4, 2.5, 405],
     [22, 47, 3.5, 3, 407], [62, 34, 4, 3.5, 409], [46, 64, 4, 3, 411],
     [14, 27, 3, 3, 413], [78, 44, 3.5, 3, 415],
+    // Around the Market Green and the bakery: the town's biggest remaining
+    // sheets of one flat green, broken with the dry-grass overlay.
+    [29, 40, 4, 2.5, 417], [39, 33, 3, 3.5, 419], [26, 28, 3.5, 2.5, 421],
+    [35, 42, 3, 2, 423], [18, 40, 3.5, 3, 425], [52, 36, 3.5, 3, 427],
   ] as const) g.blob(cx, cy, rx, ry, 'y', sd, 0.5);
   // Wildflower meadows: clustered colour accents, never sprinkled evenly.
   for (const [cx, cy, rx, ry, sd] of [
@@ -268,11 +272,15 @@ function build(): MapDef {
   g.rect(0, 0, 3, H, 'X');
   g.rect(W - 2, 0, 2, H, 'X');
   g.rect(0, H - 2, W, 2, 'X');
+  // NB: these are sized to the space actually free. The farm's north fence sits
+  // at y=7, its west fence at x=6, and the market gardens run out to x=7 —
+  // push a blob past any of those and the wood swallows a fence line or a
+  // vegetable plot, which costs far more than the extra depth buys.
   for (const [cx, cy, rx, ry, sd] of [
-    [10, 3, 12, 6, 2], [34, 2, 14, 5, 3], [58, 3, 12, 6, 5], [80, 3, 10, 6, 7],
-    [22, 4, 9, 5, 91], [48, 3, 10, 5, 93], [68, 4, 9, 5, 95],
-    [4, 14, 6, 12, 11], [3, 34, 5, 10, 13], [4, 54, 5, 9, 17], [4, 70, 6, 6, 19],
-    [3, 24, 5, 7, 97], [3, 44, 4, 7, 99], [4, 62, 5, 6, 101],
+    [10, 2, 12, 4, 2], [34, 1, 14, 4, 3], [58, 2, 12, 4, 5], [80, 3, 10, 5, 7],
+    [22, 1, 9, 4, 91], [48, 1, 10, 4, 93], [68, 2, 9, 4, 95],
+    [3, 14, 4, 12, 11], [2, 34, 4, 10, 13], [3, 54, 4, 9, 17], [4, 70, 6, 6, 19],
+    [2, 24, 3, 6, 97], [2, 44, 3, 7, 99], [2, 62, 3, 5, 101],
     [82, 12, 7, 14, 23], [84, 34, 5, 10, 29], [83, 58, 6, 10, 31],
     [20, 76, 10, 4, 37], [46, 76, 12, 4, 41], [70, 75, 12, 5, 43],
     [79, 19, 5, 9, 47], [78, 66, 8, 8, 53], [64, 72, 8, 5, 61],
@@ -282,6 +290,10 @@ function build(): MapDef {
   // Plaza. The south exit is the gate building itself, which frames its own.
   g.blob(43.5, 7, 3.6, 6, ',', 111, 0.22);
   g.blob(18, 20, 8, 6, ',', 79, 0.3);   // keep the north meadow open
+  // The overlook: a bench and a wayside shrine looking back down the valley.
+  // Without this the east screen is one unbroken wall of canopy and the only
+  // authored thing in it is invisible.
+  g.blob(78.5, 22, 3.6, 3.2, ',', 115, 0.3);
   g.blob(12, 62, 6, 5, ',', 83, 0.3);   // keep the south-west gardens open
 
   // ══ 3. the river ═════════════════════════════════════════════════════════
@@ -578,11 +590,15 @@ function build(): MapDef {
       g.set(x, y, x === x0 ? '<' : x === x1 ? '>' : post ? 'o' : 'f');
     }
   };
+  // Vertical runs are posts, not rails. The atlas has one rail tile and it is
+  // drawn horizontal; stacking it down a column produced a ladder lying in the
+  // field. A column of posts is both correct art and correct perspective — a
+  // fence running away from the camera shows its posts, not its rails.
   const fenceV = (y0: number, y1: number, x: number, gapAt?: number) => {
     for (let y = y0; y <= y1; y++) {
       if (gapAt !== undefined && (y === gapAt || y === gapAt + 1)) continue;
       if (!SOFT.includes(g.get(x, y)) && g.get(x, y) !== 'x') continue;
-      g.set(x, y, y === y0 || y === y1 || rnd(y * 59 + x, 23) < 0.18 ? 'o' : 'f');
+      g.set(x, y, 'o');
     }
   };
   fenceH(6, 17, 18, 12);
@@ -676,10 +692,17 @@ function build(): MapDef {
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       if (g.get(x, y) !== 'X') continue;
+      // The brief is a darker, taller wall on the LEFT and TOP specifically —
+      // those are the borders the frame was leaking at. Running the same
+      // treatment all the way round buried the market gardens behind a hedge
+      // of conifer, so the south and east keep their mixed broadleaf.
       const edge = Math.min(x, y, W - 1 - x, H - 1 - y);
-      const conifer = edge <= 2 ? 0.78 : edge <= 5 ? 0.52 : (y < 26 || x > 74) ? 0.24 : 0.10;
+      const framing = Math.min(x, y);
+      const conifer = framing <= 3 ? 0.74 : framing <= 6 ? 0.46 : (y < 26 || x > 74) ? 0.22 : 0.08;
       const r = rnd(x * 3 + 1, y * 5 + 2);
-      if (r < 0.52 + (edge <= 4 ? 0.16 : 0)) o.set(x, y, rnd(x * 7 + 3, y * 11 + 5) < conifer ? 'P' : 'T');
+      if (r < 0.52 + (framing <= 4 ? 0.16 : edge <= 3 ? 0.06 : 0)) {
+        o.set(x, y, rnd(x * 7 + 3, y * 11 + 5) < conifer ? 'P' : 'T');
+      }
       else if (r < 0.66) o.set(x, y, 'b');
       else if (r < 0.72) o.set(x, y, 'r');
       else if (r < 0.76) o.set(x, y, 'u');
@@ -943,7 +966,7 @@ function build(): MapDef {
   P('prop/town/flowerbed_2', 52.5, 47.5, { solid: [28, 8] });
   // A market on the square's east shoulder — implied activity, no NPC needed.
   P('prop/build/stall_frame', 52.5, 42.5, { solid: [60, 14], interact: 'prop.festStall' });
-  P('prop/build/awning_wide_red', 52.5, 40.6, { depthBias: 12000 });
+  P('prop/build/awning_wide_teal', 52.5, 39.94, { depthBias: 12000 });
   P('prop/town/crate_1', 51, 43.6, {});
   P('prop/town/basket_1', 54, 43.6, {});
   P('prop/town/basket_2', 50.2, 44.4, {});
@@ -1024,11 +1047,11 @@ function build(): MapDef {
     // The stall row down the green's west side, one behind the other, which is
     // how a market actually forms — along the side the carts come in on.
     P('prop/build/stall_frame', 27.8, 33.4, { solid: [60, 14], interact: 'prop.festStall' });
-    P('prop/build/awning_wide_teal', 27.8, 31.5, { depthBias: 12000 });
+    P('prop/build/awning_wide_teal', 27.8, 30.84, { depthBias: 12000 });
     P('prop/town/crate_1', 26.4, 34.4, {});
     P('prop/town/basket_2', 29.4, 34.3, {});
     P('prop/build/stall_frame', 27.8, 38.6, { solid: [60, 14] });
-    P('prop/build/awning_wide_red', 27.8, 36.7, { depthBias: 12000 });
+    P('prop/build/awning_wide_blue', 27.8, 36.04, { depthBias: 12000 });
     P('prop/town/basket_0', 26.4, 39.5, { interact: 'garden_basket' });
     P('prop/town/sack_0', 29.4, 39.4, {});
     P('prop/town/vegetable_row_1', 31.5, 32.4, { solid: [28, 8] });
@@ -1084,7 +1107,7 @@ function build(): MapDef {
   P('prop/fest/bunting_2', 47, 19.6, { over: true, sway: 0.5 });
   P('prop/build/stall_frame', 34, 15.5, { solid: [60, 14], interact: 'prop.festStall' });
   P('prop/build/stall_frame', 53, 15.5, { solid: [60, 14] });
-  P('prop/build/awning_wide_blue', 53, 13.6, { depthBias: 12000 });
+  P('prop/build/awning_wide_blue', 53, 12.94, { depthBias: 12000 });
   P('prop/fest/crate_stack_fest', 47, 17.6, { solid: [28, 10], interact: 'prop.festJudging' });
   P('prop/fest/crate_stack_fest', 40.6, 17.4, { solid: [28, 10] });
   P('prop/fest/barrel_fest', 48.4, 18.2, { solid: [18, 8] });
@@ -1239,6 +1262,19 @@ function build(): MapDef {
   P('prop/town/barrel_1', 24.4, 71.6, { solid: [20, 8] });
   P('prop/town/water_trough', 21.4, 66.6, { solid: [28, 8] });
   P('prop/town/hay_bale', 28.6, 66.4, { solid: [22, 10] });
+  // The working ground between the gardens and Sera's lane read as one bare
+  // brown field; it is a market garden, so it gets the clutter of one.
+  P('prop/town/hay_bale', 13.6, 65.4, { solid: [22, 10] });
+  P('prop/town/crate_0', 18.4, 68.4, {});
+  P('prop/town/barrel_0', 19.4, 69.0, { solid: [14, 8] });
+  P('prop/town/woodpile_0', 12.6, 69.4, { solid: [28, 10], interact: 'woodpile' });
+  P('prop/town/log_0', 15.5, 72.4, { solid: [26, 8] });
+  P('prop/town/bench_1', 19.6, 71.4, { solid: [30, 10], interact: 'prop.bench' });
+  for (const [x, y] of [[15.4, 69.4], [16.6, 70.2], [17.4, 64.4]] as const) {
+    P('prop/town/chicken_0', x, y, { anim: 'chicken_peck' });
+  }
+  P('prop/town/butterfly_0', 20.5, 68.5, { anim: 'butterfly_fly', depthBias: 400, offset: [0, -12] });
+  lamp(19.4, 65.4, 40, 0.36);
   P('prop/town/log_1', 6.5, 60, { solid: [22, 8] });
   P('prop/town/duck_0', 8.5, 58.6, { anim: 'duck_waddle', interact: 'prop.duck' });
   for (const [x, y] of [[9.5, 61.6], [10.6, 60.8]] as const) P('prop/town/chicken_1', x, y, { anim: 'chicken_peck' });
@@ -1363,6 +1399,16 @@ function build(): MapDef {
   P('prop/town/stone_lantern', 76.6, 21.6, { solid: [10, 8] });
   lights.push({ x: 76.6, y: 20.8, radius: 34, color: 0xffd08a, intensity: 0.34, flicker: 0.8 });
   P('prop/town/mossy_rock_0', 81, 25.5, { solid: [16, 8] });
+  // Enough dressing that the clearing reads as somewhere people come to sit.
+  P('prop/town/stone_lantern', 80.6, 20.4, { solid: [10, 8] });
+  lights.push({ x: 80.6, y: 19.6, radius: 32, color: 0xffd08a, intensity: 0.30, flicker: 0.8 });
+  P('prop/town/log_1', 77.5, 24.4, { solid: [22, 8] });
+  P('prop/town/tree_stump', 80.5, 24.2, { solid: [16, 8], interact: 'prop.stump' });
+  P('prop/town/flowerbed_2', 78.5, 19.4, { solid: [28, 8] });
+  P('prop/town/basket_1', 79.2, 23.2, {});
+  P('prop/town/bird_perched_0', 79.6, 21.8, { anim: 'bird_perched_idle', depthBias: 6 });
+  P('prop/town/butterfly_1', 77.5, 22.5, { anim: 'butterfly_fly', depthBias: 400, offset: [0, -12] });
+  lamp(75.6, 24.4, 42, 0.40);
 
   // ══ 16. townsfolk ════════════════════════════════════════════════════════
   const npcs: NpcPlacement[] = [

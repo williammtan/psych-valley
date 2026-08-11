@@ -175,7 +175,10 @@ function build(): MapDef {
     ],
 
     zones: [
-      { kind: 'door', id: 'to_town', x: DOOR_X, y: 2, w: 2, h: 1, to: 'lumen_vale', spawn: 'default', facing: 's' },
+      // Back out onto Courier Row, not into the town square. lumen_vale's
+      // 'default' spawn is the fountain, so sending the player there teleported
+      // them halfway across the map every time they left Oren's office.
+      { kind: 'door', id: 'to_town', x: DOOR_X, y: 2, w: 2, h: 1, to: 'lumen_vale', spawn: 'courier_door', facing: 's' },
       // Set back from the doormat: walking in should start the scene, but
       // spawning here (debug jumps, a door transition) should not.
       { kind: 'trigger', id: 'oren_intro', x: 18, y: 7, w: 10, h: 3, forbids: 'q2_started' },

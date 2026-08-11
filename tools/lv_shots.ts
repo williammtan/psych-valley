@@ -31,6 +31,7 @@ const SCREENS: Array<[string, number, number, number?, number?]> = [
   ['square_n', 44, 40],      // the north approach to the square
   ['plaza', 44, 15],         // Festival Plaza, ordinary state
   ['plaza_n', 44, 8],        // plaza north arch / festival transition
+  ['market', 32, 35, 31, 37], // the Market Green — the old dead band
   ['store', 36, 32, 36, 38], // the bakery frontage and its apron
   ['courier', 16, 34],       // Courier Row
   ['courier_s', 12, 44],     // Courier Row south + house_a

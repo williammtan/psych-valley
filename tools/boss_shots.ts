@@ -16,88 +16,13 @@ import { mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
+import { DRIVER } from './boss_bot';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'shots', 'boss');
 
-// ── page-side helpers, injected once per page load ──────────────────────────
-// Written as a source string rather than an imported module because it has to
-// run inside the game's window, next to __psyche and __boss.
-const DRIVER = `
-window.__bossDriver = (() => {
-  const P = () => window.__psyche;
-  const B = () => window.__boss;
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  async function until(pred, timeout) {
-    const t0 = performance.now();
-    while (performance.now() - t0 < (timeout || 12000)) {
-      let v = false;
-      try { v = !!pred(); } catch (e) { v = false; }
-      if (v) return true;
-      await wait(40);
-    }
-    return false;
-  }
-
-  function player() { return P().state().player; }
-
-  /** Walk to a world pixel position. */
-  async function goTo(tx, ty, timeout) {
-    const t0 = performance.now();
-    while (performance.now() - t0 < (timeout || 3000)) {
-      const p = player();
-      const dx = tx - p.x, dy = ty - p.y;
-      const d = Math.hypot(dx, dy);
-      if (d < 7) break;
-      P().move(dx / d, dy / d);
-      await wait(28);
-    }
-    P().stop();
-  }
-
-  /** Stand on the given side of the Echo, at reach, and swing. */
-  async function strikeFrom(side, timeout) {
-    const s = B().state();
-    const off = { n: [0, -30], s: [0, 34], e: [34, -14], w: [-34, -14] }[side];
-    await goTo(s.x + off[0], s.y - 20 + off[1], timeout || 2200);
-    P().press('attack');
-    await wait(320);
-  }
-
-  /**
-   * Advance dialogue.
-   *
-   * DialogueBox listens to raw DOM keydown, not to InputManager, and
-   * InputManager is disabled during a cutscene anyway — so __psyche.press()
-   * alone will never move a scene on. Dispatch a real key event as well.
-   */
-  function advance() {
-    for (const type of ['keydown', 'keyup']) {
-      const ev = new KeyboardEvent(type, { key: ' ', code: 'Space', keyCode: 32, which: 32, bubbles: true });
-      window.dispatchEvent(ev);
-      document.dispatchEvent(ev);
-    }
-    try { P().press('interact'); } catch (e) { /* not in a world scene */ }
-  }
-
-  /** Hammer the advance key until a condition holds (or we give up). */
-  async function advanceUntil(pred, timeout) {
-    const t0 = performance.now();
-    while (performance.now() - t0 < (timeout || 60000)) {
-      let done = false;
-      try { done = !!pred(); } catch (e) { done = false; }
-      if (done) return true;
-      advance();
-      await wait(260);
-    }
-    return false;
-  }
-
-  return { wait, until, goTo, strikeFrom, player, advance, advanceUntil };
-})();
-`;
-
+// The page-side driver is shared with tools/boss_playtest.ts so the bots that
+// take the screenshots behave exactly like the bots that are measured.
 interface Shot {
   name: string;
   note: string;
@@ -131,9 +56,9 @@ const SHOTS: Shot[] = [
       const d = window.__bossDriver;
       window.__boss.phase(1);
       await d.wait(700);
-      await d.strikeFrom('s');
+      await d.strikeSide(window.__boss.state().x, window.__boss.state().y - 26, 's');
       await d.wait(500);
-      await d.strikeFrom('s');
+      await d.strikeSide(window.__boss.state().x, window.__boss.state().y - 26, 's');
       await d.until(() => window.__boss.state().predicted, 4000);
       await d.wait(500);
     `,
@@ -146,11 +71,11 @@ const SHOTS: Shot[] = [
       const d = window.__bossDriver;
       window.__boss.phase(1);
       await d.wait(700);
-      await d.strikeFrom('s');
+      await d.strikeSide(window.__boss.state().x, window.__boss.state().y - 26, 's');
       await d.wait(450);
-      await d.strikeFrom('s');
+      await d.strikeSide(window.__boss.state().x, window.__boss.state().y - 26, 's');
       await d.until(() => window.__boss.state().predicted, 4000);
-      await d.strikeFrom('e');
+      await d.strikeSide(window.__boss.state().x, window.__boss.state().y - 26, 'e');
       await d.wait(260);
     `,
   },
@@ -205,15 +130,12 @@ const SHOTS: Shot[] = [
       const d = window.__bossDriver;
       window.__boss.phase(3);
       await d.until(() => window.__boss.state().followers.some((f) => f.odd), 8000);
-      const odd = window.__boss.state().followers.find((f) => f.odd);
-      await d.goTo(odd.x, odd.y + 26, 3000);
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 14; i++) {
         const s = window.__boss.state();
         if (!s.unanimous) break;
-        const o = s.followers.find((f) => f.odd);
-        if (o) await d.goTo(o.x, o.y + 24, 900);
-        window.__psyche.press('attack');
-        await d.wait(360);
+        const o = s.followers.filter((f) => f.odd)[0];
+        if (!o) break;
+        await d.strikeAt(o.x, o.y, 1200);
       }
       await d.wait(420);
     `,

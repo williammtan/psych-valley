@@ -165,8 +165,21 @@ function makeCtx(page: Page, out: string, errBuf: string[], logPath: string, bas
         journal: 'i', pause: 'Escape', cancel: 'Escape', map: 'm',
         up: 'w', down: 's', left: 'a', right: 'd',
       };
-      await ev('(a) => { const p = window.__psyche; if (["interact","attack","dash","observe","journal","pause","cancel","map"].includes(a)) p.press(a); }', a);
-      if (KEY[a]) await page.keyboard.press(KEY[a]);
+      // One real key event is exactly what a player produces, and both the
+      // InputManager and the dialogue box's raw listener see it. Injecting as
+      // well would fire the action twice and invent bugs.
+      // Held for a couple of frames on purpose. Playwright's press() fires
+      // keydown+keyup back to back, and the InputManager polls
+      // Keyboard.JustDown once per frame — a zero-length press is dropped
+      // there while the dialogue box (which listens to the raw event) still
+      // sees it, which looks exactly like "interact is broken".
+      if (KEY[a]) {
+        await page.keyboard.down(KEY[a]);
+        await page.waitForTimeout(70);
+        await page.keyboard.up(KEY[a]);
+      } else {
+        await ev('(a) => window.__psyche.press(a)', a);
+      }
       await page.waitForTimeout(90);
     },
     move: async (x, y) => { await ev('(x,y) => window.__psyche.move(x,y)', x, y); },
