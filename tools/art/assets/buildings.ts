@@ -748,15 +748,18 @@ function door(s: Surface, x: number, y: number, w: number, h: number, style: Doo
         s.pxOver(x + i, y + j, pick(P.WINDOW_AMBER, 3.2 - t * 1.4));
       }
     }
-    // radial glazing bars springing from the transom, clipped to the glass
-    const cx0 = x + w / 2 - 0.5;
-    for (const ang of [-0.85, 0, 0.85]) {
-      for (let t = 0; t <= ah * 1.2; t += 0.34) {
-        const bx = Math.round(cx0 + Math.sin(ang) * t);
-        const by = Math.round(y + ah - Math.cos(ang) * t);
+    // Glazing bars. Straight verticals following the arc read far better at
+    // 14px than true radial bars, which turn into scribble.
+    const cx0 = x + Math.floor(w / 2);
+    for (const dx of [-4, 0, 4]) {
+      const bx = cx0 + dx;
+      const reach = Math.round(Math.sqrt(Math.max(0, 1 - (dx * dx) / ((w / 2) * (w / 2)))) * (ah - 1));
+      for (let j = 0; j < reach; j++) {
+        const by = y + ah - 1 - j;
         const c = s.get(bx, by);
         if (c[3] === 0 || c[0] < 120) continue;   // only paint on lit glass
         s.px(bx, by, P.WOOD[1]);
+        s.px(bx + 1, by, pick(P.WINDOW_AMBER, 1), 0.5);
       }
     }
     s.pxOver(x + 2, y + ah - 3, P.WINDOW_AMBER[4]);
@@ -866,7 +869,7 @@ function door(s: Surface, x: number, y: number, w: number, h: number, style: Doo
   s.px(kx, ky + 2, P.IRON[1]);
   s.px(kx - 1, ky + 3, P.OUTLINE);
   if (o.knocker) {
-    const nx = x + Math.floor(w / 2), ny = top + Math.round(dh * 0.3);
+    const nx = x + Math.floor(w / 2), ny = top + Math.round(dh * (o.glazed ? 0.62 : 0.3));
     s.ellipseOutline(nx - 3, ny, 6, 5, P.BRONZE[2]);
     s.px(nx - 3, ny + 1, P.BRONZE[4]);
     s.rect(nx - 1, ny - 2, 2, 2, P.BRONZE[3]);
@@ -1050,12 +1053,12 @@ function signBoard(s: Surface, x: number, y: number, w: number, h: number, kind:
       break;
     }
     case 'parcel': {
-      s.rect(cx - 6, cy - 4, 12, 9, P.PARCEL_WRAP.kraft[2]);
-      s.hline(cx - 6, cy - 4, 12, P.PARCEL_WRAP.kraft[4]);
-      s.hline(cx - 6, cy + 4, 12, P.PARCEL_WRAP.kraft[0]);
-      s.vline(cx - 1, cy - 4, 9, P.TWINE);
-      s.hline(cx - 6, cy, 12, P.TWINE);
-      s.px(cx - 2, cy - 1, P.TWINE); s.px(cx + 1, cy - 1, P.TWINE);
+      s.rect(cx - 6, cy - 4, 12, 9, P.KRAFT[2]);
+      s.hline(cx - 6, cy - 4, 12, P.KRAFT[4]);
+      s.hline(cx - 6, cy + 4, 12, P.KRAFT[0]);
+      s.vline(cx - 1, cy - 4, 9, P.STRING);
+      s.hline(cx - 6, cy, 12, P.STRING);
+      s.px(cx - 2, cy - 1, P.STRING); s.px(cx + 1, cy - 1, P.STRING);
       break;
     }
     case 'boot': {
@@ -1634,28 +1637,6 @@ function buildWorkshop(): Surface {
   s.hline(42, 28, 20, P.WOOD[3]);
   shadeRect(s, 62, 30, 6, 12, P.OUTLINE, 0.25);
 
-  // ── copper venting bolted up the right flank
-  for (let j = 0; j < 42; j++) {
-    const y = 66 + j;
-    s.px(76, y, P.COPPER[4]); s.px(77, y, P.COPPER[3]);
-    s.px(78, y, P.COPPER[2]); s.px(79, y, P.COPPER[0]);
-    if (j % 13 === 5) {
-      s.hline(75, y, 6, P.COPPER[4]);
-      s.hline(75, y + 1, 6, P.COPPER[2]);
-      s.hline(75, y + 2, 6, P.COPPER[0]);
-    }
-  }
-  for (let i = 0; i < 14; i++) {
-    s.px(64 + i, 69, P.COPPER[4]); s.px(64 + i, 70, P.COPPER[3]);
-    s.px(64 + i, 71, P.COPPER[2]); s.px(64 + i, 72, P.COPPER[0]);
-  }
-  // pressure vessel bolted to the wall
-  s.ellipse(60, 64, 10, 12, P.COPPER[2]);
-  s.ellipse(61, 65, 6, 8, P.COPPER[3]);
-  s.ellipse(62, 66, 3, 4, P.COPPER[4]);
-  s.ellipseOutline(60, 64, 10, 12, P.COPPER[0]);
-  s.rect(63, 61, 4, 3, P.IRON[2]);
-  s.hline(63, 61, 4, P.IRON[4]);
   chimney(s, 28, 18, 8, 28, 'flue', seed + 33);   // smoke anchor: (32, 14)
 
   // ── tall library windows, book stacks silhouetted against the lamplight
@@ -1670,6 +1651,32 @@ function buildWorkshop(): Surface {
   door(s, 45, 82, 14, 26, 'panel', {
     ramp: P.ROOF_TEAL, seed: seed + 35, step: false, knocker: true, architrave: P.WOOD_LIGHT,
   });
+
+  // ── copper: a boiler bolted to the wall, venting up the right flank and out
+  //    through the extension. Nothing about it looks planned.
+  s.ellipse(62, 92, 13, 16, P.COPPER[2]);
+  s.ellipse(63, 93, 9, 12, P.COPPER[3]);
+  s.ellipse(64, 95, 4, 5, P.COPPER[4]);
+  s.ellipseOutline(62, 92, 13, 16, P.COPPER[0]);
+  for (let i = 0; i < 13; i += 4) s.px(62 + i, 99, P.IRON[1]);
+  s.rect(66, 88, 4, 5, P.IRON[2]);
+  s.hline(66, 88, 4, P.IRON[4]);
+  for (let j = 0; j < 34; j++) {
+    const y = 58 + j;
+    s.px(70, y, P.COPPER[4]); s.px(71, y, P.COPPER[3]);
+    s.px(72, y, P.COPPER[2]); s.px(73, y, P.COPPER[0]);
+    if (j % 12 === 4) {
+      s.hline(69, y, 6, P.COPPER[4]);
+      s.hline(69, y + 1, 6, P.COPPER[2]);
+      s.hline(69, y + 2, 6, P.COPPER[0]);
+    }
+  }
+  for (let i = 0; i < 10; i++) {
+    s.px(70 + i, 74, P.COPPER[4]); s.px(70 + i, 75, P.COPPER[3]);
+    s.px(70 + i, 76, P.COPPER[2]); s.px(70 + i, 77, P.COPPER[0]);
+  }
+  s.px(69, 90, P.COPPER[3]); s.px(70, 90, P.COPPER[2]);
+  s.px(69, 91, P.COPPER[2]); s.px(70, 91, P.COPPER[0]);
 
   // occupancy
   ivy(s, 29, 60, 6, 48, seed + 37);
@@ -1771,8 +1778,11 @@ function buildCourier(): Surface {
   lanternHanging(s, 44, 50, 4, 4);
 
   // ── service counter: awning, propped hatch, warm interior, parcels on the sill
-  awning(s, 58, 46, 38, 11, P.CANVAS, P.ROOF_BLUE, seed + 19, true, 6);
-  shadeRect(s, 58, 57, 38, 3, P.OUTLINE, 0.3);
+  s.rect(58, 46, 38, 2, P.WOOD[2]);
+  s.hline(58, 46, 38, P.WOOD[4]);
+  s.hline(58, 47, 38, P.WOOD[0]);
+  awning(s, 58, 48, 38, 11, P.CANVAS, P.ROOF_BLUE, seed + 19, true, 13);
+  shadeRect(s, 58, 59, 38, 3, P.OUTLINE, 0.3);
   const hx0 = 62, hy0 = 58, hw = 30, hh = 16;
   s.rect(hx0 - 2, hy0 - 2, hw + 4, hh + 4, P.WOOD[2]);
   s.hline(hx0 - 2, hy0 - 2, hw + 4, P.WOOD[4]);
@@ -1797,9 +1807,9 @@ function buildCourier(): Surface {
   s.hline(hx0 - 4, hy0 + hh + 3, hw + 8, P.WOOD[0]);
   shadeRect(s, hx0 - 3, hy0 + hh + 4, hw + 8, 2, P.OUTLINE, 0.3);
   // a parcel and a bell on the counter
-  s.rect(hx0 + 1, hy0 + hh - 6, 9, 6, P.PARCEL_WRAP.kraft[2]);
-  s.hline(hx0 + 1, hy0 + hh - 6, 9, P.PARCEL_WRAP.kraft[4]);
-  s.vline(hx0 + 5, hy0 + hh - 6, 6, P.TWINE);
+  s.rect(hx0 + 1, hy0 + hh - 6, 9, 6, P.KRAFT[2]);
+  s.hline(hx0 + 1, hy0 + hh - 6, 9, P.KRAFT[4]);
+  s.vline(hx0 + 5, hy0 + hh - 6, 6, P.STRING);
   s.ellipse(hx0 + hw - 8, hy0 + hh - 5, 5, 5, P.BRONZE[2]);
   s.ellipse(hx0 + hw - 7, hy0 + hh - 5, 3, 3, P.BRONZE[4]);
   s.px(hx0 + hw - 6, hy0 + hh - 7, P.BRONZE[3]);
@@ -1814,14 +1824,14 @@ function buildCourier(): Surface {
 
   // ── parcel pile and sacks against the corner
   crate(s, 90, 68, 12, 11, seed + 23);
-  s.rect(89, 79, 13, 5, P.PARCEL_WRAP.slate[2]);
-  s.hline(89, 79, 13, P.PARCEL_WRAP.slate[4]);
-  s.hline(89, 83, 13, P.PARCEL_WRAP.slate[0]);
-  s.vline(95, 79, 5, P.TWINE);
-  s.rect(90, 62, 11, 6, P.PARCEL_WRAP.rose[2]);
-  s.hline(90, 62, 11, P.PARCEL_WRAP.rose[4]);
-  s.vline(95, 62, 6, P.TWINE);
-  s.hline(90, 65, 11, P.TWINE, 0.85);
+  s.rect(89, 79, 13, 5, P.ROOF_BLUE[2]);
+  s.hline(89, 79, 13, P.ROOF_BLUE[4]);
+  s.hline(89, 83, 13, P.ROOF_BLUE[0]);
+  s.vline(95, 79, 5, P.STRING);
+  s.rect(90, 62, 11, 6, P.FLOWER_ROSE[1]);
+  s.hline(90, 62, 11, P.FLOWER_ROSE[2]);
+  s.vline(95, 62, 6, P.STRING);
+  s.hline(90, 65, 11, P.STRING, 0.85);
 
   // a parcel plaque bolted over the door instead of a swinging sign — the
   // courier office is too wide for a bracket to clear the eave.
@@ -2823,12 +2833,12 @@ function smokeFrames(): Surface[] {
           // ragged edge, solid core — a puff, not a gradient blob
           if (d > 0.55 && h2(Math.round(x + i), Math.round(y + j), 77 + p) < 0.42) continue;
           const k = tone + (i < 0 && j < 0 ? 1.2 : i > rad * 0.4 ? -0.9 : 0);
-          s.px(Math.round(x + i), Math.round(y + j), pick(P.SMOKE_PUFF, k), alpha * (d > 0.7 ? 0.55 : 1));
+          s.px(Math.round(x + i), Math.round(y + j), pick(P.CHIMNEY_SMOKE, k), alpha * (d > 0.7 ? 0.55 : 1));
         }
       }
       if (age < 0.5) {
-        s.px(Math.round(x - 1), Math.round(y - rad + 1), P.SMOKE_PUFF[4], alpha * 0.9);
-        s.px(Math.round(x - 2), Math.round(y - rad + 2), P.SMOKE_PUFF[4], alpha * 0.6);
+        s.px(Math.round(x - 1), Math.round(y - rad + 1), P.CHIMNEY_SMOKE[4], alpha * 0.9);
+        s.px(Math.round(x - 2), Math.round(y - rad + 2), P.CHIMNEY_SMOKE[4], alpha * 0.6);
       }
       void r;
     }

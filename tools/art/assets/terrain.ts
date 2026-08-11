@@ -175,30 +175,67 @@ function pathPainter(ramp: readonly string[], seed: number, style: 'dirt' | 'fla
     }
 
     if (style === 'flag') {
-      // irregular flagstones with mortar lines
-      const cuts = [0, 6, 11, 16];
-      for (const cy of cuts) {
-        for (let x = 0; x < TILE; x++) {
-          const jitter = Math.round(Math.sin((x + seed) * 0.9) * 0.6);
-          s.pxOver(x, cy + jitter, ramp[0], 0.8);
-        }
+      /**
+       * Irregular flagstones via a jittered cellular partition.
+       *
+       * The first version drew the same brick grid on every tile, so a path
+       * read as one pattern stamped repeatedly — the giveaway that a texture is
+       * generated rather than laid. Here each tile gets its own scattered stone
+       * centres (seeded from the tile's own rng), pixels are assigned to their
+       * nearest centre, and the seams between cells become mortar. Stones then
+       * differ in size and shape from tile to tile while still reading as one
+       * continuous surface.
+       */
+      const nCells = 8 + r.int(0, 3);
+      const cells: Array<{ x: number; y: number; tone: number }> = [];
+      for (let i = 0; i < nCells; i++) {
+        cells.push({ x: r.range(-2, TILE + 2), y: r.range(-2, TILE + 2), tone: r.int(0, 3) });
       }
-      const stagger = [3, 9, 13];
-      for (let bandIdx = 0; bandIdx < cuts.length - 1; bandIdx++) {
-        const top = cuts[bandIdx], bot = cuts[bandIdx + 1];
-        const sx = stagger[bandIdx % stagger.length];
-        for (let x = sx; x < TILE; x += 8) {
-          for (let y = top + 1; y < bot; y++) s.pxOver(x, y, ramp[0], 0.75);
-        }
-      }
-      // highlight the top-left of each stone
+      const owner = new Int16Array(TILE * TILE).fill(-1);
       for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
-          if (s.alphaAt(x, y) === 0) continue;
-          const above = s.get(x, y - 1);
-          if (y > 0 && above[3] > 0 && above[0] < 90) s.px(x, y, ramp[4], 0.65);
+          if (coverage.alphaAt(x, y) === 0) continue;
+          let bestI = 0, bestD = Infinity;
+          for (let i = 0; i < cells.length; i++) {
+            const d = (cells[i].x - x) ** 2 + (cells[i].y - y) ** 2;
+            if (d < bestD) { bestD = d; bestI = i; }
+          }
+          owner[y * TILE + x] = bestI;
+          // Each stone carries its own tone so a run of them has rhythm.
+          s.px(x, y, ramp[[2, 2, 3, 1][cells[bestI].tone]]);
         }
       }
+
+      // The mortar groove: one pixel wide, on the stone's bottom/right edge only.
+      const isMortar = new Uint8Array(TILE * TILE);
+      for (let y = 0; y < TILE; y++) {
+        for (let x = 0; x < TILE; x++) {
+          const o = owner[y * TILE + x];
+          if (o < 0) continue;
+          const right = x + 1 < TILE ? owner[y * TILE + x + 1] : o;
+          const down = y + 1 < TILE ? owner[(y + 1) * TILE + x] : o;
+          if (right !== o || down !== o) { isMortar[y * TILE + x] = 1; s.px(x, y, ramp[0], 0.9); }
+        }
+      }
+
+      // The lit bevel goes on the stone face NEXT TO a groove, never on the
+      // groove itself. Putting both on the same pixel is what makes generated
+      // paving read as cracked mud rather than as cut stone.
+      for (let y = 0; y < TILE; y++) {
+        for (let x = 0; x < TILE; x++) {
+          const i2 = y * TILE + x;
+          if (owner[i2] < 0 || isMortar[i2]) continue;
+          const upIsGroove = y > 0 && isMortar[i2 - TILE];
+          const leftIsGroove = x > 0 && isMortar[i2 - 1];
+          const upIsEdge = y === 0 && coverage.alphaAt(x, y - 1) === 0;
+          const leftIsEdge = x === 0 && coverage.alphaAt(x - 1, y) === 0;
+          if (upIsGroove || leftIsGroove || upIsEdge || leftIsEdge) s.px(x, y, ramp[4], 0.5);
+        }
+      }
+
+      // Wear: grit in the joints, a little polish on the stone faces.
+      speckle(s, r, 0, 0, TILE, TILE, ramp[1], 8, 0.35);
+      speckle(s, r, 0, 0, TILE, TILE, ramp[3], 4, 0.3);
     } else if (style === 'cobble') {
       const r2 = rng(seed + 17);
       for (let cy = 1; cy < TILE; cy += 4) {
@@ -215,9 +252,37 @@ function pathPainter(ramp: readonly string[], seed: number, style: 'dirt' | 'fla
         }
       }
     } else {
-      // dirt: wheel ruts + gravel
-      speckle(s, r, 0, 0, TILE, TILE, ramp[0], 7, 0.5);
-      speckle(s, r, 0, 0, TILE, TILE, ramp[4], 5, 0.45);
+      /**
+       * Worn earth. Two soft ruts run the length of the track with a slightly
+       * lighter crown between them, plus gravel and a few embedded stones.
+       * Uniform speckle alone reads as sandpaper rather than a used road.
+       */
+      const rutA = 4 + r.int(0, 1);
+      const rutB = 10 + r.int(0, 1);
+      for (let y = 0; y < TILE; y++) {
+        for (let x = 0; x < TILE; x++) {
+          if (coverage.alphaAt(x, y) === 0) continue;
+          // Periodic in y so the ruts line up across the tile seam; a
+          // non-periodic wobble makes the track jog every 16 pixels.
+          const wob = Math.round(Math.sin((y / TILE) * Math.PI * 2) * 1.4);
+          const dA = Math.abs(x - (rutA + wob));
+          const dB = Math.abs(x - (rutB + wob));
+          const d = Math.min(dA, dB);
+          if (d <= 1) s.px(x, y, ramp[1], d === 0 ? 0.75 : 0.4);
+          else if (d >= 4) s.px(x, y, ramp[3], 0.28);
+        }
+      }
+      speckle(s, r, 0, 0, TILE, TILE, ramp[0], 6, 0.45);
+      speckle(s, r, 0, 0, TILE, TILE, ramp[4], 4, 0.4);
+      // A couple of half-buried stones per tile.
+      for (let i = 0; i < r.int(0, 2); i++) {
+        const sx = r.int(1, TILE - 3), sy = r.int(1, TILE - 2);
+        if (coverage.alphaAt(sx, sy) === 0) continue;
+        s.px(sx, sy, ramp[4], 0.8);
+        s.px(sx + 1, sy, ramp[3], 0.8);
+        s.px(sx, sy + 1, ramp[0], 0.55);
+        s.px(sx + 1, sy + 1, ramp[0], 0.55);
+      }
     }
 
     // Edge treatment: warm lip on top edge, dark lip elsewhere.

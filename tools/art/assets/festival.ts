@@ -2430,6 +2430,68 @@ function confetti(variant: number): Surface {
   return s;
 }
 
+// ── crowd furniture ────────────────────────────────────────────────────────
+//
+// The conformity quest needs the player to feel *surrounded* — a ring of
+// villagers whose attention is on the stage. A map author cannot build that
+// from NPC positions alone: the crowd needs a boundary to gather along. These
+// two pieces let them arc a barrier around the trial stage, which both shapes
+// the gathering and keeps the walkable route obvious.
+
+/** A short post with a brass ring, for the crowd rope. */
+function crowdPost(): Surface {
+  const W = 12, H = 28;
+  const s = new Surface(W, H);
+  const cx = 5;
+  for (let y = 6; y < 25; y++) {
+    for (let dx = 0; dx < 4; dx++) {
+      const u = dx / 3;
+      s.px(cx + dx - 1, y, u < 0.25 ? P.WOOD_LIGHT[4] : u < 0.55 ? P.WOOD_LIGHT[3] : u < 0.8 ? P.WOOD_LIGHT[2] : P.WOOD[0]);
+    }
+  }
+  grain(s, cx - 1, 6, 4, 19, P.WOOD_LIGHT, 8800, false);
+  // turned collar and a brass finial
+  s.hline(cx - 2, 8, 6, P.BRONZE[2]);
+  s.hline(cx - 2, 9, 6, P.BRONZE[0]);
+  s.ellipse(cx - 2, 2, 6, 6, P.BRONZE[2]);
+  s.ellipse(cx - 1, 3, 4, 4, P.BRONZE[3]);
+  s.px(cx, 4, P.BRONZE[4]);
+  s.px(cx + 2, 6, P.BRONZE[0]);
+  // the ring the rope threads through
+  s.ellipseOutline(cx - 3, 10, 8, 5, P.BRONZE[2]);
+  s.px(cx - 3, 12, P.BRONZE[4]);
+  s.px(cx + 4, 13, P.BRONZE[0]);
+  // foot
+  s.ellipse(cx - 4, 22, 10, 5, P.WOOD[1]);
+  s.hline(cx - 3, 24, 8, P.OUTLINE, 0.5);
+  rim(s, P.OUTLINE, 0.9);
+  contact(s, cx, 27, 12, 5, 0.32);
+  return s;
+}
+
+/** A sagging velvet rope between two posts. Three sags, so runs look placed. */
+function crowdRope(variant: number): Surface {
+  const W = 32, H = 20;
+  const s = new Surface(W, H);
+  const top = 3, sag = [6, 8, 5][variant % 3];
+  const ramp = P.CARPET_RED;
+  for (let x = 0; x < W; x++) {
+    const y = Math.round(cableY(x, W, top, sag));
+    s.px(x, y, ramp[3]);
+    s.px(x, y + 1, ramp[2]);
+    s.px(x, y + 2, ramp[0], 0.85);
+    if (x % 4 === 1) s.px(x, y, ramp[4], 0.6);
+  }
+  // gold ferrules at both ends
+  for (const ex of [0, 1, W - 2, W - 1]) {
+    const y = Math.round(cableY(ex, W, top, sag));
+    s.px(ex, y, P.UI_GOLD[3]);
+    s.px(ex, y + 1, P.UI_GOLD[2]);
+    s.px(ex, y + 2, P.UI_GOLD[0]);
+  }
+  return s;
+}
+
 // ── festival ground ────────────────────────────────────────────────────────
 
 /** Plaza paving, dressed for the festival with painted lines and chalk. */
@@ -2458,39 +2520,50 @@ function plazaFlagTile(variant: number): Surface {
     for (let y = cuts[band] + 1; y < cuts[band + 1]; y++) s.pxOver(sx, y, ramp[1], 0.8);
   }
   // festival dressing
+  // Festival dressing. The runtime shuffles variants within a family per world
+  // position, so nothing here may be directional: a painted line would land in
+  // random broken segments and read as damage. Linear ceremony is the carpet
+  // blob's job; these four are shuffle-safe.
   const r = rng(8400 + variant * 31);
   if (variant === 0) {
-    // a painted gold lane line — held at a fixed row so a run of these tiles
-    // forms one continuous painted line across the plaza
-    for (let x = 0; x < TILE; x++) {
-      s.px(x, 7, P.UI_GOLD[4], 0.55);
-      s.px(x, 8, P.UI_GOLD[3], 0.8);
-      s.px(x, 9, P.UI_GOLD[1], 0.45);
+    // swept clean, a few flecks of confetti in the joints
+    for (let i = 0; i < 3; i++) {
+      const px = r.int(0, TILE - 1), py = r.int(0, TILE - 1);
+      s.px(px, py, r.pick([P.DYE_SAFFRON[3], P.CANVAS[4], P.TONE_ROSE[3]]), 0.55);
     }
-    for (let x = 1; x < TILE; x += 5) s.px(x, 8, P.UI_GOLD[4], 0.7);
   } else if (variant === 1) {
-    // the same lane, painted red and worn to dashes
-    for (let x = 0; x < TILE; x++) {
-      if ((x + 1) % 6 === 0) continue;
-      s.px(x, 7, P.CARPET_RED[4], 0.4);
-      s.px(x, 8, P.CARPET_RED[3], 0.7);
-      s.px(x, 9, P.CARPET_RED[1], 0.4);
+    // trodden petals and confetti
+    for (let i = 0; i < 8; i++) {
+      const px = r.int(0, TILE - 2), py = r.int(0, TILE - 2);
+      const c = r.pick([P.BLOSSOM[3], P.DYE_SAFFRON[3], P.DYE_SEA[3], P.TONE_ROSE[3], P.UI_GOLD[3]]);
+      s.px(px, py, c, 0.85);
+      if (r.chance(0.55)) s.px(px + 1, py, c, 0.5);
+      if (r.chance(0.3)) s.px(px, py + 1, P.OUTLINE, 0.25);
     }
   } else if (variant === 2) {
-    // trodden petals and confetti
-    for (let i = 0; i < 7; i++) {
-      const px = r.int(0, TILE - 2), py = r.int(0, TILE - 2);
-      const c = r.pick([P.BLOSSOM[3], P.DYE_SAFFRON[3], P.DYE_SEA[3], P.TONE_ROSE[3]]);
-      s.px(px, py, c, 0.8);
-      if (r.chance(0.5)) s.px(px + 1, py, c, 0.5);
+    // chalk: where a stall was pitched, plus a scuff
+    for (let a = 0; a < 34; a++) {
+      const th = (a / 34) * Math.PI * 2;
+      s.px(Math.round(8 + Math.cos(th) * 5.5), Math.round(8 + Math.sin(th) * 4.5), P.CANVAS[4], 0.30);
     }
+    s.px(8, 8, P.CANVAS[4], 0.35);
+    for (let i = 0; i < 3; i++) s.px(r.int(1, 14), r.int(1, 14), P.CANVAS[3], 0.3);
   } else {
-    // a chalked ring where a stall stood
-    for (let a = 0; a < 40; a++) {
-      const th = (a / 40) * Math.PI * 2;
-      s.px(Math.round(8 + Math.cos(th) * 5), Math.round(8 + Math.sin(th) * 4), P.CANVAS[4], 0.35);
-    }
-    for (let i = 0; i < 4; i++) s.px(r.int(0, 15), r.int(0, 15), P.DYE_SAFFRON[3], 0.5);
+    // a faded painted lantern motif, outlined not filled, so that at one tile
+    // in four it reads as old ceremonial paintwork rather than as litter
+    const cx = 8, cy = 9;
+    const A = 0.34;
+    for (const [dx, dy] of [
+      [-2, -3], [-1, -3], [0, -3], [1, -3],
+      [-3, -2], [2, -2], [-3, -1], [2, -1], [-3, 0], [2, 0], [-3, 1], [2, 1],
+      [-2, 2], [-1, 2], [0, 2], [1, 2],
+    ] as const) s.px(cx + dx, cy + dy, P.UI_GOLD[3], A);
+    s.px(cx - 1, cy - 4, P.UI_GOLD[2], A * 0.8);
+    s.px(cx, cy - 4, P.UI_GOLD[2], A * 0.8);
+    s.px(cx - 1, cy + 3, P.UI_GOLD[1], A * 0.8);
+    s.px(cx, cy + 3, P.UI_GOLD[1], A * 0.8);
+    s.px(cx - 1, cy - 5, P.UI_GOLD[2], A * 0.6);
+    s.px(cx - 1, cy - 1, P.UI_GOLD[4], A * 0.9);
   }
   return s;
 }
@@ -2917,6 +2990,8 @@ export function registerFestival(b: ArtBuild): void {
   }
 
   for (let i = 0; i < 3; i++) b.add(`prop/fest/ground_lantern_${i}`, groundLantern(i));
+  b.add('prop/fest/crowd_post', crowdPost());
+  for (let i = 0; i < 3; i++) b.add(`prop/fest/crowd_rope_${i}`, crowdRope(i));
   b.add('prop/fest/flower_arch', flowerArch());
   for (let i = 0; i < 4; i++) b.add(`prop/fest/petal_${i}`, petal(i));
   for (let i = 0; i < 4; i++) b.add(`prop/fest/confetti_${i}`, confetti(i));

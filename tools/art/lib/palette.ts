@@ -43,7 +43,7 @@ export const SHADOW_CAST = '#241d3355'; // drop shadow under entities
 export const GRASS: Ramp = ['#1c3a2c', '#27543a', '#357049', '#4b8f56', '#6cb069'];
 export const GRASS_DRY: Ramp = ['#33452a', '#4a5f31', '#66793b', '#87964c', '#a8b062'];
 export const DIRT: Ramp = ['#402c22', '#5b4130', '#785640', '#957054', '#b28d6e'];
-export const PATH_STONE: Ramp = ['#4a4038', '#6b5c4e', '#8b7a68', '#a99783', '#c6b6a1'];
+export const PATH_STONE: Ramp = ['#4a3a2c', '#6a5541', '#8a7157', '#a68d6f', '#c2ab8b'];
 export const COBBLE: Ramp = ['#3f3a3c', '#5c5457', '#7a7071', '#98908c', '#b8b1a8'];
 export const SAND: Ramp = ['#7a6142', '#9c7d55', '#bc9c70', '#d6bb90', '#eddab4'];
 
@@ -228,6 +228,11 @@ export const BRICK: Ramp = ['#3f231e', '#5c332a', '#7a4738', '#96604a', '#b17f63
 export const ROOF_SLATE: Ramp = ['#252634', '#343648', '#484b61', '#61647c', '#7f8298'];
 /** Ancient shrine granite — colder and greener than SHRINE_STONE's interior. */
 export const SHRINE_OUTER: Ramp = ['#20222e', '#2e3242', '#3e4457', '#525a70', '#6d768c'];
+/** Chimney smoke: warm-grey drifting to violet, never neutral. */
+export const CHIMNEY_SMOKE: Ramp = ['#3c3648', '#544e62', '#6f6980', '#918ba0', '#b4aec2'];
+/** Brown paper a courier's parcel is wrapped in, and the string round it. */
+export const KRAFT: Ramp = ['#6a5236', '#8b6f4a', '#ab8c60', '#c9aa7c', '#e3c99e'];
+export const STRING = '#d0b98c';
 
 // ── Festival of Lanterns (appended) ───────────────────────────────────────
 // The three ceremonial trial tones reuse the FX tone ramps so the lantern and
@@ -348,7 +353,7 @@ export const BELL_TONE: Ramp = ['#6b3a0e', '#a8641a', '#e09a2c', '#ffc85e', '#ff
 /** Festival lantern tone B (rose). Tone A is BELL_TONE, tone C is TONE_TEAL. */
 export const TONE_ROSE: Ramp = ['#5c1c38', '#8f2f52', '#c25074', '#e8829e', '#ffc6d6'];
 /** Festival lantern tone C (teal) — cool but short of Echo cyan's saturation. */
-export const TONE_TEAL: Ramp = ['#0e3a3c', '#166063', '#22898a', '#4cb9ae', '#98e8d8'];
+export const TONE_TEAL: Ramp = ['#14494a', '#1d6f6c', '#2b9a92', '#46c0b0', '#8fe4d2'];
 
 /** Greyscale falloff for light sprites; tinted + additively blended at runtime. */
 export const LIGHT_RAMP: Ramp = ['#1e1e1e', '#454545', '#7a7a7a', '#b8b8b8', '#ffffff'];
@@ -396,17 +401,13 @@ export const SOOT: Ramp = ['#131120', '#1f1c2c', '#2e2b3c', '#403d4f', '#565266'
 // declaring a second, near-identical ramp.
 
 /**
- * The four parcel wraps. Quest Two asks the player to recognise a specific
- * package, so `prop/town/parcel_*` and `prop/int/post_parcel_*` MUST both take
- * their colours from here — this record is the contract between those modules.
+ * The four parcel wraps, in index order. Quest Two asks the player to recognise
+ * a specific package they saw somewhere else, so `prop/town/parcel_<i>` and
+ * `prop/int/post_parcel_<i>` MUST be the same colour for the same `i`. This
+ * array is the contract; neither module may pick its own wrap colours.
  */
-export const PARCEL_WRAP: Record<'kraft' | 'slate' | 'rose' | 'sage', Ramp> = {
-  kraft: ['#6b4a28', '#8c6437', '#ad824c', '#c9a068', '#e0bd8c'],
-  slate: ['#2f3a4a', '#445264', '#5d6d80', '#7b8b9c', '#9caab8'],
-  rose: ['#5e2434', '#803347', '#a2495c', '#bd6a78', '#d4909a'],
-  sage: ['#334029', '#4a5a3a', '#66784f', '#849668', '#a5b48a'],
-};
-/** String / twine that ties a parcel and pins a route map. */
+export const PARCEL_WRAP: Ramp[] = [UI_PARCHMENT, ROOF_BLUE, ROOF_PLUM, ROOF_TEAL];
+/** String / twine that pins a route map. Parcel ties use ROPE, as in town. */
 export const TWINE = '#c9b184';
 
 // ── Echo Shrine (appended — shrine module) ────────────────────────────────

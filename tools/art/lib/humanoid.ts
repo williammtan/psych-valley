@@ -9,9 +9,9 @@
  * ── Canvas contract ───────────────────────────────────────────────────────
  *   24 wide x 32 tall, figure centred on x=12, feet on the bottom row (y=31).
  *   Landmarks (for heightAdj = 0):
- *     hair     y  1..3     head    y  3..12   (11 x 10 — deliberately large)
- *     neck     y 12..13    torso   y 13..22
- *     legs     y 22..29    boots   y 30..31
+ *     hair     y  1..3     head     y  3..12   (11 x 10 — deliberately large)
+ *     neck     y 11..14    shoulder y 14   waist y 20   hip y 21
+ *     legs     y 21..29    boots    y 29..31
  *   The contact shadow lives on rows 29..31 *behind* the figure and is never
  *   part of the outlined silhouette.
  *
@@ -685,7 +685,16 @@ function drawHair(
     // an egg, and the crown gets a highlight.
     b.pxOver(hx + 1, hy + 5, hair[1]);
     b.pxOver(hx + 9, hy + 5, hair[1]);
-    if (dir !== 'n') b.pxOver(hx + 2, hy + 1, shift(hair, 2)[4]);
+    if (dir !== 'n') {
+      b.pxOver(hx + 2, hy + 1, shift(hair, 2)[4]);      // scalp highlight
+      // Brows: without hair the face has no dark mass at all and reads blank.
+      if (dir === 's') {
+        b.pxOver(hx + 2, hy + 3, hair[1]); b.pxOver(hx + 3, hy + 3, hair[1]);
+        b.pxOver(hx + 7, hy + 3, hair[1]); b.pxOver(hx + 8, hy + 3, hair[1]);
+      } else {
+        b.pxOver(hx + 6, hy + 3, hair[1]); b.pxOver(hx + 7, hy + 3, hair[1]);
+      }
+    }
     return;
   }
   const style = spec.hairStyle;
@@ -728,9 +737,16 @@ function drawHair(
     case 'long': {
       if (dir === 'n') {
         taper(m, hy + 2, shoulder + 6 + lift, CX, 5.5, CX + sway, 5, 1.1);
+      } else if (dir === 'e') {
+        // In profile the mass belongs behind the head; only a thin strand
+        // falls in front of the ear.
+        limb(m, hx - 1, hy + 3, hx - 2 + sway, shoulder + 5 + lift, 4, 3);
+        limb(m, hx + 10, hy + 4, hx + 10 + sway, hy + 9, 2, 2);
       } else {
-        limb(m, hx, hy + 3, hx - 1 + sway, shoulder + 4 + lift, 4, 3);
-        limb(m, hx + 10, hy + 3, hx + 11 + sway, shoulder + 4 + lift, 4, 3);
+        // Hangs *beside* the face, not over it — a curtain across the eyes is
+        // the difference between long hair and a hood.
+        limb(m, hx - 1, hy + 3, hx - 1 + sway, shoulder + 4 + lift, 3, 3);
+        limb(m, hx + 11, hy + 3, hx + 11 + sway, shoulder + 4 + lift, 3, 3);
       }
       break;
     }

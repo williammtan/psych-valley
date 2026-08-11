@@ -511,15 +511,14 @@ function dashTrailFrames(): Surface[] {
   // Lengths are deliberately uneven and longest in the middle, so the streaks
   // add up to one lens-shaped smear instead of a stack of equal rules.
   const streaks = [
-    { y: 4.5, x: 11.0, len: 8, w: 0.55, a: 0.5 },
-    { y: 7.0, x: 5.5, len: 16, w: 0.9, a: 0.85 },
-    { y: 10.0, x: 2.0, len: 21, w: 1.3, a: 1.0 },
-    { y: 12.5, x: 4.5, len: 18, w: 1.0, a: 0.9 },
-    { y: 15.0, x: 9.0, len: 12, w: 0.7, a: 0.62 },
-    { y: 17.0, x: 13.5, len: 7, w: 0.5, a: 0.4 },
+    { y: 5.0, x: 10.0, len: 10, w: 0.7, a: 0.55 },
+    { y: 8.0, x: 3.5, len: 19, w: 1.5, a: 0.9 },
+    { y: 11.5, x: 1.5, len: 23, w: 1.9, a: 1.0 },
+    { y: 15.0, x: 4.0, len: 18, w: 1.4, a: 0.85 },
+    { y: 17.5, x: 11.0, len: 9, w: 0.65, a: 0.5 },
   ];
   const keys = [
-    { amp: 1.55, shrink: 0.0, off: 0, n: 6 },
+    { amp: 1.55, shrink: 0.0, off: 0, n: 5 },
     { amp: 1.15, shrink: 0.24, off: 2.5, n: 5 },
     { amp: 0.74, shrink: 0.48, off: 5.0, n: 4 },
     { amp: 0.40, shrink: 0.70, off: 7.5, n: 3 },
@@ -1002,7 +1001,7 @@ function toneRingFrames(
         fRing(F, { cx: c, cy: c, r: rad - 2, squash, thick: thick * 0.7, amp: amp * 0.6 });
       }
     }
-    return paint(s, F, bandsAt(ramp, 0.16, 1.15, 0.3, Math.max(peak, 0.2), 1.3));
+    return paint(s, F, bandsAt(ramp, 0.30, 1.08, 0.3, Math.max(peak, 0.2), 1.3));
   });
 }
 
@@ -1084,7 +1083,7 @@ function observePingFrames(): Surface[] {
     }
     // the pulse's origin keeps a small glow for the first half of the sweep
     if (f < 3) fDot(F, c, c, 5 - f, (1.0 - f * 0.3) * 0.9, 2);
-    return paint(s, F, bandsAt(P.ECHO_CYAN, 0.15, 0.98, 0.3, amp, 1.35));
+    return paint(s, F, bandsAt(P.ECHO_CYAN, 0.30, 0.95, 0.3, amp, 1.35));
   });
 }
 
@@ -1103,11 +1102,11 @@ function observeMarkFrames(): Surface[] {
     // corner brackets rather than a closed diamond: it points, it doesn't frame
     for (let k = 0; k < 4; k++) {
       const p = pts[k], q = pts[(k + 1) % 4];
-      fLine(F, p[0], p[1], p[0] + (q[0] - p[0]) * 0.34, p[1] + (q[1] - p[1]) * 0.34, 0.7, 0.5, 1.15, 0.75);
-      fLine(F, q[0], q[1], q[0] + (p[0] - q[0]) * 0.34, q[1] + (p[1] - q[1]) * 0.34, 0.7, 0.5, 1.15, 0.75);
+      fLine(F, p[0], p[1], p[0] + (q[0] - p[0]) * 0.36, p[1] + (q[1] - p[1]) * 0.36, 0.85, 0.6, 1.3, 0.85);
+      fLine(F, q[0], q[1], q[0] + (p[0] - q[0]) * 0.36, q[1] + (p[1] - q[1]) * 0.36, 0.85, 0.6, 1.3, 0.85);
     }
     fDot(F, c, c, 1.9, 0.95, 1.4);
-    paint(s, F, bands(P.ECHO_CYAN, 0.22, 1.2, 0.26));
+    paint(s, F, bands(P.ECHO_CYAN, 0.36, 1.18, 0.26));
     if (f % 2 === 0) s.pxOver(7, 7, P.ECHO_RUNE);
     return s;
   });
@@ -1129,7 +1128,7 @@ function linkThreadFrames(): Surface[] {
         fMax(F, x, Math.floor(y) + dy, amp * (1 - Math.pow(Math.min(1, d / 1.35), 1.8)));
       }
     }
-    return paint(s, F, bands(P.ECHO_CYAN, 0.24, 1.3, 0.24));
+    return paint(s, F, bands(P.ECHO_CYAN, 0.42, 1.22, 0.24));
   });
 }
 
@@ -1147,7 +1146,7 @@ function linkNodeFrames(): Surface[] {
     const F = field(S, S);
     fRing(F, { cx: c, cy: c, r: k.r, thick: 0.8, amp: k.amp });
     fDot(F, c, c, k.core, k.amp * 1.15, 1.2);
-    paint(s, F, bands(P.ECHO_CYAN, 0.22, 1.3, 0.24));
+    paint(s, F, bands(P.ECHO_CYAN, 0.42, 1.22, 0.24));
     if (i === 1) s.pxOver(5, 5, P.ECHO_RUNE);
     return s;
   });
@@ -1185,11 +1184,11 @@ function recallShimmerFrames(): Surface[] {
     const s = new Surface(S, S);
     const G = field(S, S);
     memoryGlyph(G, c - k.sep, c, k.rad, k.ghost);
-    paint(s, G, bandsAt(P.ECHO_VIOLET, 0.2, 1.25, 0.34, k.ghost, 1.15));
+    paint(s, G, bandsAt(P.ECHO_VIOLET, 0.34, 1.2, 0.34, k.ghost, 1.15));
     const R = field(S, S);
     memoryGlyph(R, c + k.sep * 0.45, c, k.rad, k.real);
     if (i >= 4) fDot(R, c + k.sep * 0.45, c, 2.4, k.real * 0.8, 1.6);
-    paint(s, R, bands(P.ECHO_CYAN, 0.2, 1.3, 0.24));
+    paint(s, R, bands(P.ECHO_CYAN, 0.36, 1.22, 0.24));
     if (i >= 4) s.pxOver(Math.round(c + k.sep * 0.45), Math.round(c), P.ECHO_RUNE);
     return s;
   });
@@ -1243,7 +1242,7 @@ function dissentBreakFrames(): Surface[] {
       fLine(F, bx - 2, by + 2, bx + 3, by - 3, 1.0, 0.2, 1.6, 0.3);
       fLine(F, bx - 1, by - 2, bx + 2, by + 3, 0.8, 0.2, 1.2, 0.2);
     }
-    paint(s, F, bandsAt(P.ECHO_VIOLET, 0.18, 1.3, 0.28, k.amp, 1.35));
+    paint(s, F, bandsAt(P.ECHO_VIOLET, 0.32, 1.25, 0.28, k.amp, 1.35));
     if (i === 2) {
       const a = (-52 * Math.PI) / 180;
       s.pxOver(Math.round(c + Math.cos(a) * k.r), Math.round(c + Math.sin(a) * k.r), P.SPECULAR);
@@ -1265,7 +1264,7 @@ function echoWispFrames(): Surface[] {
     // a short tail, then the mote itself
     fLine(F, x - Math.sin(t * Math.PI * 2) * 1.6, y + 4.0, x, y, 0.4, 1.2, amp * 0.34, amp * 0.9);
     fDot(F, x, y, 2.6, amp, 1.15);
-    paint(s, F, bands(P.ECHO_VIOLET, 0.24, 1.05, 0.3));
+    paint(s, F, bands(P.ECHO_VIOLET, 0.36, 1.0, 0.3));
     s.pxOver(Math.round(x), Math.round(y), P.ECHO_GLOW);
     return s;
   });
@@ -1298,7 +1297,7 @@ function echoBurstFrames(): Surface[] {
       a, len: k.len * lens[j], w: k.w, amp: k.amp * (0.7 + 0.3 * lens[j]),
     })), 1, k.inner);
     if (k.core > 0) fDot(F, c, c, k.core, k.coreAmp, 1.4);
-    paint(s, F, bandsAt(P.ECHO_VIOLET, 0.16, 1.2, 0.26, k.amp, 1.55, P.ECHO_GLOW));
+    paint(s, F, bandsAt(P.ECHO_VIOLET, 0.28, 1.15, 0.26, k.amp, 1.55, P.ECHO_GLOW));
     if (i === 1) s.pxOver(19, 20, P.SPECULAR);
     return s;
   });
@@ -1336,7 +1335,7 @@ function runeActivateFrames(): Surface[] {
       fLine(F, c + x0, c + y0, c + x1, c + y1, 0.72, 0.72, k.glyph, k.glyph);
     }
     fDot(F, c, c - 1, 1.6, k.glyph * 0.8, 1.4);
-    paint(s, F, bandsAt(P.ECHO_CYAN, 0.2, 1.15, 0.26, Math.max(k.glyph, k.rAmp), 1.4, P.ECHO_RUNE));
+    paint(s, F, bandsAt(P.ECHO_CYAN, 0.34, 1.1, 0.26, Math.max(k.glyph, k.rAmp), 1.4, P.ECHO_RUNE));
     return s;
   });
 }

@@ -662,38 +662,42 @@ function stairsTile(dir: 'up' | 'down', half: 'l' | 'r', part: 'near' | 'far', s
   const s = new Surface(T, T);
   const left = half === 'l';
   const tread = lifted(P.FLOOR_WOOD);
-  const th = 4;
-  for (let k = 0; k < 4; k++) {
-    const y = k * th;
-    // Read order top-to-bottom for one step: hard riser shadow, bright nosing,
-    // tread surface falling away. The black line is what makes it a step and
-    // not a plank.
-    wood(s, 0, y, T, th, tread, seed + k * 17, 'h');
-    s.hline(0, y, T, P.OUTLINE, 0.85);           // riser in shadow
-    s.hline(0, y + 1, T, tread[4], 0.95);        // lit nosing
-    s.hline(0, y + 2, T, tread[2], 0.5);
-    s.hline(0, y + 3, T, tread[0], 0.55);        // the tread falling away
-    // worn strip up the middle where everyone treads
-    for (let x = 4; x < T - 4; x++) s.px(x, y + 2, tread[3], 0.4);
+  const off = part === 'far' ? 0 : T;   // this tile's offset within the 32px flight
+  // Everything outside the flight is the dark space beside/under it, so the
+  // treads can taper. The taper is the whole trick: parallel bands read as a
+  // plank floor, converging ones read as a staircase.
+  s.rect(0, 0, T, T, P.SOOT[1]);
+  texture(s, 0, 0, T, T, P.SOOT, seed + 5, { scale: 4.5, lo: 0.45, hi: 0.7 });
+  const inset = (gy: number) => Math.round((31 - gy) * 0.14);
+  for (let y = 0; y < T; y++) {
+    const gy = off + y;
+    const k = Math.floor(gy / 4);          // which step
+    const row = gy % 4;                    // where we are within it
+    const ins = inset(gy);
+    const x0 = left ? ins : 0;
+    const x1 = left ? T : T - ins;
+    // riser shadow, lit nosing, tread surface falling away
+    const c = row === 0 ? P.OUTLINE : row === 1 ? tread[4] : row === 2 ? tread[2] : tread[0];
+    const a = row === 0 ? 0.9 : row === 1 ? 1 : 0.85;
+    for (let x = x0; x < x1; x++) {
+      s.px(x, y, tread[2]);
+      s.px(x, y, c, a);
+      if (row === 2 && x > x0 + 3 && x < x1 - 3) s.px(x, y, tread[3], 0.45); // worn middle
+    }
     // each step further from the room loses light
-    const depth = (part === 'far' ? 0 : 4) + k;
-    const amt = dir === 'up' ? (7 - depth) * 0.035 : depth * 0.03;
-    s.rect(0, y, T, th, P.SHRINE_STONE[0], Math.max(0, amt));
-  }
-  // stringer + banister on the outer edge, wall crease on the inner edge
-  const bx = left ? 0 : T - 4;
-  wood(s, bx, 0, 4, T, P.WOOD, seed + 71, 'v');
-  s.vline(left ? 0 : T - 1, 0, T, P.WOOD[1], 0.9);
-  s.vline(left ? 1 : T - 2, 0, T, P.WOOD_LIGHT[4], 0.75);
-  s.vline(left ? 2 : T - 3, 0, T, P.WOOD[2], 0.7);
-  s.vline(left ? 3 : T - 4, 0, T, P.WOOD[0]);
-  for (let y = 0; y < T; y++) s.px(left ? 4 : T - 5, y, P.OUTLINE, 0.4);
-  for (let y = 2; y < T; y += 8) { // baluster shadows on the stringer
-    s.hline(bx + 1, y, 2, P.WOOD[0], 0.5);
+    const amt = dir === 'up' ? (7 - k) * 0.032 : k * 0.03;
+    for (let x = x0; x < x1; x++) s.px(x, y, P.SHRINE_STONE[0], Math.max(0, amt));
+    // the stringer, tracking the taper
+    const sx = left ? x0 - 1 : x1;
+    for (let d = 0; d < 3; d++) {
+      const px = left ? sx - d : sx + d;
+      s.px(px, y, d === 0 ? P.WOOD_LIGHT[4] : d === 1 ? P.WOOD[2] : P.WOOD[0], d === 0 ? 0.85 : 1);
+    }
+    s.px(left ? sx - 3 : sx + 3, y, P.OUTLINE, 0.5);
   }
   // the dark end of the flight
   if (dir === 'up' && part === 'far') {
-    for (let y = 0; y < 9; y++) s.hline(0, y, T, P.SOOT[0], 0.7 - y * 0.075);
+    for (let y = 0; y < 9; y++) s.hline(0, y, T, P.SOOT[0], 0.72 - y * 0.078);
   }
   if (dir === 'down' && part === 'near') {
     for (let y = T - 9; y < T; y++) s.hline(0, y, T, P.SOOT[0], (y - (T - 10)) * 0.075);
@@ -740,7 +744,10 @@ function rugPainter(ramp: Ramp, accent: Ramp, seed: number) {
       s.px(x, y, accent[2], 0.9);
       s.px(x + (x > 7 ? -1 : 1), y, accent[1], 0.35);
     }
-    for (const [x, y] of top) s.px(x, y, accent[4], 0.55);
+    for (const [x, y] of top) {
+      s.px(x, y, accent[4], 0.55);
+      if ((x & 1) === 1) s.px(x, y, P.CLOTH.cream[4], 0.7); // fringe
+    }
     for (const [x, y] of bottom) {
       s.px(x, y, ramp[0], 0.7);
       if ((x & 1) === 0) s.px(x, y, P.CLOTH.cream[3], 0.85); // fringe
@@ -1644,15 +1651,20 @@ function innFirewood(): Surface {
   s.hline(1, 16, 18, P.OUTLINE, 0.85);
   s.vline(1, 8, 9, P.ROPE[3], 0.6);
   s.vline(18, 8, 9, P.ROPE[0], 0.8);
-  // split logs
+  // split logs, end-on: the pale end grain is what makes them read as logs
   const r = rng(3461);
-  for (let i = 0; i < 7; i++) {
-    const x = 2 + r.int(0, 13), y = 2 + r.int(0, 5), w = r.int(4, 6);
-    s.rect(x, y, w, 4, P.WOOD[2]);
-    wood(s, x, y, w, 4, P.WOOD, 3462 + i, 'h');
-    s.ellipse(x, y, 3, 4, P.WOOD_LIGHT[3]);
-    s.ellipse(x + 1, y + 1, 1, 2, P.WOOD_LIGHT[1]);
-    s.hline(x, y + 3, w, P.OUTLINE, 0.6);
+  const logs: Array<[number, number, number]> = [
+    [2, 4, 6], [8, 3, 6], [13, 5, 5], [5, 9, 6], [11, 9, 6], [3, 0, 5], [9, 0, 6],
+  ];
+  for (let i = 0; i < logs.length; i++) {
+    const [x, y, d] = logs[i];
+    s.ellipse(x, y, d, d - 1, P.WOOD[1]);
+    s.ellipse(x, y, d - 1, d - 2, P.WOOD_LIGHT[3]);
+    s.ellipse(x + 1, y + 1, d - 3, d - 4, P.WOOD_LIGHT[4], 0.7);
+    for (let k = 1; k < 3; k++) s.ellipseOutline(x + k, y + k, d - k * 2, d - 1 - k * 2, P.WOOD_LIGHT[1], 0.45);
+    s.line(x + 1, y + 1, x + d - 2, y + d - 3, P.WOOD[0], 0.5); // the split
+    s.ellipseOutline(x, y, d, d - 1, P.WOOD[0], 0.75);
+    if (r.chance(0.4)) s.px(x + 1, y + d - 3, P.MOSS[2], 0.5);
   }
   return finish(s, 'hearth');
 }
@@ -2679,57 +2691,58 @@ function labSpecimen(): Surface {
 // ── The Courier Office ──────────────────────────────────────────────────────
 
 /**
- * A parcel in one of the four wraps. Quest Two turns on the player recognising
- * a package they saw somewhere else, so the wrap colours come from
- * P.PARCEL_WRAP and nowhere else.
+ * A parcel in wrap `i`. Quest Two turns on the player recognising a package
+ * they saw somewhere else, so the wrap colour, the ROPE tie and the amber
+ * label are taken straight from `prop/town/parcel_<i>`'s vocabulary — index i
+ * here is index i there, and P.PARCEL_WRAP is the shared source.
  */
-function parcelBox(s: Surface, x: number, y: number, w: number, h: number, wrap: keyof typeof P.PARCEL_WRAP, seed: number) {
-  const R = P.PARCEL_WRAP[wrap];
+function parcelBox(s: Surface, x: number, y: number, w: number, h: number, wrap: number, seed: number) {
+  const R = P.PARCEL_WRAP[wrap % P.PARCEL_WRAP.length];
   s.rect(x, y, w, h, R[2]);
   texture(s, x, y, w, h, [R[1], R[2], R[2], R[3], R[3]], seed, { scale: 3.6, lo: 0.42, hi: 0.6 });
-  s.hline(x, y, w, R[4], 0.9);
-  s.vline(x, y, h, R[3], 0.6);
-  s.vline(x + w - 1, y, h, R[0], 0.85);
-  s.hline(x, y + h - 1, w, P.OUTLINE, 0.9);
+  s.hline(x, y, w, R[3], 0.95);
+  s.vline(x, y, h, R[3], 0.7);
+  s.vline(x + w - 1, y, h, R[0], 0.9);
+  s.hline(x, y + h - 1, w, R[0], 0.9);
+  s.hline(x, y + h - 1, w, P.OUTLINE, 0.6);
+  // paper creases
+  for (let j = y + 2; j < y + h - 2; j += 3) s.hline(x + 1, j, w - 2, R[1], 0.35);
   // twine, both ways, with a knot
-  const mx = x + Math.floor(w / 2) - 1;
+  const mx = x + Math.floor(w / 2);
   const my = y + Math.floor(h / 2);
-  s.vline(mx, y, h, P.TWINE, 0.9);
-  s.vline(mx + 1, y, h, P.OUTLINE, 0.3);
-  s.hline(x, my, w, P.TWINE, 0.85);
-  s.hline(x, my + 1, w, P.OUTLINE, 0.25);
-  s.px(mx, my, P.CLOTH.cream[4]);
-  s.px(mx - 1, my - 1, P.TWINE);
-  s.px(mx + 2, my + 1, P.TWINE);
-  // a paper label with two ink strokes
-  if (w >= 10 && h >= 8) {
-    s.rect(x + 2, y + 2, 5, 3, P.UI_PARCHMENT[4]);
-    s.hline(x + 3, y + 3, 3, P.UI_INK_SOFT, 0.6);
-    s.px(x + 3, y + 4, P.UI_INK_SOFT, 0.45);
-    s.hline(x + 2, y + 4, 5, P.OUTLINE, 0.25);
+  s.vline(mx, y, h, P.ROPE[3]);
+  if (w > 6) s.vline(mx + 1, y, h, P.ROPE[0], 0.6);
+  s.hline(x, my, w, P.ROPE[3]);
+  s.hline(x, my + 1, w, P.ROPE[0], 0.6);
+  s.px(mx - 1, y + 1, P.ROPE[4]);
+  // the amber address label with a wax dot, as in town
+  if (w >= 9 && h >= 7) {
+    s.rect(x + 2, y + 2, 3, 2, P.LANTERN[1]);
+    s.px(x + 2, y + 2, P.LANTERN[3]);
+    s.px(x + 5, y + 2, P.FLOWER_ROSE[0]);
   }
 }
 
-function postParcel(wrap: keyof typeof P.PARCEL_WRAP): Surface {
+function postParcel(wrap: number): Surface {
   const s = new Surface(16, 14);
   contact(s, 8, 13, 14, 4, 0.3);
-  parcelBox(s, 1, 2, 14, 11, wrap, 3801 + wrap.length);
+  parcelBox(s, 1, 2, 14, 11, wrap, 3801 + wrap);
   return finish(s, 'lamp');
 }
 
 function postParcelStack(): Surface {
   const s = new Surface(28, 30);
   contact(s, 14, 29, 26, 5, 0.3);
-  parcelBox(s, 1, 16, 17, 13, 'kraft', 3811);
-  parcelBox(s, 18, 19, 10, 10, 'sage', 3812);
-  parcelBox(s, 4, 5, 13, 11, 'slate', 3813);
-  parcelBox(s, 15, 8, 11, 11, 'rose', 3814);
+  parcelBox(s, 1, 16, 17, 13, 0, 3811);
+  parcelBox(s, 18, 19, 10, 10, 3, 3812);
+  parcelBox(s, 4, 5, 13, 11, 1, 3813);
+  parcelBox(s, 15, 8, 11, 11, 2, 3814);
   // a tube parcel across the top
-  s.rect(3, 0, 18, 5, P.PARCEL_WRAP.kraft[2]);
-  s.hline(3, 0, 18, P.PARCEL_WRAP.kraft[4], 0.9);
+  s.rect(3, 0, 18, 5, P.PARCEL_WRAP[0][2]);
+  s.hline(3, 0, 18, P.PARCEL_WRAP[0][4], 0.9);
   s.hline(3, 4, 18, P.OUTLINE, 0.85);
-  s.ellipse(2, 0, 4, 5, P.PARCEL_WRAP.kraft[3]);
-  s.ellipse(3, 1, 2, 3, P.PARCEL_WRAP.kraft[1]);
+  s.ellipse(2, 0, 4, 5, P.PARCEL_WRAP[0][3]);
+  s.ellipse(3, 1, 2, 3, P.PARCEL_WRAP[0][1]);
   s.vline(12, 0, 5, P.TWINE, 0.85);
   return finish(s, 'lamp');
 }
@@ -2753,7 +2766,7 @@ function postCounter(): Surface {
     if (i % 2 === 0) { s.hline(x + 1, 3, 3, P.UI_PARCHMENT[4]); s.hline(x + 1, 4, 3, P.UI_PARCHMENT[2]); }
   }
   // the day's work on the counter
-  parcelBox(s, 34, 0, 11, 7, 'rose', 3823);
+  parcelBox(s, 34, 0, 11, 7, 2, 3823);
   s.rect(24, 2, 7, 4, P.UI_PARCHMENT[4]);
   s.hline(24, 2, 7, P.UI_PARCHMENT[3]);
   s.hline(24, 5, 7, P.OUTLINE, 0.5);
@@ -2790,8 +2803,7 @@ function postPigeonholes(part: 'l' | 'mid' | 'r'): Surface {
           s.hline(x + 1, y + ch - 4 + k - 2, cw - 4, P.UI_PARCHMENT[k % 2 ? 3 : 4]);
         }
       } else if (roll < 0.52) {
-        const wraps = ['kraft', 'slate', 'rose', 'sage'] as const;
-        parcelBox(s, x + 1, y + 1, cw - 4, ch - 4, r.pick(wraps), 3851 + cx * 7 + cy * 13);
+        parcelBox(s, x + 1, y + 1, cw - 4, ch - 4, r.int(0, 3), 3851 + cx * 7 + cy * 13);
       } else if (roll < 0.62) {
         s.rect(x + 1, y + 1, 3, ch - 4, P.LEATHER[2]);   // a ledger on its side
         s.vline(x + 1, y + 1, ch - 4, P.LEATHER[3]);
@@ -2873,7 +2885,7 @@ function postScales(): Surface {
     s.ellipse(px - 2, py + 3, 5, 3, P.BRONZE[4], 0.7);
     s.ellipseOutline(px - 3, py + 3, 7, 4, P.BRONZE[0], 0.7);
   }
-  parcelBox(s, 0, 6, 6, 5, 'sage', 3871);
+  parcelBox(s, 0, 6, 6, 5, 3, 3871);
   s.rect(15, 10, 4, 2, P.IRON[2]);          // the weights
   s.hline(15, 10, 4, P.IRON[4], 0.8);
   return finish(s, 'lamp');
@@ -2929,8 +2941,8 @@ function postSacks(): Surface {
   sack(20, 24, 12, 15, 3894, false);
   sack(6, 14, 13, 9, 3895, true);
   // an official flap, stencilled with a shape rather than a word
-  s.rect(3, 16, 6, 5, P.PARCEL_WRAP.slate[2]);
-  s.hline(3, 16, 6, P.PARCEL_WRAP.slate[4], 0.8);
+  s.rect(3, 16, 6, 5, P.PARCEL_WRAP[1][2]);
+  s.hline(3, 16, 6, P.PARCEL_WRAP[1][4], 0.8);
   s.px(5, 18, P.CLOTH.cream[4]); s.px(6, 18, P.CLOTH.cream[4]); s.px(5, 19, P.CLOTH.cream[3]);
   // letters spilling from the untied one
   for (let i = 0; i < 4; i++) {
@@ -2973,8 +2985,8 @@ function postHandcart(): Surface {
   s.rect(28, 24, 2, 5, P.WOOD[1]);
   s.hline(28, 28, 2, P.OUTLINE, 0.8);
   // load
-  parcelBox(s, 12, 1, 10, 8, 'kraft', 3902);
-  parcelBox(s, 22, 3, 9, 6, 'slate', 3903);
+  parcelBox(s, 12, 1, 10, 8, 0, 3902);
+  parcelBox(s, 22, 3, 9, 6, 1, 3903);
   s.hline(13, 0, 8, P.TWINE, 0.7);
   return finish(s, 'lamp');
 }
@@ -3068,8 +3080,8 @@ function postLostShelf(): Surface {
       s.line(19, y + 4, 22, y + 6, P.BRONZE[2]);
       s.px(22, y + 7, P.BRONZE[1]); s.px(21, y + 7, P.BRONZE[3]);
     } else { // parcels never collected
-      parcelBox(s, 3, y + 1, 10, 7, 'rose', 3922);
-      parcelBox(s, 15, y + 2, 10, 6, 'kraft', 3923);
+      parcelBox(s, 3, y + 1, 10, 7, 2, 3922);
+      parcelBox(s, 15, y + 2, 10, 6, 0, 3923);
     }
     s.hline(2, y + 8, 26, P.WOOD_LIGHT[4], 0.85);
     s.hline(2, y + 9, 26, P.OUTLINE, 0.8);
@@ -3698,9 +3710,9 @@ export function registerInteriors(b: ArtBuild): void {
   b.add('prop/int/post_pigeon_l', postPigeonholes('l'));
   b.add('prop/int/post_pigeon_mid', postPigeonholes('mid'));
   b.add('prop/int/post_pigeon_r', postPigeonholes('r'));
-  for (const wrap of ['kraft', 'slate', 'rose', 'sage'] as const) {
-    b.add(`prop/int/post_parcel_${wrap}`, postParcel(wrap));
-  }
+  // index i is the same wrap as prop/town/parcel_i — the delivery quest reads
+  // these by colour across both maps
+  for (let i = 0; i < 4; i++) b.add(`prop/int/post_parcel_${i}`, postParcel(i));
   b.add('prop/int/post_parcel_stack', postParcelStack());
   b.add('prop/int/post_routemap', postRouteMap());
   b.add('prop/int/post_scales', postScales());

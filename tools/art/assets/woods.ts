@@ -860,22 +860,22 @@ function ledgeLip(s: Surface, side: 'n' | 's' | 'e' | 'w', from: number, to: num
   } else {
     // Side verges. Light from the upper-left: the west verge catches it, the
     // east verge is the one that throws a shadow inward.
-    const x0 = side === 'w' ? 0 : TILE - 3;
-    for (let y = from; y <= to; y++) {
-      const j = n(11, y * 3, 2.5) > 0.62 ? 1 : 0;
-      for (let i = 0; i < 3; i++) s.px(x0 + i - (side === 'w' ? j : -j), y, ramp[1]);
-    }
-    faceRock(s, Math.max(0, x0 - 1), from, Math.min(TILE - 1, x0 + 2), to, seed + 13);
+    const x0 = side === 'w' ? 0 : TILE - 4;
+    faceRock(s, x0, from, x0 + 3, to, seed + 13, 0.4);
     for (let y = from; y <= to; y++) {
       const j = n(11, y * 3, 2.5) > 0.62 ? 1 : 0;
       if (side === 'w') {
-        s.px(0 - j, y, ramp[3]);
-        s.px(2 - j, y, P.OUTLINE, 0.8);
-        s.px(3 - j, y, P.OUTLINE, 0.35);
+        // the west verge turns toward the light, so its outer face is the lit
+        // one and the shadow falls inward across the lower ground
+        s.px(0, y, ramp[4]);
+        s.px(1, y, ramp[3]);
+        s.px(2 + j, y, P.OUTLINE, 0.85);
+        s.px(3 + j, y, P.OUTLINE, 0.4);
       } else {
-        s.px(TILE - 1 + j, y, ramp[2]);
-        s.px(TILE - 3 + j, y, ramp[4], 0.8);
-        s.px(TILE - 4 + j, y, P.OUTLINE, 0.5);
+        s.px(TILE - 1, y, ramp[2]);
+        s.px(TILE - 2, y, ramp[1]);
+        s.px(TILE - 3 - j, y, ramp[4], 0.85);
+        s.px(TILE - 4 - j, y, P.OUTLINE, 0.6);
       }
     }
   }
@@ -933,21 +933,26 @@ function stairsTile(half: 0 | 1, seed: number): Surface {
 function shrineStoneTile(seed: number, variant: number): Surface {
   const s = new Surface(TILE, TILE);
   const ramp = P.SHRINE_STONE;
-  mottle(s, ramp, seed + variant * 41, { scale: 3.0, lightAmt: 0.7, darkAmt: 0.36 });
+  // Calmer than the woods' natural materials: this is *cut* stone, so the
+  // field is quiet and the joints carry the read.
+  mottle(s, ramp, seed + variant * 41, { scale: 3.8, lightAmt: 0.78, darkAmt: 0.26 });
   const r = rng(seed + variant * 97);
   // flagstone joints, staggered per variant
   const cuts = [0, 7, 16];
   for (const cy of cuts) {
     for (let x = 0; x < TILE; x++) {
       const j = Math.round(Math.sin((x + seed + variant) * 0.9) * 0.6);
-      s.pxOver(x, cy + j, ramp[0], 0.85);
-      if (cy + j + 1 < TILE) s.pxOver(x, cy + j + 1, ramp[4], 0.4);
-    }
+      s.px(x, cy + j, P.OUTLINE, 0.75);                       // the mortar gap
+      if (cy + j + 1 < TILE) s.px(x, cy + j + 1, ramp[4], 0.7); // lit top of the
+    }                                                          // stone below
   }
   const stagger = [4, 11];
   for (let band = 0; band < cuts.length - 1; band++) {
     const sx = stagger[(band + variant) % stagger.length];
-    for (let y = cuts[band] + 1; y < cuts[band + 1]; y++) s.pxOver(sx, y, ramp[0], 0.8);
+    for (let y = cuts[band] + 1; y < cuts[band + 1]; y++) {
+      s.px(sx, y, P.OUTLINE, 0.7);
+      s.px(sx + 1, y, ramp[4], 0.45);
+    }
   }
   // moss has got into the joints, and one stone has hairline cracks
   for (let k = 0; k < 5; k++) {
@@ -1279,7 +1284,7 @@ function leafMound(
   const baseY = opts.base ?? H - 2;
   for (let i = 0; i < lobes; i++) {
     const t = lobes === 1 ? 0.5 : i / (lobes - 1);
-    s && paintClump(s, {
+    paintClump(s, {
       x: W * (0.22 + 0.56 * t) + r.range(-1.5, 1.5),
       y: baseY - H * (0.28 + (i % 2 ? 0.16 : 0.04)),
       rx: r.range(W * 0.2, W * 0.3) * fat,

@@ -90,21 +90,29 @@ export function blobMask(mask: number, seed: number, opts: { wobble?: number; ra
   return s;
 }
 
-/** Edge classification of a coverage mask: which pixels touch the outside. */
+/**
+ * Edge classification of a coverage mask: which pixels touch the outside.
+ *
+ * Pixels beyond the tile boundary count as COVERED. The mask already encodes
+ * whether each neighbouring tile carries the same material, so a tile that is
+ * fully covered is genuinely in the middle of the material and must get no edge
+ * treatment at all. Treating the tile border as an edge puts a lit line on the
+ * top row and a dark line on the bottom row of every interior tile, which draws
+ * a horizontal band across the whole surface every 16 pixels — the seam artefact
+ * that makes generated terrain look like a grid of stamps.
+ */
 export function edgePixels(mask: Surface) {
   const top: [number, number][] = [];
   const bottom: [number, number][] = [];
   const side: [number, number][] = [];
+  const covered = (x: number, y: number) =>
+    x < 0 || y < 0 || x >= mask.w || y >= mask.h ? 1 : mask.alphaAt(x, y);
   for (let y = 0; y < mask.h; y++) {
     for (let x = 0; x < mask.w; x++) {
       if (mask.alphaAt(x, y) === 0) continue;
-      const up = y === 0 ? 0 : mask.alphaAt(x, y - 1);
-      const dn = y === mask.h - 1 ? 0 : mask.alphaAt(x, y + 1);
-      const lf = x === 0 ? 0 : mask.alphaAt(x - 1, y);
-      const rt = x === mask.w - 1 ? 0 : mask.alphaAt(x + 1, y);
-      if (up === 0) top.push([x, y]);
-      else if (dn === 0) bottom.push([x, y]);
-      else if (lf === 0 || rt === 0) side.push([x, y]);
+      if (covered(x, y - 1) === 0) top.push([x, y]);
+      else if (covered(x, y + 1) === 0) bottom.push([x, y]);
+      else if (covered(x - 1, y) === 0 || covered(x + 1, y) === 0) side.push([x, y]);
     }
   }
   return { top, bottom, side };
