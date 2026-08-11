@@ -206,43 +206,58 @@ export function buildWoods(): MapDef {
   // ── 1. structure: everything is thicket until it is carved ────────────────
   const g = new GridPainter(W, H, '#');
 
-  // the road down from the south gate
-  g.rect(17, 0, 10, 8, '.');
-  g.blob(21, 10, 6, 4, '.', 3, 0.22);
+  // The spine is carved first and eight tiles wide — two clear tiles either
+  // side of the four-tile path. Everything after this only ever widens the
+  // walkable space, so the route from the gate to the shrine cannot be broken
+  // by a decorative pass.
+  g.vLine(0, 28, 21, '.', 8);
+  g.vLine(26, 38, 20, '.', 8);
+  g.vLine(36, 50, 22, '.', 8);
+  g.vLine(48, 67, 22, '.', 8);
+  g.hLine(22, 14, 65, '.', 8);
+  g.vLine(63, 70, 14, '.', 8);
+  g.hLine(14, 22, 69, '.', 8);
+  g.vLine(68, 85, 22, '.', 8);
+  g.vLine(83, 91, 21, '.', 8);
+  g.vLine(88, 100, 22, '.', 8);
+  g.vLine(98, 110, 21, '.', 8);
+
+  // the road down from the town gate
+  g.rect(17, 0, 10, 9, '.');
   // First Clearing
   g.blob(21, 20, 11, 6, '.', 5, 0.2);
-  // The Narrows
-  g.vLine(24, 36, 21, '.', 8);
   // east spur → toadstool ring
   g.hLine(21, 33, 30, '.', 4);
   g.blob(35, 31, 6, 4, '.', 7, 0.26);
   // The Hollow
   g.blob(23, 42, 11, 6, '.', 11, 0.24);
-  // the run south past the plateau
-  g.vLine(46, 63, 22, '.', 8);
   // the plateau: a sealed pocket, reachable only through the gully
   g.rect(2, 48, 13, 11, '.');
   g.blob(8, 53, 6, 5, '.', 13, 0.18);
   // The Dell, at the foot of the cliff
-  g.blob(14, 65, 13, 4, '.', 17, 0.18);
   g.rect(2, 61, 25, 6, '.');
-  // down to the terrace
-  g.vLine(66, 82, 22, '.', 9);
+  g.blob(14, 65, 13, 4, '.', 17, 0.18);
+  // The Broken Terrace
   g.blob(22, 75, 10, 5, '.', 19, 0.2);
   // east spur → the carved stone
   g.hLine(27, 36, 74, '.', 4);
   g.blob(36, 75, 5, 4, '.', 23, 0.24);
   // the stream and both its banks
-  g.rect(2, 79, 40, 9, '.');
+  g.rect(2, 80, 40, 8, '.');
   // the island campsite
   g.blob(8, 90, 7, 4, '.', 29, 0.18);
   // South Bank
   g.blob(23, 92, 10, 5, '.', 31, 0.2);
   // The Standing Stones
-  g.vLine(96, 108, 22, '.', 10);
   g.blob(22, 102, 12, 5, '.', 37, 0.16);
   // shrine approach
   g.rect(15, 105, 14, 9, '.');
+
+  // Thickets standing in the wide river banks, so the crossing reads as a
+  // place rather than as forty tiles of empty floor.
+  g.rect(2, 80, 4, 2, '#');
+  g.rect(33, 80, 8, 2, '#');
+  g.rect(29, 87, 5, 2, '#');
 
   // the frame, re-asserted after the carving
   g.rect(0, 0, W, 3, '#');

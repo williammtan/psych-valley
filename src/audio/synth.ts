@@ -83,9 +83,11 @@ export interface RackOpts {
  * dormant; it exists so that an unlucky pile-up — a bell, a crit and a boss
  * roar landing on the same sample — saturates gently instead of clipping.
  */
-function limiterCurve(): Float32Array {
+function limiterCurve(): Float32Array<ArrayBuffer> {
   const n = 4097;
-  const curve = new Float32Array(n);
+  // Explicitly ArrayBuffer-backed: WaveShaperNode.curve does not accept a view
+  // that might sit on a SharedArrayBuffer.
+  const curve = new Float32Array(new ArrayBuffer(n * 4));
   for (let i = 0; i < n; i++) {
     // The shaper sees the signal at half level, so the curve covers ±2.
     const v = ((i / (n - 1)) * 2 - 1) * 2;

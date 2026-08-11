@@ -1112,6 +1112,40 @@ export const SFX_LENGTH: Record<string, number> = {
   ui_toast: 1.4,
 };
 
+/**
+ * THE MIXER SHEET.
+ *
+ * Relative balance *inside* an effect belongs in its generator; balance
+ * *between* effects belongs here, in one place, where it can be read as a
+ * mix. Levels are set from `tools/audio_probe.ts` measurements, in three tiers:
+ *
+ *   0.55–0.70  the sounds the game is about — the bells, the pipes, the
+ *              concept chime, the Echo's roar. These are allowed to arrive.
+ *   0.20–0.45  combat, world interaction, quest feedback.
+ *   0.05–0.20  footsteps, UI, and the dialogue blip, which plays per character
+ *              and must stay under everything else.
+ */
+export const LEVEL: Record<string, number> = {
+  bell_town: 0.30, bell_small: 0.36, pipe_crash: 0.55,
+  cat_meow: 1.1, cat_hiss: 1.1, cat_purr: 0.85,
+  lantern_tone_a: 0.42, lantern_tone_b: 0.46, lantern_tone_c: 0.42, lantern_tone_ref: 0.42,
+
+  step_grass: 2.3, step_stone: 2.5, step_wood: 1.7, step_water: 1.5,
+  sword: 2.4, hit: 1.7, crit: 1.0, enemy_die: 1.9, hurt: 2.2, dash: 2.2,
+  block: 1.5, charge: 1.3, shoot: 1.8, aggro: 1.4, heart: 0.35, land: 1.8,
+
+  door: 1.8, door_stone: 0.5, chest: 0.4, pressure_plate: 1.2, gate_open: 0.6,
+  switch: 1.9, rune_activate: 0.22, splash: 2.0, bush_cut: 2.5, push_block: 1.2,
+  pickup: 1.6, water_ambient: 1.1,
+
+  dialogue_blip: 1.15, ui_move: 1.7, ui_confirm: 1.3, ui_cancel: 1.5,
+  ui_toast: 0.36, journal_open: 1.1, journal_close: 2.0,
+  insight: 0.28, quest_start: 0.38, quest_done: 0.36,
+
+  echo_hum: 0.25, echo_hit: 0.38, echo_roar: 0.36, echo_phase: 0.3,
+  mote_chirp: 1.2, observe: 0.26, link: 0.3, recall: 0.31, dissent: 0.33,
+};
+
 export function sfxNames(): string[] {
   return Object.keys(SFX).sort();
 }

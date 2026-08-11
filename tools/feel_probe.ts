@@ -98,7 +98,7 @@ function installHarness(): void {
       dir: p.dir,
       hb: p.hitbox.active,
       inv: p.invulnerable,
-      hp: w.__psyche.state().hp,
+      hp: F.trackHp === false ? 0 : w.__psyche.state().hp,
       ts: F.scene.timeScale,
       ax: +ax.x.toFixed(2),
       ay: +ax.y.toFixed(2),
@@ -175,16 +175,26 @@ function installHarness(): void {
     F.scene.cameras.main.centerOn(px, py);
   };
 
+  F.trackHp = true;
   F.clean = () => {
     F.scene.enemies.clear();
     F.clearWalls();
     F.move(0, 0);
+    F.trackHp = true;
     w.__psyche.hp(6);
   };
 
+  /** Centre of the largest guaranteed-open test arena, in pixels. */
+  F.arena = (w2 = 13, h2 = 13) => {
+    const o = F.findOpen(w2, h2) ?? F.findOpen(9, 9) ?? F.findOpen(7, 7);
+    return o;
+  };
+
   /* ── event taps ───────────────────────────────────────────────────────── */
-  for (const name of ['player:attack', 'player:dash', 'player:step', 'player:hurt', 'player:dashtrail', 'enemy:died']) {
-    w.__events_on(name, (p: any) => F.events.push({ f: F.frame, name, p }));
+  // Only the three gameplay events that reach FxManager, which is where the
+  // page-side shim can see them.
+  for (const name of ['player:attack', 'player:step', 'player:dashtrail']) {
+    w.__events_on(name, () => F.events.push({ f: F.frame, name }));
   }
 }
 

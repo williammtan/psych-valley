@@ -188,6 +188,8 @@ export interface IndexedLine {
   path: string;
   speaker: string;
   text: string;
+  /** Deliberate repetition (a crowd chorus, or the Echo quoting someone). */
+  dup?: boolean;
 }
 
 /** Every player-visible line in the game, conditions ignored. Used by the lint. */
