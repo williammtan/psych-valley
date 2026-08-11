@@ -73,12 +73,19 @@ export const CHAMBER = {
 
 /** The rune ring the basin is inscribed with, in tile coords. */
 const RUNE_RING: Array<[number, number]> = [];
-for (let i = 0; i < 18; i++) {
-  const a = (i / 18) * Math.PI * 2;
-  RUNE_RING.push([
-    Math.round(14.5 + Math.cos(a) * 10.6),
-    Math.round(7.6 + Math.sin(a) * 4.1),
-  ]);
+{
+  const seen = new Set<string>();
+  for (let i = 0; i < 40; i++) {
+    const a = (i / 40) * Math.PI * 2;
+    const t: [number, number] = [
+      Math.round(14.5 + Math.cos(a) * 10.6),
+      Math.round(7.6 + Math.sin(a) * 4.2),
+    ];
+    const key = `${t[0]},${t[1]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    RUNE_RING.push(t);
+  }
 }
 /** Exported so the encounter can light the arc nearest a flaring brazier. */
 export const RUNE_TILES: ReadonlyArray<readonly [number, number]> = RUNE_RING;
@@ -145,7 +152,7 @@ function build(): MapDef {
     // The way you came in, and the reason you are not going back out of it.
     // NOTE (art gap): door_barred_0..3 exist as frames but no animation is
     // registered for them, so the bars are static. Frame 0 reads correctly.
-    { key: 'prop/shrine/door_barred_0', x: 14.5, y: 14, spec: { offset: [0, 6] }, id: 'door' },
+    { key: 'prop/shrine/door_barred_0', x: 14.5, y: 14, spec: { offset: [0, 6], depthBias: -90 }, id: 'door' },
 
     // The ring of pillars. Six, on the same ellipse as the rune plates, so the
     // architecture and the inscription agree about where the middle is.
@@ -166,16 +173,22 @@ function build(): MapDef {
   ];
 
   /**
-   * The room is lit by exactly four things you can point at: the seal, the two
-   * crystals, and the drain. The braziers are dark until the Echo lights them,
-   * which is the entire point of them.
+   * Every light in the room comes from something the player can point at (the
+   * shrine's rule), and between them they have to keep the whole floor readable
+   * — a boss arena where a telegraph can hide in shadow is a broken arena.
+   *
+   * The four braziers are lit separately, by the encounter, because their state
+   * is gameplay information; see `Brazier` in entities/EchoBoss.ts.
    */
   const lights: LightDef[] = [
-    { x: 14.5, y: 2.4, radius: 92, color: SHRINE_VIOLET, intensity: 0.5, flicker: 0.2 },
-    { x: 3.2, y: 2.4, radius: 46, color: SHRINE_CYAN, intensity: 0.34, flicker: 0.14 },
-    { x: 25.8, y: 2.4, radius: 46, color: SHRINE_CYAN, intensity: 0.34, flicker: 0.14 },
-    { x: 14.5, y: 7.6, radius: 58, color: SHRINE_VIOLET, intensity: 0.3, flicker: 0.3 },
-    { x: 14.5, y: 13.6, radius: 44, color: SHRINE_VIOLET, intensity: 0.3, flicker: 0.1 },
+    // The seal is the brightest thing in the room and the reason you look up.
+    { x: 14.5, y: 2.6, radius: 150, color: SHRINE_VIOLET, intensity: 0.62, flicker: 0.18 },
+    { x: 3.2, y: 2.6, radius: 62, color: SHRINE_CYAN, intensity: 0.5, flicker: 0.14 },
+    { x: 25.8, y: 2.6, radius: 62, color: SHRINE_CYAN, intensity: 0.5, flicker: 0.14 },
+    // The pool over the drain: the room's centre, and where it goes at the end.
+    { x: 14.5, y: 7.8, radius: 96, color: SHRINE_VIOLET, intensity: 0.46, flicker: 0.3 },
+    // The door you came in by stays lit, so the room always has a bottom edge.
+    { x: 14.5, y: 13.4, radius: 56, color: SHRINE_VIOLET, intensity: 0.4, flicker: 0.1 },
   ];
 
   return {
@@ -184,7 +197,10 @@ function build(): MapDef {
     subtitle: 'something was measured here',
     music: 'boss',
     tint: 0x0d1030,
-    darkness: 0.62,
+    // Dark, but never so dark that a telegraph can hide in it. Phase two puts
+    // marks on the unlit floor that the player has to SEE and then correctly
+    // ignore, so "unlit" has to mean dim, not invisible.
+    darkness: 0.36,
     ground,
     legend: LEGEND,
     objects: o.rows(),

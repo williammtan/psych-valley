@@ -1,7 +1,7 @@
 {
-  "updated": "2026-08-11T22:10:00Z",
-  "phase": "Wave 2 \u2014 world, quests and dungeon (round 2)",
-  "headline": "All eleven art modules have landed: 1,877 sprites and 1,272 tiles, every pixel generated from code. A blind A/B critic scored the town against the Stardew density reference and lost 10-0; its findings have gone back to the level designer. Five maps now load clean at 60fps. The three quests, the dungeon, the boss, audio and dialogue are all in build.",
+  "updated": "2026-08-11T23:30:00Z",
+  "phase": "Wave 2 \u2014 critics reporting, findings routed",
+  "headline": "A fresh-context critic audited the whole game against its two hard rules \u2014 is it fun without the lesson, and does it require understanding rather than answering. Two of three quests passed both; the boss passed all three phases. The Memory Threads board failed for grading the player per card, and 236 authored lines of the conformity act turned out to be unwired. Every finding is back with its builder.",
   "areas": [
     {
       "name": "Art pipeline",
@@ -70,15 +70,18 @@
     },
     {
       "name": "Quest 1 \u2014 Pip",
-      "state": "building"
+      "state": "critiqued",
+      "note": "Best of the three \u2014 a real puzzle with the psychology deleted"
     },
     {
       "name": "Quest 2 \u2014 Oren",
-      "state": "building"
+      "state": "critiqued",
+      "note": "Failed the quiz test \u2014 the board grades instead of arguing"
     },
     {
       "name": "Quest 3 \u2014 Lantern Trial",
-      "state": "building"
+      "state": "critiqued",
+      "note": "Authored dialogue unwired; shipped version is didactic"
     },
     {
       "name": "Whisper Woods map",
@@ -90,7 +93,8 @@
     },
     {
       "name": "The Echo boss",
-      "state": "building"
+      "state": "critiqued",
+      "note": "All three phases passed the audit; phase one called the best in the build"
     },
     {
       "name": "Audio",
@@ -98,7 +102,8 @@
     },
     {
       "name": "Dialogue",
-      "state": "building"
+      "state": "good",
+      "note": "935 lines, 255 exchanges, lint-clean; the Echo quotes earlier dialogue verbatim"
     },
     {
       "name": "Combat feel",
@@ -107,40 +112,52 @@
   ],
   "findings": [
     {
-      "area": "Lumen Vale",
+      "area": "Quest 2",
       "severity": "blocker",
       "status": "open",
-      "text": "Blind A/B vs the Stardew reference: the town reads as a floor plan (ground drawn first, objects sprinkled on) rather than a scene. Fix: halve the open plaza and fill the reclaimed space with tall overlapping structure \u2014 trees first, then fences, hedges, stalls \u2014 placed to CROSS path edges and building bases."
+      "text": "THESIS RISK: the Memory Threads board grades each card the moment it lands, prints a running score, and volunteers the answer when wrong \u2014 the only screen in the game that looks like a worksheet. Fix: delay anchoring until the player commits a complete board; replace verdicts with statements of physical fact."
     },
     {
-      "area": "Lumen Vale",
+      "area": "Quest 3",
+      "severity": "blocker",
+      "status": "open",
+      "text": "All 236 authored lines of quest3_lantern.ts are unwired, including the third naming moment. The shipped inline version reads a textbook definition aloud before the Insight Card repeats it \u2014 structurally the same as plan.md's own example of bad dialogue."
+    },
+    {
+      "area": "Quest 3",
       "severity": "major",
       "status": "open",
-      "text": "Measured: most-repeated pixel-identical tile covers 11.9% of the frame (reference: 2.5%). Tonal contrast 0.148 vs the reference's 0.268 \u2014 there are no true darks in the frame. Zero trees on screen; the reference has eight."
+      "text": "The shipped trial answers contradict the ambient dialogue: half the valley says 'I heard third, I said second', but the trial's round three is a different pair. After the emotional peak the villagers describe a trial the player did not play."
     },
     {
-      "area": "Lumen Vale",
+      "area": "Ending",
       "severity": "major",
       "status": "open",
-      "text": "Buildings sit on axis-aligned rectangular dirt pads with hard straight edges; the critic read them as a tilemap bug rather than as yards."
+      "text": "TALK.ending and TALK.boss are authored and unwired \u2014 the game's final scene does not play."
     },
     {
-      "area": "Props",
+      "area": "Shrine",
       "severity": "major",
       "status": "open",
-      "text": "No prop casts a ground shadow \u2014 the 1px dark rim is an outline, not a shadow, so every prop reads as a sticker on the floor."
+      "text": "Room Three as specified is brute-forceable in two attempts (two sequences shown, free retries). The sequence must be constructed from context, not chosen between two demonstrations."
     },
     {
-      "area": "Lumen Vale",
+      "area": "Journal",
+      "severity": "major",
+      "status": "fixed",
+      "text": "The journal rendered only definition, illustration and terms \u2014 misconception, real-world examples and every example the player earned were written and never displayed, tilting the notebook toward a vocabulary list. Now two pages: what happened to you first, formal terms second."
+    },
+    {
+      "area": "Dialogue",
+      "severity": "minor",
+      "status": "fixed",
+      "text": "Cut a naming-moment line that told the player they had learned, a Sera idle line that gave away the whole first puzzle before the player had tried it, and an insight-card eyebrow that asserted the player's inner state."
+    },
+    {
+      "area": "Quest 1",
       "severity": "minor",
       "status": "open",
-      "text": "The fountain is too small and too low-contrast to anchor the square it sits in; eight identical flower planters repeat across open lawn."
-    },
-    {
-      "area": "Lighting",
-      "severity": "minor",
-      "status": "open",
-      "text": "The dynamic light layer is the game's genuine advantage over the reference and is under-exploited \u2014 only two small pools in the whole frame."
+      "text": "Passes, but both restraint hazards are opt-in \u2014 a player who never swings the sword faces only the tower timing. Needs an environmental startle to anticipate, not merely one to abstain from causing."
     },
     {
       "area": "Build",
@@ -171,18 +188,6 @@
       "severity": "major",
       "status": "fixed",
       "text": "Grass variants were tone-mismatched and non-periodic, producing per-tile seams and brightness checkerboarding. Now seamless and rank-quantised."
-    },
-    {
-      "area": "Terrain",
-      "severity": "minor",
-      "status": "fixed",
-      "text": "Flagstone stamped one identical stone pattern on every tile; now a per-tile cellular partition with the mortar groove and lit bevel on separate pixels."
-    },
-    {
-      "area": "Build",
-      "severity": "major",
-      "status": "fixed",
-      "text": "One agent's in-progress edit broke every other agent's art build. Modules now load dynamically and a broken one is skipped and reported."
     }
   ],
   "comparisons": [

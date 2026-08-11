@@ -241,13 +241,11 @@ function discover(w: WorldScene, id: string, alias?: string): boolean {
   return true;
 }
 
-/** Read a clue: play its lines, then add it to the board's tray. */
-async function readClue(w: WorldScene, def: { id: string; exchange?: string; alias?: string; note?: string }): Promise<void> {
+/** Read something that is not a card: the weather, the order of the row. */
+async function readEnvironment(w: WorldScene, def: { id: string; exchange?: string; alias?: string }): Promise<void> {
   const first = !State.has(CLUE_FLAG(def.id));
   await w.cutscene.talk(async (c) => {
     if (def.exchange) await playId(c, def.exchange);
-    else if (def.note) await c.say('narrator', def.note);
-    if (first && def.note && def.exchange) await c.say('narrator', def.note);
   });
   if (first) discover(w, def.id, def.alias);
 }
@@ -276,10 +274,11 @@ async function reveal(w: WorldScene): Promise<void> {
     await playId(c, 'q2.threadsSolved');
     await playId(c, 'q2.reveal');
 
-    // Sera lets herself in, as she does.
-    w.spawnNpc({ id: 'sera', actor: 'sera', x: 24, y: 4, facing: 's' });
-    await c.walk('sera', 18, 8);
-    c.face('sera', 's');
+    // Sera lets herself in, as she does. NPCs walk in straight lines, so the
+    // arrival is raced against a timeout: a scene must never wait on pathing.
+    w.spawnNpc({ id: 'sera', actor: 'sera', x: 24, y: 6, facing: 'w' });
+    await Promise.race([c.walk('sera', 20, 10), c.wait(3500)]);
+    c.face('sera', 'w');
     await playId(c, 'q2.naming');
     await playId(c, 'q2.recall');
 
@@ -331,7 +330,7 @@ registerArea('courier', {
         y: p.sprite.y - p.sprite.height / 2,
         label: 'Read',
         observable: true,
-        onInteract: () => { void readClue(w, r); },
+        onInteract: () => { void readEnvironment(w, r); },
       });
     }
 
@@ -360,12 +359,14 @@ registerArea('courier', {
 
   onTrigger(w, id) {
     if (id !== 'oren_intro' || State.has('q2_started')) return false;
+    // Flags go up front: a player who walks out mid-scene is still on the quest.
+    const hadPanic = State.has('oren_panic');
+    State.setAll(['q2_started', 'met_oren', 'oren_panic']);
+    State.startQuest('q2_oren');
     void w.cutscene.run(async (c) => {
       c.face('oren', 's');
-      if (!State.has('oren_panic')) await playId(c, 'q2.panic');
+      if (!hadPanic) await playId(c, 'q2.panic');
       await playId(c, 'q2.officeTalk');
-      State.setAll(['q2_started', 'met_oren', 'oren_panic']);
-      State.startQuest('q2_oren');
       State.advanceQuest('q2_oren', 'talk');
       c.toast('Reconstruct the two days');
     });

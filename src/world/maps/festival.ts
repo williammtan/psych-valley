@@ -35,6 +35,14 @@ import type { LightDef, MapDef, ObjectSpec, PropPlacement } from '../types';
 const W = 48;
 const H = 36;
 
+/**
+ * The trial stage's base row. Everything ceremonial hangs off this: the three
+ * lanterns sit in the cups on its posts, the reference stands in front of it,
+ * and the crowd arcs below. Kept as one constant so the ensemble stays a
+ * single readable object when it is nudged.
+ */
+const STAGE_Y = 19.6;
+
 /** Warm lantern-paper amber — the festival's signature colour. */
 const AMBER = 0xffb04a;
 const CANDLE = 0xffc978;
@@ -84,7 +92,7 @@ function build(): MapDef {
 
   // The trial ground — a laid carpet, which is what tells the player where the
   // evening's event actually is before anyone says a word.
-  g.blob(23, 20.8, 8, 4.6, 'f', 21, 0.16);
+  g.blob(23, 23.6, 8, 4.8, 'f', 21, 0.16);
 
   // Entry road from town, and the two service lanes to the stall rows.
   g.vLine(28, H - 1, 23, 'p', 5);
@@ -93,7 +101,7 @@ function build(): MapDef {
 
   // Building/stall footprints — solid ground the sprites sit on.
   const footprints: Array<[number, number, number, number]> = [
-    [20, 14, 8, 4],   // trial stage
+    [20, 16, 8, 4],   // trial stage
     [4, 15, 5, 2],    // food stall 0
     [9, 15, 4, 2],    // food stall 1
     [34, 15, 5, 2],   // bandstand
@@ -180,11 +188,11 @@ function build(): MapDef {
   };
 
   // ── the trial: the centre of attention ───────────────────────────────────
-  put('prop/fest/trial_stage', 23.5, 17.4, { solid: [88, 44] }, { radius: 78, color: AMBER, intensity: 0.34, dy: -2.4 }, 'trial_stage');
-  put('prop/fest/banner_0', 19.6, 17.6, {}, { radius: 34, color: ROSE, intensity: 0.22, dy: -1.6 });
-  put('prop/fest/banner_2', 27.4, 17.6, {}, { radius: 34, color: TEAL, intensity: 0.22, dy: -1.6 });
-  put('prop/fest/banner_1', 21.6, 13.6, { depthBias: -6 }, { radius: 30, color: AMBER, intensity: 0.2, dy: -1.6 });
-  put('prop/fest/banner_1', 25.4, 13.6, { depthBias: -6 }, { radius: 30, color: AMBER, intensity: 0.2, dy: -1.6 });
+  put('prop/fest/trial_stage', 23.5, STAGE_Y, { solid: [88, 44] }, { radius: 82, color: AMBER, intensity: 0.36, dy: -2.6 }, 'trial_stage');
+  put('prop/fest/banner_0', 19.6, 19.8, {}, { radius: 34, color: ROSE, intensity: 0.22, dy: -1.6 });
+  put('prop/fest/banner_2', 27.4, 19.8, {}, { radius: 34, color: TEAL, intensity: 0.22, dy: -1.6 });
+  put('prop/fest/banner_1', 21.6, 15.8, { depthBias: -6 }, { radius: 30, color: AMBER, intensity: 0.2, dy: -1.6 });
+  put('prop/fest/banner_1', 25.4, 15.8, { depthBias: -6 }, { radius: 30, color: AMBER, intensity: 0.2, dy: -1.6 });
 
   /**
    * The three trial lanterns are MOUNTED, not standing loose on the grass: the
@@ -194,21 +202,21 @@ function build(): MapDef {
    * belonging to this stage rather than three ornaments someone left out.
    *
    *   stage centre 23.5 → sprite left edge px 336 → posts at px 360/384/408
-   *   stage base   17.4 → sprite top      py 230.4 → cup floor py 239.4
+   *   stage base STAGE_Y → sprite top 64px up → cup floor 9px below that
    */
-  const POST_Y = (230.4 + 9 - 16) / 16;
-  put('prop/fest/trial_lantern_a', 22.0, POST_Y, {}, { radius: 40, color: TRIAL_COLORS.a, intensity: 0.46, dy: -1.2 }, 'lantern_a');
-  put('prop/fest/trial_lantern_b', 23.5, POST_Y, {}, { radius: 40, color: TRIAL_COLORS.b, intensity: 0.46, dy: -1.2 }, 'lantern_b');
-  put('prop/fest/trial_lantern_c', 25.0, POST_Y, {}, { radius: 40, color: TRIAL_COLORS.c, intensity: 0.46, dy: -1.2 }, 'lantern_c');
+  const POST_Y = STAGE_Y - (64 - 9) / 16;
+  put('prop/fest/trial_lantern_a', 22.0, POST_Y, {}, { radius: 48, color: TRIAL_COLORS.a, intensity: 0.62, dy: -1.3 }, 'lantern_a');
+  put('prop/fest/trial_lantern_b', 23.5, POST_Y, {}, { radius: 48, color: TRIAL_COLORS.b, intensity: 0.62, dy: -1.3 }, 'lantern_b');
+  put('prop/fest/trial_lantern_c', 25.0, POST_Y, {}, { radius: 48, color: TRIAL_COLORS.c, intensity: 0.62, dy: -1.3 }, 'lantern_c');
 
   // The reference stands alone on the carpet, forward of the stage and lower
   // than the three — its own stone pedestal, its own pool of white light.
-  put('prop/fest/reference_lantern', 23.5, 19.8, { solid: [14, 8], anim: 'reference_lantern_struck' },
+  put('prop/fest/reference_lantern', 23.5, 22.2, { solid: [14, 8], anim: 'reference_lantern_struck' },
     { radius: 56, color: MOONWHITE, intensity: 0.54, flicker: 0.15, dy: -2.0 }, 'ref_lantern');
-  put('prop/fest/striker', 21.4, 19.6, {}, undefined, 'striker');
+  put('prop/fest/striker', 21.0, 22.0, {}, undefined, 'striker');
 
-  put('prop/fest/judging_table', 29.2, 19.8, { solid: [44, 12] }, { radius: 30, color: CANDLE, intensity: 0.24, dy: -1.2 });
-  put('prop/fest/prize_ribbon', 30.4, 19.2, {});
+  put('prop/fest/judging_table', 29.2, 21.2, { solid: [44, 12] }, { radius: 30, color: CANDLE, intensity: 0.24, dy: -1.2 });
+  put('prop/fest/prize_ribbon', 30.4, 20.6, {});
 
   // ── west: the food row ───────────────────────────────────────────────────
   put('prop/fest/stall_food_0', 6.2, 17.2, { solid: [58, 22] }, { radius: 46, color: AMBER, intensity: 0.38, dy: -2.2 });
@@ -249,8 +257,8 @@ function build(): MapDef {
 
   // ── the ring of ground lanterns that draws the trial floor ───────────────
   const ring: Array<[number, number]> = [
-    [32.0, 20.8], [30.3, 24.1], [25.8, 26.1], [20.2, 26.1], [15.7, 24.1],
-    [14.0, 20.8], [15.7, 17.5], [30.3, 17.5],
+    [31.8, 23.6], [29.2, 27.6], [25.2, 29.2], [20.8, 29.2], [16.8, 27.6],
+    [14.2, 23.6], [16.8, 19.6], [29.2, 19.6],
   ];
   ring.forEach(([x, y], i) => {
     put(`prop/fest/ground_lantern_${i % 3}`, x, y, {}, { radius: 30, color: AMBER, intensity: 0.4, flicker: 0.35, dy: -0.9 });
@@ -356,16 +364,16 @@ function build(): MapDef {
       // toward the stage. The player's answering spot is the gap at its mouth —
       // standing IN the group, not in front of it, is what makes round three
       // work, so this arrangement is gameplay, not decoration.
-      { id: 'tavi', x: 19.6, y: 22.8, facing: 'n' },
-      { id: 'nia', x: 30.2, y: 22.6, facing: 'n' },
-      { id: 'villager_a', x: 17.0, y: 24.8, facing: 'n' },
-      { id: 'villager_b', x: 18.8, y: 26.8, facing: 'n' },
-      { id: 'villager_c', x: 21.6, y: 27.8, facing: 'n' },
-      { id: 'villager_d', x: 25.6, y: 27.8, facing: 'n' },
-      { id: 'villager_e', x: 28.8, y: 26.0, facing: 'n' },
+      { id: 'tavi', x: 19.4, y: 24.4, facing: 'n' },
+      { id: 'nia', x: 29.6, y: 25.6, facing: 'n' },
+      { id: 'villager_a', x: 17.6, y: 26.2, facing: 'n' },
+      { id: 'villager_b', x: 19.2, y: 28.0, facing: 'n' },
+      { id: 'villager_c', x: 21.2, y: 25.0, facing: 'n' },
+      { id: 'villager_d', x: 25.8, y: 25.0, facing: 'n' },
+      { id: 'villager_e', x: 27.4, y: 28.0, facing: 'n' },
       // Host, observer, and the two who are here for the food.
-      { id: 'elia', x: 27.6, y: 20.4, facing: 'w' },
-      { id: 'sera', x: 15.6, y: 21.0, facing: 'e' },
+      { id: 'elia', x: 27.8, y: 22.4, facing: 'w' },
+      { id: 'sera', x: 15.8, y: 23.0, facing: 'e' },
       { id: 'mira', x: 6.2, y: 15.4, facing: 's' },
       { id: 'oren', x: 12.0, y: 19.4, facing: 'n', path: [[12, 19], [9, 21], [12, 22]], dwell: 3.2 },
       { id: 'villager_f', x: 36.0, y: 15.6, facing: 's' },
@@ -376,15 +384,15 @@ function build(): MapDef {
       // Fires as the player comes under the arch, before they reach the crowd.
       { kind: 'trigger', id: 'festival_arrival', x: 20, y: 30, w: 7, h: 2, forbids: 'q3_intro_done' },
       // Stepping into the back of the arc is what starts the ceremony.
-      { kind: 'trigger', id: 'trial_ready', x: 19, y: 24, w: 10, h: 2, forbids: 'q3_trial_done' },
+      { kind: 'trigger', id: 'trial_ready', x: 19, y: 29, w: 10, h: 2, forbids: 'q3_trial_done' },
     ],
     lights: P.lights,
     spawns: {
       // South of the arrival trigger, so a harness jump does not fire a cutscene.
       default: { x: 23, y: 34, facing: 'n' },
       south: { x: 23, y: 34, facing: 'n' },
-      trial: { x: 23, y: 23, facing: 'n' },
-      stage: { x: 23, y: 19, facing: 'n' },
+      trial: { x: 23, y: 27, facing: 'n' },
+      stage: { x: 23, y: 21, facing: 'n' },
     },
   };
 }

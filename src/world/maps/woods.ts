@@ -67,7 +67,8 @@ export const WOODS = {
   narrows: [21, 31] as const,
   toadstools: [35, 31] as const,
   hollow: [23, 45] as const,
-  dell: [20, 65] as const,
+  /** Stand here and the cliff, the plateau and the lit chest are all on screen. */
+  dell: [18, 64] as const,
   gully: [4, 60] as const,
   plateau: [9, 53] as const,
   /** The tile you stand on to open the chest — the chest itself is solid. */
@@ -294,8 +295,11 @@ export function buildWoods(): MapDef {
   overlay(g, 'l', (t) => { t.blob(23, 42, 9, 5, '*', 47, 0.28); });
   overlay(g, 'l', (t) => { t.blob(22, 70, 7, 5, '*', 53, 0.3); });
   overlay(g, 'l', (t) => { t.blob(22, 93, 8, 5, '*', 59, 0.28); });
-  // bare soil at the cliff foot and the river banks
-  overlay(g, 'd', (t) => { t.blob(14, 63, 12, 3, '*', 61, 0.3); });
+  // The dell floor: dry rubble at the foot of the rock, softening to leaf
+  // litter and moss further out, so it is not one flat brown field.
+  overlay(g, 'd', (t) => { t.blob(9, 62, 8, 2, '*', 61, 0.35); });
+  overlay(g, 'l', (t) => { t.blob(17, 65, 9, 3, '*', 63, 0.3); });
+  overlay(g, 'm', (t) => { t.blob(6, 66, 5, 2, '*', 65, 0.35); });
   overlay(g, 'd', (t) => { t.rect(2, 82, 40, 2, '*'); t.rect(2, 87, 40, 2, '*'); });
   // the old terrace: cut stone, the shrine's architecture surfacing early
   overlay(g, 'S', (t) => { t.blob(22, 75, 8, 4, '*', 67, 0.16); });

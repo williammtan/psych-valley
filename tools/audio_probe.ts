@@ -22,7 +22,7 @@
  *   npx tsx tools/audio_probe.ts --json out.json
  */
 import { chromium, type Browser, type Page } from 'playwright';
-import { writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
@@ -153,6 +153,40 @@ function decode(b64: string): Float32Array {
   return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
 }
 
+// ── call-site coverage ──────────────────────────────────────────────────────
+
+function walk(dir: string, out: string[] = []): string[] {
+  for (const e of readdirSync(dir)) {
+    const full = join(dir, e);
+    if (statSync(full).isDirectory()) walk(full, out);
+    else if (full.endsWith('.ts')) out.push(full);
+  }
+  return out;
+}
+
+/**
+ * Every name the game passes to `Audio.sfx(...)`. Template literals such as
+ * `lantern_tone_${id}` are kept as patterns and satisfied if the library has at
+ * least one name that fits. This is the check that catches a system asking for
+ * a sound that was never written — which is silence at runtime, and invisible
+ * in a screenshot.
+ */
+function callSiteNames(): { literals: string[]; patterns: string[] } {
+  const literals = new Set<string>();
+  const patterns = new Set<string>();
+  const re = /Audio\.sfx\(\s*(?:[a-zA-Z0-9_.?!=:'"\s]*\?\s*)?(['"`])([^'"`]+)\1/g;
+  const ternary = /Audio\.sfx\([^)]*?\?\s*'([^']+)'\s*:\s*'([^']+)'/g;
+  for (const file of walk(join(ROOT, 'src'))) {
+    if (file.includes(`${'/'}audio${'/'}`)) continue;
+    const src = readFileSync(file, 'utf8');
+    for (const m of src.matchAll(re)) {
+      (m[2].includes('${') ? patterns : literals).add(m[2]);
+    }
+    for (const m of src.matchAll(ternary)) { literals.add(m[1]); literals.add(m[2]); }
+  }
+  return { literals: [...literals].sort(), patterns: [...patterns].sort() };
+}
+
 // ── harness ─────────────────────────────────────────────────────────────────
 
 async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevServer }> {
@@ -166,9 +200,12 @@ async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevSe
   const port = typeof addr === 'object' && addr ? addr.port : 5199;
 
   const browser = await chromium.launch({
+    // Headless Chrome allows autoplay by default, which would hide the very bug
+    // this harness exists to catch. Force the policy a real player's browser
+    // uses; OfflineAudioContext is exempt from it, so rendering is unaffected.
     args: [
       '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
-      '--no-sandbox', '--autoplay-policy=no-user-gesture-required',
+      '--no-sandbox', '--autoplay-policy=user-gesture-required',
     ],
   });
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
@@ -197,19 +234,20 @@ async function recycle(page: Page, every = 20): Promise<void> {
   if (++sinceReload < every) return;
   sinceReload = 0;
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(2000);
   await waitForAudio(page);
 }
 
 /** page.evaluate, retried once if a reload pulled the context out from under us. */
 async function ev<T>(page: Page, fn: (arg: string) => T | Promise<T>, arg = ''): Promise<T> {
-  try {
-    return await page.evaluate<T, string>(fn, arg);
-  } catch (e) {
-    if (!/context was destroyed|Target closed/i.test(String(e))) throw e;
-    await page.waitForTimeout(1000);
-    await waitForAudio(page);
-    return page.evaluate<T, string>(fn, arg);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await page.evaluate<T, string>(fn, arg);
+    } catch (e) {
+      if (attempt >= 3 || !/context was destroyed|Target closed/i.test(String(e))) throw e;
+      await page.waitForTimeout(1500);
+      await waitForAudio(page);
+    }
   }
 }
 
@@ -223,6 +261,92 @@ function table(headers: string[], rows: string[][]): string {
 }
 
 interface Check { name: string; ok: boolean; detail: string }
+
+/**
+ * Exercises the real, non-offline path: the autoplay gesture, `?mute=1`, and
+ * the rule that walking between two maps on the same track must not restart it.
+ */
+async function liveChecks(page: Page): Promise<Check[]> {
+  const out: Check[] = [];
+  const base = page.url().split('?')[0];
+
+  // `?mute=1` — the screenshot and playthrough harnesses pass it every run.
+  await page.goto(`${base}?mute=1`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2500);
+  await waitForAudio(page);
+  await ev(page, () => { (window as any).__audio.playMusic('town'); return 0; });
+  // A real click, not a synthetic event: only trusted gestures unlock audio.
+  await page.mouse.click(400, 300);
+  await page.waitForTimeout(600);
+  const muted = await ev<{ ready: boolean; starts: number }>(page, async () => {
+    const a = (window as any).__audio;
+    a.playMusic('town');
+    a.sfx('sword');
+    await new Promise((r) => setTimeout(r, 250));
+    return { ready: a.ready(), starts: a.musicStarts() };
+  });
+  out.push({
+    name: '?mute=1 creates no audio at all',
+    ok: !muted.ready && muted.starts === 0,
+    detail: `ready=${muted.ready} musicStarts=${muted.starts}`,
+  });
+
+  // Unmuted: nothing before a gesture, everything after one.
+  const warnings: string[] = [];
+  const onConsole = (m: { type(): string; text(): string }): void => {
+    if (m.type() === 'warning' || m.type() === 'error') warnings.push(m.text());
+  };
+  page.on('console', onConsole as never);
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2500);
+  await waitForAudio(page);
+
+  const before = await ev<boolean>(page, () => {
+    (window as any).__audio.playMusic('town');
+    return (window as any).__audio.ready();
+  });
+  out.push({
+    name: 'silent until the player touches something',
+    ok: before === false,
+    detail: `ready before gesture = ${before}`,
+  });
+
+  await page.mouse.click(400, 300);
+  await page.keyboard.press('z');
+  await page.waitForTimeout(800);
+  const after = await ev<{ ready: boolean; started: string | null; s1: number; s2: number; now: string | null; s3: number }>(page, async () => {
+    const a = (window as any).__audio;
+    const started = a.currentTrack();
+    const s1 = a.musicStarts();
+    a.playMusic('town');            // same map's track again
+    await new Promise((r) => setTimeout(r, 300));
+    const s2 = a.musicStarts();
+    for (const n of a.listSfx()) a.sfx(n, { volume: 0.2 });
+    await new Promise((r) => setTimeout(r, 400));
+    a.playMusic('woods');
+    await new Promise((r) => setTimeout(r, 400));
+    return { ready: a.ready(), started, s1, s2, now: a.currentTrack(), s3: a.musicStarts() };
+  });
+  page.off('console', onConsole as never);
+
+  out.push({
+    name: 'music requested before the gesture starts on it',
+    ok: after.ready === true && after.started === 'town',
+    detail: `ready=${after.ready} track=${after.started}`,
+  });
+  out.push({
+    name: 're-entering a map on the same track does not restart it',
+    ok: after.s1 === after.s2 && after.s1 > 0,
+    detail: `starts ${after.s1} → ${after.s2}, then 'woods' → ${after.s3} (${after.now})`,
+  });
+  const sfxWarnings = warnings.filter((w) => w.includes('[audio]'));
+  out.push({
+    name: 'no audio warnings when firing every sound live',
+    ok: sfxWarnings.length === 0,
+    detail: sfxWarnings.length ? sfxWarnings.slice(0, 3).join(' | ') : 'clean',
+  });
+  return out;
+}
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -402,6 +526,26 @@ async function main(): Promise<void> {
         detail: `rms ${num(calm.a.rms, 4)} → ${num(boss.rms, 4)} (${(boss.rms / calm.a.rms).toFixed(2)}×)`,
       });
     }
+
+    // ── every call site resolves ───────────────────────────────────────────
+    const { literals, patterns } = callSiteNames();
+    const have = new Set(sfxNames);
+    const missing = literals.filter((n) => !have.has(n));
+    const unmatched = patterns.filter((p) => {
+      const rx = new RegExp(`^${p.replace(/\$\{[^}]*\}/g, '[A-Za-z0-9_]+')}$`);
+      return !sfxNames.some((n) => rx.test(n));
+    });
+    checks.push({
+      name: 'every Audio.sfx() call site has a sound',
+      ok: missing.length === 0 && unmatched.length === 0,
+      detail: missing.length || unmatched.length
+        ? `missing: ${[...missing, ...unmatched].join(', ')}`
+        : `${literals.length} names + ${patterns.length} patterns across src/`,
+    });
+
+    // ── live behaviour ─────────────────────────────────────────────────────
+    const live = await liveChecks(page);
+    checks.push(...live);
 
     console.log('\n\nCHECKS\n');
     for (const c of checks) {

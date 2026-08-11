@@ -139,7 +139,24 @@ export function createRack(ctx: BaseAudioContext, o: RackOpts = {}): Rack {
   sfx.gain.value = 1;
   sfx.connect(master);
 
-  // Convolution reverb from a synthesised impulse.
+  // Effect sends land back on the sfx bus, never on the master. A send that
+  // bypasses its own bus is a send that cannot be faded, ducked or crossfaded,
+  // and the wet tail carries on at full level while the dry signal ducks.
+  const { reverbSend, delaySend } = createSends(ctx, sfx, o);
+
+  return { ctx, master, music, sfx, reverbSend, delaySend, compressor };
+}
+
+/**
+ * A reverb and a feedback delay feeding `dest`.
+ *
+ * Built per bus rather than once globally: the music player gives every playing
+ * track its own pair so a track's reverb tail crossfades, ducks and stops with
+ * the track that made it.
+ */
+export function createSends(
+  ctx: BaseAudioContext, dest: AudioNode, o: RackOpts = {},
+): { reverbSend: GainNode; delaySend: GainNode; nodes: AudioNode[] } {
   const conv = ctx.createConvolver();
   conv.normalize = false;
   conv.buffer = impulse(ctx, o.reverbSeconds ?? 2.2, o.reverbDecay ?? 2.8);
@@ -149,10 +166,10 @@ export function createRack(ctx: BaseAudioContext, o: RackOpts = {}): Rack {
   revWet.gain.value = o.reverbMix ?? 0.85;
   reverbSend.connect(conv);
   conv.connect(revWet);
-  revWet.connect(master);
+  revWet.connect(dest);
 
-  // Feedback delay. 0.28s is well above the 128-sample minimum a feedback loop
-  // through a DelayNode requires, so the loop is legal.
+  // 0.27s is well above the 128-sample minimum a feedback loop through a
+  // DelayNode requires, so the loop is legal.
   const dl = ctx.createDelay(2);
   dl.delayTime.value = o.delayTime ?? 0.27;
   const fb = ctx.createGain();
@@ -169,9 +186,9 @@ export function createRack(ctx: BaseAudioContext, o: RackOpts = {}): Rack {
   damp.connect(fb);
   fb.connect(dl);
   dl.connect(dlWet);
-  dlWet.connect(master);
+  dlWet.connect(dest);
 
-  return { ctx, master, music, sfx, reverbSend, delaySend, compressor };
+  return { reverbSend, delaySend, nodes: [reverbSend, conv, revWet, delaySend, dl, damp, fb, dlWet] };
 }
 
 // ── shared buffers ──────────────────────────────────────────────────────────

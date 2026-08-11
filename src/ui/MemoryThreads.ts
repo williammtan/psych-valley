@@ -15,6 +15,18 @@
  * six slots and watches nothing happen — and the board tells them why, by
  * showing the two accounts that cannot both be true shoving at each other.
  *
+ * ── placing is a claim; ENTER is the submission ─────────────────────────────
+ *
+ * Nothing is checked as it lands. Dropping a card says "I think this happened
+ * here" and the board simply holds it. Only when the player commits the whole
+ * arrangement — ENTER, "that is both days" — does anything resolve, and it
+ * resolves all at once or not at all.
+ *
+ * A refused commit is never told which card is wrong. The board answers with an
+ * argument instead: the two accounts that collide, or Oren on his own memory,
+ * or a plain restatement of a physical fact and the thing that dates it. The
+ * conclusion stays the player's to draw. There is no score anywhere on screen.
+ *
  * Art contract: everything here degrades. `ui/clue_card_*`, `ui/panelDark_*`,
  * `ui/thread_node_*`, `ui/timeline_bar_*`, `ui/thread_connector_*` and
  * `ui/clue_pin` are used when the UI art module has built them, and equivalent
@@ -54,6 +66,11 @@ export interface ThreadCard {
   claim: { day: ThreadDay; slot: number };
   /** One short line: the proof, or whose recollection this is. */
   note: string;
+  /**
+   * For contextual cards: the fact that dates the thing in `note` — the rain,
+   * the roll of cord, the wet paint. Stated on its own, never as a ruling.
+   */
+  context?: string;
 }
 
 export interface ThreadRow {
@@ -72,6 +89,13 @@ export interface ThreadBoard {
   cards: ThreadCard[];
   /** delivery id → where it actually happened. */
   truth: Record<string, { day: ThreadDay; slot: number }>;
+  /** Authored lines the board says back. See `src/data/dialogue/`. */
+  messages?: {
+    /** Played when the player commits a board that leans on a recollection. */
+    memory?: string;
+    /** The prompt on a full board. */
+    ready?: string;
+  };
 }
 
 /** Open the board and resolve when it closes. `true` if it was solved. */
@@ -149,6 +173,9 @@ export class MemoryThreads {
   private held: string | null = null;
   private cursor = { row: 0, col: 0 };
   private conflicts: Conflict[] = [];
+  /** What the board said back the last time the player committed. */
+  private answer = '';
+  private argueIndex = 0;
   private art = { card: false, node: false, bar: false, conn: false, pin: false };
 
   constructor(private scene: Phaser.Scene) {
@@ -164,7 +191,8 @@ export class MemoryThreads {
       else if (k === 'arrowright' || k === 'd') this.moveCursor(1, 0);
       else if (k === 'arrowup' || k === 'w') this.moveCursor(0, -1);
       else if (k === 'arrowdown' || k === 's') this.moveCursor(0, 1);
-      else if (k === ' ' || k === 'enter' || k === 'e') this.act();
+      else if (k === ' ' || k === 'e') this.act();
+      else if (k === 'enter') this.commit();
       else if (k === 'escape' || k === 'backspace') this.back();
     });
 
@@ -183,6 +211,7 @@ export class MemoryThreads {
       state: () => this.debugState(),
       place: (cardId: string, day: ThreadDay, slot: number) => this.debugPlace(cardId, day, slot),
       clear: (day: ThreadDay, slot: number) => this.debugClear(day, slot),
+      commit: () => this.commit(),
       close: () => this.close(false),
     };
   }
@@ -199,6 +228,8 @@ export class MemoryThreads {
     this.placed.clear();
     this.anchored.clear();
     this.conflicts = [];
+    this.answer = '';
+    this.argueIndex = 0;
     this.held = null;
     this.cursor = { row: 2, col: 0 };
 
@@ -330,12 +361,14 @@ export class MemoryThreads {
   }
 
   /**
-   * Two cards describing the same delivery cannot both be on the board: one
-   * parcel went to one door on one day. That is the collision the player has to
-   * resolve, and it is where the two accounts are made to argue in public.
+   * Run after every change. This does NOT check anybody's answer — it only
+   * notices the one thing the player could notice unaided: that two cards on the
+   * board describe the same delivery, and one parcel cannot have gone to one
+   * door on two days. Those two are then made to argue in public.
    */
   private evaluate(): void {
     const placed = this.placedCards();
+    this.answer = '';
     this.conflicts = [];
     for (let i = 0; i < placed.length; i++) {
       for (let j = i + 1; j < placed.length; j++) {
@@ -345,23 +378,66 @@ export class MemoryThreads {
         this.conflicts.push({ a: a.card.id, b: b.card.id, reason: conflictReason(a.card, b.card) });
       }
     }
-
-    const before = this.anchored.size;
-    this.anchored.clear();
-    for (const p of placed) {
-      if (this.isAnchoring(p.card, p.row, p.col)) this.anchored.add(p.key);
-    }
     if (this.conflicts.length && this.conflicts.length !== this.lastConflictCount) {
       Audio.sfx('ui_cancel', { volume: 0.45 });
       emit('threads:conflict', { reason: this.conflicts[0].reason });
     }
     this.lastConflictCount = this.conflicts.length;
-
-    if (this.anchored.size > before) emit('threads:anchor', { count: this.anchored.size });
-    if (this.anchored.size === 6 && !this.solved) this.finish();
   }
 
   private lastConflictCount = 0;
+
+  /**
+   * "That is both days." The only moment anything is judged, and it is judged
+   * whole: six slots resolve together or none of them do.
+   *
+   * A refusal never says which card is wrong. It says one true thing about what
+   * is on the board and stops talking.
+   */
+  private commit(): void {
+    if (!this.board || this.solved) return;
+    if (this.placed.size < 6) {
+      const empty = 6 - this.placed.size;
+      this.answer = empty === 1 ? 'One slot is still empty.' : `${empty} slots are still empty.`;
+      Audio.sfx('ui_cancel', { volume: 0.3 });
+      this.render();
+      return;
+    }
+    const held = this.placedCards().every((p) => this.isAnchoring(p.card, p.row, p.col));
+    if (!held) {
+      this.answer = this.argue();
+      Audio.sfx('ui_cancel', { volume: 0.5 });
+      this.scene.cameras.main.shake(160, 0.003);
+      emit('threads:refused', { reason: this.answer });
+      this.render();
+      return;
+    }
+    this.anchored = new Set(this.placedCards().map((p) => p.key));
+    emit('threads:anchor', { count: this.anchored.size });
+    this.render();
+    this.finish();
+  }
+
+  /**
+   * What the board says when it will not close. Never a verdict — a collision,
+   * Oren on his own memory, or a physical fact and the thing that dates it.
+   */
+  private argue(): string {
+    if (this.conflicts.length) return this.conflicts[0].reason;
+
+    const memories = this.placedCards().filter((p) => p.card.kind === 'memory');
+    if (memories.length) {
+      const i = this.argueIndex++;
+      if (i % 2 === 0 && this.board?.messages?.memory) return this.board.messages.memory;
+      const m = memories[Math.floor(i / 2) % memories.length];
+      return `Nothing holds ${sourceOf(m.card)}'s account in place.`;
+    }
+
+    const facts = this.placedCards().filter((p) => p.card.context);
+    if (!facts.length) return 'Something on this board is standing in the wrong day.';
+    const f = facts[this.argueIndex++ % facts.length];
+    return `${f.card.note} ${f.card.context}`;
+  }
 
   private finish(): void {
     this.solved = true;
@@ -410,6 +486,7 @@ export class MemoryThreads {
       this.placed.set(key, this.held);
       this.held = null;
       Audio.sfx('ui_confirm', { volume: 0.45 });
+      this.answer = '';
       this.evaluate();
       this.render();
       return;
@@ -470,6 +547,7 @@ export class MemoryThreads {
       cards: (this.board?.cards ?? []).map((c) => ({ id: c.id, kind: c.kind, delivery: c.delivery })),
       cursor: { ...this.cursor },
       held: this.held,
+      answer: this.answer,
     };
   }
 
@@ -497,7 +575,7 @@ export class MemoryThreads {
 
     // ── header ─────────────────────────────────────────────────────────────
     this.text(L.labelX, L.titleY, b.title, 'display', COLORS.goldLight);
-    const hint = this.text(L.panel.x + L.panel.w - 8, L.titleY + 2, 'WASD move  SPACE lift/place  ESC back', 'body', 0x6f6390);
+    const hint = this.text(L.panel.x + L.panel.w - 8, L.titleY + 2, 'WASD move  SPACE lift  ENTER commit  ESC back', 'body', 0x6f6390);
     hint.setOrigin(1, 0);
     this.text(L.labelX, L.ruleY, b.rule, 'body', 0x9a90b8);
 
@@ -659,7 +737,7 @@ export class MemoryThreads {
     c.add(bar);
 
     const p = makeText(this.scene, x + 14, y + 7, card.parcel.toUpperCase(), 'body', { tint: INK });
-    const a = makeText(this.scene, x + 8, y + 18, card.address, 'body', { tint: INK_SOFT });
+    const a = makeText(this.scene, x + 14, y + 18, card.address, 'body', { tint: INK_SOFT });
     c.add(p.obj); c.add(a.obj);
     this.texts.push(p, a);
 
@@ -707,14 +785,21 @@ export class MemoryThreads {
     const a = this.centreOf(c.a);
     const b = this.centreOf(c.b);
     if (!a || !b) return;
-    g.lineStyle(1, COLORS.danger, 0.9);
-    // A frayed thread, not a clean line — this connection does not hold.
+    g.lineStyle(1, COLORS.danger, 0.95);
+    // A frayed thread, not a clean line — this connection does not hold. The
+    // kink is perpendicular to the run, so it reads on any pair of slots.
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const px0 = -dy / len;
+    const py0 = dx / len;
     const steps = 9;
     let px = a.x, py = a.y;
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      const nx = a.x + (b.x - a.x) * t;
-      const ny = a.y + (b.y - a.y) * t + (i % 2 ? 3 : -3) * (i < steps ? 1 : 0);
+      const k = i < steps ? (i % 2 ? 3.5 : -3.5) : 0;
+      const nx = a.x + dx * t + px0 * k;
+      const ny = a.y + dy * t + py0 * k;
       g.lineBetween(px, py, nx, ny);
       px = nx; py = ny;
     }
@@ -728,25 +813,23 @@ export class MemoryThreads {
         ? this.board!.cards[cell.index]
         : this.card(this.placed.get(`${cell.row}:${cell.col}`) ?? '');
 
-    if (focus) {
-      const prefix = focus.kind === 'context' ? '' : '';
-      const wrapped = wrapText(this.scene, `${prefix}${focus.note}`, 'body', L.panel.w - 40);
+    if (this.answer) {
+      const wrapped = wrapText(this.scene, this.answer, 'body', L.panel.w - 40);
+      this.text(L.trayX + 2, L.detailY, wrapped, 'body', COLORS.goldLight);
+    } else if (focus) {
+      const wrapped = wrapText(this.scene, focus.note, 'body', L.panel.w - 40);
       this.text(L.trayX + 2, L.detailY, wrapped, 'body', focus.kind === 'context' ? COLORS.parchment : 0x9f95bd);
     }
 
-    let status = `${this.anchored.size} of 6 slots hold.`;
+    // The bottom line is the board's own voice: the collision it can see, or
+    // the invitation to commit. It never counts anything.
+    let status = this.board!.messages?.ready ?? 'ENTER — that is both days';
     let tint = 0x8f83ae;
     if (this.conflicts.length) {
       status = this.conflicts[0].reason;
       tint = COLORS.danger;
-    } else {
-      const stray = this.placedCards().find((p) => p.card.kind === 'context' && !this.anchored.has(p.key));
-      if (stray) {
-        status = `${stray.card.note} — that is not ${this.board!.rows[stray.row].label.toLowerCase()}.`;
-        tint = 0xd08a4a;
-      } else if (this.placed.size >= 3 && this.anchored.size === 0) {
-        status = 'Nothing on the board proves itself yet.';
-      }
+    } else if (this.placed.size < 6) {
+      status = 'Pin all six, then ENTER.';
     }
     this.text(L.trayX + 2, L.statusY, status, 'body', tint);
   }
@@ -804,6 +887,14 @@ function hashPhase(id: string): number {
   let n = 0;
   for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) | 0;
   return ((n >>> 0) % 628) / 100;
+}
+
+/** Whose account a memory card is, taken from its note: "OREN: ..." → "Oren". */
+function sourceOf(card: ThreadCard): string {
+  const m = /^([A-Z][A-Z ]+):/.exec(card.note);
+  if (!m) return 'that';
+  const name = m[1].trim().toLowerCase();
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 function conflictReason(a: ThreadCard, b: ThreadCard): string {

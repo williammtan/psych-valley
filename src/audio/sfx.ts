@@ -88,6 +88,42 @@ const bellSmall: SfxFn = (c) => {
   });
 };
 
+/**
+ * The tower bell heard from inside the inn: the same strikes, but the high
+ * partials and the clapper transient are gone and what is left is mostly room.
+ * Written as a filtered variant rather than a separate sound so it is provably
+ * the same bell — the point of Act I is that Pip reacts to *this* bell, and the
+ * player has to be able to tell that the muffled one and the loud one are one
+ * object.
+ */
+const bellTowerFar: SfxFn = (c) => {
+  const { r, t } = c;
+  const ctx = r.ctx;
+  // Walls and distance: a gentle lowpass, and far more wet than dry.
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 900;
+  lp.Q.value = 0.7;
+  lp.connect(r.sfx);
+  const send = ctx.createGain();
+  send.gain.value = 0.7;
+  lp.connect(send);
+  send.connect(r.reverbSend);
+
+  const root = mtof(BELL_TOWN_ROOT) * c.rate * vary(0.002);
+  BELL_MOTIF.forEach((semi, i) => {
+    bell(r, t + i * 0.66, root * Math.pow(2, semi / 12), {
+      ring: 2.4,
+      gain: c.vol * 0.34,
+      strike: 0.08,
+      beat: 1.2,
+      bright: 0.35,
+      doubled: 3,
+      dest: lp,
+    });
+  });
+};
+
 // ── the storm's pipes ───────────────────────────────────────────────────────
 
 /**
@@ -188,6 +224,48 @@ const catPurr: SfxFn = (c) => {
     attack: 0.1, decay: 0.1, sustain: 0.8, hold: 1.05, release: 0.28,
     gain: c.vol * 0.05, pan: c.pan,
     vibrato: { rate, cents: 90 },
+  });
+};
+
+/** Smaller than a meow: higher, shorter, and asking rather than complaining. */
+const catMew: SfxFn = (c) => {
+  const { r, t } = c;
+  formant(r, t, {
+    freq: 620 * c.rate * vary(0.1),
+    type: 'sawtooth',
+    contour: [[0, 0.82], [0.3, 1.1], [1, 0.92]],
+    formants: [[1020 * c.rate, 8, 1], [1980 * c.rate, 10, 0.42], [3200 * c.rate, 12, 0.14]],
+    breath: 0.05,
+    attack: 0.03, decay: 0.07, sustain: 0.65, hold: rand(0.05, 0.11), release: 0.12,
+    gain: c.vol * 0.24, pan: c.pan, vibrato: { rate: rand(6, 8), cents: 18 },
+    reverb: 0.1,
+  });
+};
+
+/** Crockery and loose boards going over. Small, busy, and entirely harmless. */
+const clatter: SfxFn = (c) => {
+  const { r, t } = c;
+  const n = 7 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const at = t + (i === 0 ? 0 : rand(0.02, 0.46));
+    const pan = c.pan + rand(-0.4, 0.4);
+    noise(r, at, {
+      duration: rand(0.02, 0.05),
+      filterType: 'bandpass',
+      filterFreq: rand(700, 3400) * c.rate,
+      q: rand(2.5, 7),
+      gain: c.vol * rand(0.1, 0.22), attack: 0.0006, pan,
+    });
+    tone(r, at, {
+      freq: rand(160, 520) * c.rate, type: 'triangle',
+      attack: 0.001, decay: rand(0.05, 0.14),
+      gain: c.vol * rand(0.05, 0.11), pan,
+    });
+  }
+  // Something heavy settles at the end.
+  tone(r, t + 0.42, {
+    freq: 96 * c.rate * vary(0.1), type: 'sine', slideFrom: 1.5, slideTime: 0.04,
+    attack: 0.001, decay: 0.2, gain: c.vol * 0.16, pan: c.pan,
   });
 };
 
@@ -1021,6 +1099,13 @@ export const SFX: Record<string, SfxFn> = {
   cat_meow: catMeow,
   cat_hiss: catHiss,
   cat_purr: catPurr,
+  cat_mew: catMew,
+  bell_tower_far: bellTowerFar,
+  clatter,
+  // Names other systems reached for. Aliased to the same function object, so
+  // they are the same sound and not a near-miss copy of it.
+  bell_tower: bellTown,
+  purr: catPurr,
   lantern_tone_a: (c) => lantern(c, 'a'),
   lantern_tone_b: (c) => lantern(c, 'b'),
   lantern_tone_c: (c) => lantern(c, 'c'),
@@ -1088,7 +1173,12 @@ export const SFX: Record<string, SfxFn> = {
  */
 export const SFX_LENGTH: Record<string, number> = {
   bell_town: 5.2,
+  bell_tower: 5.2,
+  bell_tower_far: 5.2,
   bell_small: 2.4,
+  cat_mew: 1.0,
+  purr: 2.2,
+  clatter: 1.4,
   pipe_crash: 2.2,
   cat_meow: 1.2,
   cat_hiss: 1.2,
@@ -1126,8 +1216,9 @@ export const SFX_LENGTH: Record<string, number> = {
  *              and must stay under everything else.
  */
 export const LEVEL: Record<string, number> = {
-  bell_town: 0.26, bell_small: 0.32, pipe_crash: 0.55,
-  cat_meow: 1.1, cat_hiss: 1.1, cat_purr: 0.85,
+  bell_town: 0.26, bell_tower: 0.26, bell_small: 0.32, bell_tower_far: 0.26,
+  pipe_crash: 0.55, clatter: 1.0,
+  cat_meow: 1.1, cat_hiss: 1.1, cat_purr: 0.85, purr: 0.85, cat_mew: 1.8,
   // Levelled by RMS, not by peak, so all three land at the same loudness.
   lantern_tone_a: 0.34, lantern_tone_b: 0.36, lantern_tone_c: 0.56, lantern_tone_ref: 0.34,
 

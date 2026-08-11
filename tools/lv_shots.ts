@@ -66,15 +66,27 @@ page.on('console', (m) => {
 
 await page.goto(`http://127.0.0.1:${port}/?skiptitle=1&map=lumen_vale&mute=1`, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => !!(window as any).__psyche?.ready, undefined, { timeout: 25000 }).catch(() => {});
+// The map runs its arrival cutscene on a fresh save, and that cutscene drives
+// the camera — teleporting under it captures whatever the pan is looking at.
+// Set the flag, then reload the map so it comes up in its ordinary state.
 await page.evaluate(() => (window as any).__psyche.setFlag('intro_done'));
-await page.waitForTimeout(600);
+await page.evaluate(() => (window as any).__psyche.goto('lumen_vale', 'default'));
+await page.waitForFunction(
+  () => (window as any).__psyche?.state()?.cutscene === false,
+  undefined, { timeout: 20000 },
+).catch(() => {});
+await page.evaluate(() => (window as any).__psyche.hideHud(true));
+await page.waitForTimeout(2600);   // let the location banner expire
 
 mkdirSync(OUT, { recursive: true });
 for (const [name, x, y] of list) {
+  // Two teleports with a wait between: the camera follows on an exponential
+  // lerp and swiftshader runs well under 60fps, so a single call leaves the
+  // view part-way through the jump.
   await page.evaluate(([tx, ty]) => (window as any).__psyche.teleport(tx, ty), [x, y]);
-  await page.waitForTimeout(650);
-  await page.evaluate(() => (window as any).__psyche.hideHud(true));
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(700);
+  await page.evaluate(([tx, ty]) => (window as any).__psyche.teleport(tx, ty), [x, y]);
+  await page.waitForTimeout(900);
   await page.screenshot({ path: join(OUT, `${name}.png`) });
   console.log(`  shots/lv/${name}.png  (${x},${y})`);
 }

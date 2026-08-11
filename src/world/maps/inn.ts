@@ -64,8 +64,10 @@ function build(): MapDef {
   g.set(21, 5, 'd'); g.set(22, 5, 'd');
 
   // ── the arch between them ────────────────────────────────────────────────
-  g.rect(19, 8, 1, 3, '.');
-  g.rect(20, 8, 1, 3, 'k');
+  // Both threshold columns stay planked. Running the kitchen's pale tiling up
+  // to the arch mouth turns the opening into a bright slot in the wall, which
+  // reads as a hole rather than a door.
+  g.rect(19, 8, 2, 3, '.');
 
   // Warm plank floor in the pool of firelight, so the hearth reads from the door.
   g.rect(3, 3, 6, 5, 'w');
@@ -101,8 +103,8 @@ function build(): MapDef {
       '-': { base: 'int/wood_floor', scatter: 'wall_shadow' },
       'w': { base: 'int/wood_floor_warm' },
       '+': { base: 'int/wood_floor_warm', scatter: 'wall_shadow' },
-      'k': { base: 'int/stone_floor' },
-      ';': { base: 'int/stone_floor', scatter: 'wall_shadow' },
+      'k': { base: 'int/tile_floor' },
+      ';': { base: 'int/tile_floor', scatter: 'wall_shadow' },
       '=': { base: 'int/doormat' },
       'T': { base: 'int/wall_wood_top', solid: true },
       'B': { base: 'int/wall_wood_base', solid: true },
@@ -198,8 +200,10 @@ function props(): PropPlacement[] {
     { key: 'prop/int/inn_bar_r', x: 15, y: 6, spec: { solid: [16, 26], interact: 'prop.innBar' } },
     { key: 'prop/int/inn_lectern', x: 10, y: 5.4, spec: { solid: [12, 8], interact: 'prop.innGuestBook' }, id: 'ledger' },
     { key: 'prop/int/inn_mug', x: 11.7, y: 4.9, spec: { depthBias: 26 } },
-    // The supper bell, on the shelf behind the bar where Mira's mother left it.
-    { key: 'prop/town/bell_small', x: 13, y: 2.5, spec: { depthBias: 40 }, id: 'handbell' },
+    // The supper bell. It lives on the shelf behind the bar, but it sits out on
+    // the counter where the player cannot walk past it without seeing it —
+    // a quest object nobody finds is a quest nobody finishes.
+    { key: 'prop/town/bell_small', x: 12.8, y: 4.9, spec: { depthBias: 30 }, id: 'handbell' },
     { key: 'prop/int/inn_plate', x: 13.9, y: 4.9, spec: { depthBias: 26 } },
     { key: 'prop/int/inn_mug_half', x: 14.8, y: 4.9, spec: { depthBias: 26 } },
     { key: 'prop/int/inn_stool', x: 11.6, y: 7.6, spec: {} },
@@ -235,8 +239,21 @@ function props(): PropPlacement[] {
     { key: 'prop/int/inn_clock', x: 3.4, y: 9, spec: { solid: [12, 6], interact: 'prop.innClock' } },
     { key: 'prop/int/inn_plant_b', x: 3.5, y: 12.4, spec: {} },
     { key: 'prop/int/inn_plant_a', x: 17.8, y: 16.8, spec: {} },
-    { key: 'prop/int/inn_broom', x: 18.4, y: 13, spec: {} },
-    { key: 'prop/int/inn_bucket', x: 17.6, y: 14.2, spec: {} },
+    { key: 'prop/int/inn_broom', x: 18.4, y: 13.4, spec: { interact: 'prop.innBroom' } },
+    { key: 'prop/int/inn_bucket', x: 17.6, y: 14.4, spec: {} },
+
+    // The east side of the room: a corner table with one chair, which is where
+    // somebody sits when they want to be left alone, and a bench by the door.
+    { key: 'prop/int/table_small', x: 16.6, y: 12.4, spec: { solid: [16, 8] } },
+    { key: 'prop/int/inn_chair_w', x: 15.2, y: 12.5, spec: {} },
+    { key: 'prop/int/inn_mug_half', x: 16.6, y: 11.9, spec: { depthBias: 26 } },
+    { key: 'prop/int/inn_bench', x: 15.6, y: 16.4, spec: { solid: [28, 8] } },
+    { key: 'prop/int/inn_barrel_stack', x: 18, y: 7.2, spec: { solid: [20, 8] } },
+
+    { key: 'prop/int/inn_table_round', x: 13.4, y: 15.4, spec: { solid: [26, 12] } },
+    { key: 'prop/int/inn_chair_w', x: 11.9, y: 15.6, spec: {} },
+    { key: 'prop/int/inn_chair_n', x: 13.4, y: 14.3, spec: {} },
+    { key: 'prop/int/inn_plate', x: 13.4, y: 14.8, spec: { depthBias: 26 } },
 
     // ── kitchen wing ───────────────────────────────────────────────────────
     // The quest geometry, in one corner: crates against the storeroom door, a

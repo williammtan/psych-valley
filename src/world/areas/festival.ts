@@ -39,6 +39,7 @@ import { registerArea } from '../registry';
 import { TRIAL_COLORS } from '../maps/festival';
 import type { WorldScene } from '@/scenes/WorldScene';
 import type { CutsceneContext, SayOptions } from '@/systems/Cutscene';
+import type { Dir } from '@/entities/Player';
 
 type L = 'a' | 'b' | 'c';
 
@@ -53,6 +54,15 @@ const PATTERN: Record<L, { count: number; gap: number }> = {
   b: { count: 3, gap: 287 },
   c: { count: 5, gap: 172 },
 };
+
+/**
+ * The ceremony is shot in two setups, and the cut between them is the round's
+ * rhythm: look at the lanterns while the reference rings, look at the people
+ * while the people answer. Round three tightens onto the group a third time.
+ */
+const FRAME_STAGE = 20.0;
+const FRAME_GROUP = 25.4;
+const FRAME_PRESSURE = 25.9;
 
 const BASE_FRAME: Record<L | 'ref', string> = {
   a: 'prop/fest/trial_lantern_a',
@@ -280,6 +290,20 @@ function resetState(): void {
   S.named = false;
 }
 
+/**
+ * Npc.update() turns idle characters to look around every few seconds, which is
+ * exactly right for a market and exactly wrong for a ceremony: a directed
+ * facing would silently un-set itself two seconds later. Freezing the
+ * participants for the duration is what lets round three's turn-and-stare hold.
+ */
+function holdStill(w: WorldScene, ids: string[], ms = 10 * 60 * 1000): void {
+  for (const id of ids) w.npc(id)?.freeze(ms);
+}
+
+function faceAll(w: WorldScene, ids: string[], dir: Dir): void {
+  for (const id of ids) w.npc(id)?.face(dir);
+}
+
 function head(w: WorldScene, id: string): { wx: number; wy: number } {
   const n = w.npc(id);
   return { wx: n?.x ?? 0, wy: (n?.y ?? 0) - 38 };
@@ -304,10 +328,11 @@ function startTrial(w: WorldScene, fast = false): void {
     // Take the stand. The player's spot is the mouth of the arc, which is what
     // makes them part of the group rather than an audience for it.
     cam.stopFollow();
-    await c.movePlayer(23, 23, 92);
+    await c.movePlayer(23, 27.4, 92);
     c.face('player', 'n');
-    for (const id of PARTICIPANTS) w.npc(id)?.face('n');
-    await c.panTo(23.5, 20.5, S.fast ? 1 : 620);
+    holdStill(w, [...PARTICIPANTS, 'elia', 'sera']);
+    faceAll(w, PARTICIPANTS, 'n');
+    await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 620);
 
     await say('elia', 'Everyone! Four rounds. Ears open.');
     await say('tavi', "Four? I'll take all four.");
@@ -325,6 +350,8 @@ function startTrial(w: WorldScene, fast = false): void {
 
     cam.zoomTo(1, 380, 'Sine.easeInOut', true);
     c.followPlayer(420);
+    // Give everyone their idle life back now the ceremony is over.
+    holdStill(w, [...PARTICIPANTS, 'elia', 'sera'], 0);
     S.finished = true;
     State.set('q3_trial_done');
     State.advanceQuest('q3_lanterns', 'rounds');
@@ -354,9 +381,14 @@ async function runRound(
   if (r.n === 3) await say('elia', "Round three. We'll come to you last.");
   if (r.n === 4) await say('elia', 'Last round. Same as before.');
 
+  // Look at the lanterns while they speak...
+  await c.panTo(23.5, FRAME_STAGE, S.fast ? 1 : 480);
   await beat(300);
   await c.wait(S.fast ? 16 : S.rig!.strikeReference(w, r.correct));
-  await beat(520);
+  await beat(420);
+  // ...and back to the people, who are the actual subject of this quest.
+  await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 480);
+  await beat(200);
 
   const speak = async (e: Answer) => {
     const npc = w.npc(e.id);
@@ -383,9 +415,11 @@ async function runRound(
     if (r.n === 3) {
       // The pressure staging. Everything here is about attention, not threat:
       // the group turns, the frame tightens, and then the game waits. No timer.
+      // Seven people stop looking at the lanterns and look at you instead.
+      // This is the round; everything else in it is staging.
       for (const id of PARTICIPANTS) w.npc(id)?.faceTowards(w.player.x, w.player.y);
-      cam.zoomTo(1.12, S.fast ? 1 : 900, 'Sine.easeInOut', true);
-      await c.panTo(23.5, 22.6, S.fast ? 1 : 900);
+      cam.zoomTo(1.10, S.fast ? 1 : 900, 'Sine.easeInOut', true);
+      await c.panTo(23.5, FRAME_PRESSURE, S.fast ? 1 : 900);
       await beat(500);
       await say('elia', 'And you?');
       await beat(400);
@@ -402,9 +436,9 @@ async function runRound(
       await say('elia', 'Noted.');
       if (answer === group) await say('tavi', 'See? Everyone hears it.');
       else await say('tavi', 'Huh.');
-      for (const id of PARTICIPANTS) w.npc(id)?.face('n');
+      faceAll(w, PARTICIPANTS, 'n');
       cam.zoomTo(1, S.fast ? 1 : 600, 'Sine.easeInOut', true);
-      await c.panTo(23.5, 20.5, S.fast ? 1 : 600);
+      await c.panTo(23.5, FRAME_GROUP, S.fast ? 1 : 600);
     }
   };
 
@@ -555,8 +589,8 @@ registerArea('festival', {
       if (!p) continue;
       w.addInteractable({
         id: `trial_lantern_${id}`,
-        x: p.sprite.x, y: 284,
-        radius: 10,
+        x: p.sprite.x, y: 312,
+        radius: 26,
         label: 'Strike', observable: true,
         forbids: 'q3_trial_done',
         onInteract: strike(id),

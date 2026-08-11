@@ -160,7 +160,9 @@ function build(): MapDef {
 
     zones: [
       { kind: 'door', id: 'to_town', x: DOOR_X, y: 2, w: 2, h: 1, to: 'lumen_vale', spawn: 'default', facing: 's' },
-      { kind: 'trigger', id: 'oren_intro', x: DOOR_X - 1, y: 4, w: 4, h: 2, forbids: 'q2_started' },
+      // Set back from the doormat: walking in should start the scene, but
+      // spawning here (debug jumps, a door transition) should not.
+      { kind: 'trigger', id: 'oren_intro', x: 18, y: 7, w: 10, h: 3, forbids: 'q2_started' },
       { kind: 'camera', id: 'bounds', x: 0, y: 0, w: W, h: H },
     ],
 

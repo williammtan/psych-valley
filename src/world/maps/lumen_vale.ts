@@ -45,7 +45,7 @@ const RIVER: Array<[number, number, number]> = [
   [24, 70, 3.2],
   [36, 67, 3.2],
   [46, 65, 3.4],
-  [54, 65, 5],
+  [54, 65, 4.4],
   [62, 66, 4],
   [70, 69, 3.4],
   [84, 74, 3],
@@ -132,9 +132,9 @@ function build(): MapDef {
   g.scatter('"', ['.', ','], 0.15, 29);
   // Sun-scorched patches: the only warm ground tone that is not a path.
   for (const [cx, cy, rx, ry, sd] of [
-    [30, 41, 6, 4, 401], [50, 53, 6, 4, 403], [40, 24, 7, 3, 405],
-    [22, 47, 5, 4, 407], [62, 34, 5, 5, 409], [46, 64, 6, 4, 411],
-    [14, 27, 4, 4, 413], [78, 44, 5, 4, 415],
+    [30, 41, 4, 3, 401], [50, 53, 4, 3, 403], [39, 25, 4, 2.5, 405],
+    [22, 47, 3.5, 3, 407], [62, 34, 4, 3.5, 409], [46, 64, 4, 3, 411],
+    [14, 27, 3, 3, 413], [78, 44, 3.5, 3, 415],
   ] as const) g.blob(cx, cy, rx, ry, 'y', sd, 0.5);
   // Wildflower meadows: clustered colour accents, never sprinkled evenly.
   for (const [cx, cy, rx, ry, sd] of [
@@ -213,30 +213,34 @@ function build(): MapDef {
   route([[44, 45], [52, 44], [58, 44]], 3.6, 3.2, 'p', 4);
 
   // Lanes — narrower, dirt, district-flavoured.
-  route([[8, 35], [17, 35], [24, 35], [28, 34]], 2.2, 2.0, 'd', 5);   // Courier Row front
-  route([[17, 35], [17, 40], [16, 44]], 2.0, 2.2, 'd', 6);            // down to Bridge Street
-  route([[20, 22], [20, 28], [20, 34]], 2.0, 2.0, 'd', 7);            // north through the row
-  route([[6, 45], [11, 45], [16, 44]], 2.2, 2.0, 'd', 8);             // house_a's lane
-  route([[13, 14], [13, 22], [13, 30], [12, 34]], 2.0, 2.0, 'd', 9);  // farm lane
-  route([[13, 14], [20, 14], [27, 15], [33, 17]], 2.2, 2.0, 'd', 10); // farm → plaza
-  route([[34, 48], [28, 50], [22, 51], [21, 56], [21, 61]], 2.2, 2.2, 'd', 11); // Sera's lane
-  route([[21, 61], [17, 60], [16, 60]], 2.2, 2.0, 'd', 12);
-  route([[21, 61], [21, 67], [20, 70], [13, 70]], 2.2, 2.0, 'd', 13); // market gardens
-  route([[42, 64], [48, 65], [52, 64]], 2.2, 2.0, 'd', 14);           // house_d lane
-  route([[42, 64], [36, 65], [33, 64]], 2.2, 2.0, 'd', 15);           // house_c lane
-  route([[46, 21], [52, 24], [57, 25], [62, 27]], 2.2, 2.0, 'd', 16); // plaza → ford
-  route([[74, 27], [74, 34], [74, 41], [74, 48], [73, 56]], 2.2, 2.0, 'd', 17); // east track
-  route([[74, 41], [78, 41]], 2.0, 2.4, 'd', 18);                     // inn approach
-  route([[73, 56], [70, 57]], 2.0, 2.0, 'd', 19);                     // down to the jetty
-  route([[74, 27], [78, 24], [79, 21]], 2.0, 1.8, 'd', 20);           // up to the overlook
+  route([[8, 35], [17, 35], [24, 35], [28, 34]], 1.9, 1.7, 'd', 5);   // Courier Row front
+  route([[17, 35], [17, 40], [16, 44]], 1.7, 1.9, 'd', 6);            // down to Bridge Street
+  route([[20, 22], [20, 28], [20, 34]], 1.7, 1.7, 'd', 7);            // north through the row
+  route([[6, 45], [11, 45], [16, 44]], 1.9, 1.7, 'd', 8);             // house_a's lane
+  route([[13, 14], [13, 22], [13, 30], [12, 34]], 1.7, 1.7, 'd', 9);  // farm lane
+  route([[13, 14], [20, 14], [27, 15], [33, 17]], 1.9, 1.7, 'd', 10); // farm → plaza
+  route([[34, 48], [28, 50], [22, 51], [21, 56], [21, 61]], 1.9, 1.9, 'd', 11); // Sera's lane
+  route([[21, 61], [17, 60], [16, 60]], 1.9, 1.7, 'd', 12);
+  route([[21, 61], [21, 67], [20, 70], [13, 70]], 1.9, 1.7, 'd', 13); // market gardens
+  route([[42, 64], [48, 65], [52, 64]], 1.9, 1.7, 'd', 14);           // house_d lane
+  route([[42, 64], [36, 65], [33, 64]], 1.9, 1.7, 'd', 15);           // house_c lane
+  route([[46, 21], [52, 24], [57, 25], [62, 27]], 1.9, 1.7, 'd', 16); // plaza → ford
+  route([[74, 27], [74, 34], [74, 41], [74, 48], [73, 56]], 1.9, 1.7, 'd', 17); // east track
+  route([[74, 41], [78, 41]], 1.7, 2.1, 'd', 18);                     // inn approach
+  route([[73, 56], [70, 57]], 1.7, 1.7, 'd', 19);                     // down to the jetty
+  route([[74, 27], [78, 24], [79, 21]], 1.7, 1.5, 'd', 20);           // up to the overlook
+  route([[71, 44], [74, 44]], 2.6, 2.4, 'p', 21);                     // bridge → east track
 
   // ══ 5. paved places ══════════════════════════════════════════════════════
-  // Festival Plaza: a green with a modest paved centre — most of it is grass.
-  g.blob(43, 15, 8.5, 5.5, 'c', 103, 0.22);
-  g.blob(43, 15, 4.5, 3, 'p', 107, 0.25);
+  // Festival Plaza: a green. The paving is a ring where the stalls stand, not
+  // a parade ground — the middle of a plaza is the easiest place in a map to
+  // end up with fifty identical tiles.
+  g.blob(43, 15, 6.5, 4, 'c', 103, 0.26);
+  g.blob(38, 13, 2.5, 2, 'c', 105, 0.4);
+  g.blob(49, 18, 2.5, 2, 'c', 106, 0.4);
 
   // Bell-tower green: an apron at the foot of the tower, not a courtyard.
-  g.blob(49, 31, 7, 4, 'c', 109, 0.24);
+  g.blob(49, 31, 6, 3.5, 'c', 109, 0.26);
 
   // TOWN SQUARE — deliberately small. Roughly 17x13 including its kerb, which
   // is under half of what it was: the space it gave up is now planting,
@@ -260,15 +264,39 @@ function build(): MapDef {
       }
     }
   }
+  // Repairs: single slabs of the other stone dropped into each paved area.
+  // A blob autotiler only ever draws one interior tile, so an unbroken paved
+  // field repeats that tile forever; this scatters edges through the middle of
+  // it and the repeat disappears.
+  {
+    const snap = g.rows();
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const c = snap[y][x];
+        if (c !== 'c' && c !== 'p') continue;
+        const solo = snap[y - 1][x] === c && snap[y + 1][x] === c
+          && snap[y][x - 1] === c && snap[y][x + 1] === c;
+        if (!solo) continue;
+        const r = rnd(x * 97 + 11, y * 53 + 7);
+        if (r < 0.19) g.set(x, y, c === 'c' ? 'p' : 'c');
+      }
+    }
+  }
 
   // ══ 6. the bridge ════════════════════════════════════════════════════════
-  const BR_X0 = 57, BR_X1 = 72;
+  // Span measured off the water it actually crosses, so the deck never runs
+  // out across the grass as a slab.
+  let BR_X0 = W, BR_X1 = 0;
+  for (let y = 42; y <= 45; y++) {
+    for (let x = 0; x < W; x++) if (g.get(x, y) === '~') { BR_X0 = Math.min(BR_X0, x); BR_X1 = Math.max(BR_X1, x); }
+  }
+  BR_X0 -= 2;
+  BR_X1 += 2;
   for (let x = BR_X0; x <= BR_X1; x++) {
     g.set(x, 42, 'N');
     g.set(x, 43, '=');
     g.set(x, 44, '=');
-    g.set(x, 45, '=');
-    g.set(x, 46, 'S');
+    g.set(x, 45, 'S');
   }
 
   // ══ 7. the ford ══════════════════════════════════════════════════════════
@@ -362,9 +390,9 @@ function build(): MapDef {
           || WALK.includes(snap[y][x - 1]) || WALK.includes(snap[y][x + 1]);
         if (!near) continue;
         const r = rnd(x * 31 + 5, y * 17);
-        if (r < 0.15) g.set(x, y, 'p');       // stones spilled off the road
-        else if (r < 0.34) g.set(x, y, 'y');  // scorched, trodden grass
-        else if (r < 0.66) g.set(x, y, ';');
+        if (r < 0.07) g.set(x, y, 'p');       // stones spilled off the road
+        else if (r < 0.25) g.set(x, y, 'y');  // scorched, trodden grass
+        else if (r < 0.62) g.set(x, y, ';');
       }
     }
   }
@@ -389,13 +417,13 @@ function build(): MapDef {
     for (let x = 1; x < W - 1; x++) {
       if (!SOFT.includes(g.get(x, y))) continue;
       let near = false;
-      for (let j = -3; j <= 3 && !near; j++) for (let i = -3; i <= 3; i++) {
+      for (let j = -2; j <= 2 && !near; j++) for (let i = -2; i <= 2; i++) {
         if (g.get(x + i, y + j) === 'X') { near = true; break; }
       }
       if (!near) continue;
       const r = rnd(x * 11 + 3, y * 7 + 4);
-      if (r < 0.16) o.set(x, y, 'T');
-      else if (r < 0.28) o.set(x, y, 'b');
+      if (r < 0.13) o.set(x, y, 'T');
+      else if (r < 0.27) o.set(x, y, 'b');
       else if (r < 0.33) o.set(x, y, 'y');
       else if (r < 0.38) o.set(x, y, 'r');
     }
@@ -481,8 +509,11 @@ function build(): MapDef {
   }
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
+      // NB: 's' (riverbank) is deliberately absent — the banks keep their
+      // reeds, wet rocks and river stones. That planting is what stops the
+      // water reading as a flat blue rectangle with a tan border.
       const c = g.get(x, y);
-      if ('pdcxs~=NSgfo<>'.includes(c)) o.set(x, y, ' ');
+      if ('pdcx~=NSgfo<>'.includes(c)) o.set(x, y, ' ');
     }
   }
 
@@ -671,6 +702,23 @@ function build(): MapDef {
   for (const [x, y] of [[38, 8.6], [49, 8.6], [34, 22], [53, 22]] as const) lamp(x, y, 44, 0.38);
   P('prop/town/flowerbed_0', 33, 11, { solid: [28, 8] });
   P('prop/town/flowerbed_2', 54.5, 20, { solid: [28, 8] });
+  // The middle of the plaza is where the festival will stand: right now it is
+  // the delivery yard for all of it, which is what keeps the paving occupied.
+  P('prop/town/cart', 42, 12.4, { solid: [42, 14] });
+  P('prop/town/crate_1', 40.4, 12.9, {});
+  P('prop/town/crate_0', 44.2, 12.6, {});
+  P('prop/town/sack_0', 39.6, 13.4, {});
+  P('prop/town/sack_1', 45.4, 13.2, {});
+  P('prop/fest/judging_table', 45.6, 16.4, { solid: [42, 10], interact: 'plaza_stall' });
+  P('prop/fest/bread_basket', 45.2, 16.1, {});
+  P('prop/town/barrel_0', 41.4, 16.4, { solid: [14, 8] });
+  P('prop/town/barrel_1', 40.4, 16.9, { solid: [20, 8] });
+  P('prop/town/woodpile_1', 36.4, 17.4, { solid: [20, 10], interact: 'woodpile' });
+  P('prop/town/stool', 44, 18.4, {});
+  P('prop/town/basket_0', 42.4, 18.6, {});
+  P('prop/town/basket_2', 48.6, 12.6, {});
+  P('prop/fest/toy_windmill', 50.4, 20.4, { sway: 0.4 });
+  P('prop/town/bird_perched_0', 43, 11.4, { anim: 'bird_perched_idle' });
   for (const [x, y] of [[41, 16.5], [46.5, 14], [35, 19]] as const) {
     P('prop/town/butterfly_1', x, y, { anim: 'butterfly_fly', depthBias: 400, offset: [0, -12] });
   }
@@ -731,6 +779,19 @@ function build(): MapDef {
     P('prop/town/crate_0', 21.6, 33.6, {});
     P('prop/town/barrel_0', 26.4, 29.4, {});
   }
+
+  // ── the west approach: the ground between the square and Sera's lane ────
+  // Left as open lawn this was the emptiest screen on the map.
+  P('prop/town/log_0', 27.4, 47.4, { solid: [26, 8] });
+  P('prop/town/tree_stump', 26.4, 48.6, { solid: [16, 8] });
+  P('prop/town/woodpile_0', 25.4, 45.4, { solid: [28, 10], interact: 'woodpile' });
+  P('prop/town/bench_1', 31.4, 49.4, { solid: [30, 10] });
+  P('prop/town/wheelbarrow', 29.6, 53.4, { solid: [22, 10] });
+  P('prop/town/beehive', 24.6, 53.4, { solid: [14, 8] });
+  P('prop/town/hay_bale', 27.6, 55.4, { solid: [22, 10] });
+  P('prop/town/rock_3', 32.6, 44.4, { solid: [22, 8] });
+  P('prop/town/butterfly_2', 29, 51.5, { anim: 'butterfly_fly', depthBias: 400, offset: [0, -12] });
+  lamp(28, 50.6, 40, 0.36);
 
   // ── Sera's Workshop ─────────────────────────────────────────────────────
   {
@@ -804,8 +865,22 @@ function build(): MapDef {
   }
 
   // ── the river: bridge, jetties, ford, wildlife ──────────────────────────
-  for (const [x, y] of [[BR_X0, 42], [BR_X1, 42], [BR_X0, 46], [BR_X1, 46]] as const) {
-    P('prop/town/bridge_post', x, y, { depthBias: 200 });
+  // Posts every few tiles: without them a long deck is one flat plank field.
+  for (let x = BR_X0; x <= BR_X1; x += 4) {
+    P('prop/town/bridge_post', x, 42, { depthBias: 200, interact: x === BR_X0 ? 'bridge_rail' : undefined });
+    P('prop/town/bridge_post', x, 45.6, { depthBias: 8000 });
+  }
+  P('prop/town/bridge_post', BR_X1, 42, { depthBias: 200 });
+  P('prop/town/bridge_post', BR_X1, 45.6, { depthBias: 8000 });
+  // Life in the water the whole length of the river, not only in the pool.
+  for (let y = 6; y < H - 6; y += 3) {
+    const [cx, half] = riverAt(y);
+    const r = rnd(y * 17, 3);
+    if (y >= 40 && y <= 47) continue;                       // keep the bridge clear
+    if (r < 0.34) P('prop/town/lilypad_0', Math.round(cx + (r - 0.17) * half), y, { depthBias: -60 });
+    else if (r < 0.58) P('prop/town/river_rock_1', Math.round(cx - half + 0.5), y, { depthBias: -20 });
+    else if (r < 0.74) P('prop/town/river_rock_0', Math.round(cx + half - 0.5), y, { depthBias: -20 });
+    else if (r < 0.86) P('prop/town/duck_0', cx + (r - 0.8) * 6, y, { anim: 'duck_waddle', depthBias: -40 });
   }
   P('prop/town/jetty', 59.5, 55, { solid: [28, 8], interact: 'jetty' }, 'jetty');
   P('prop/town/jetty', 71.5, 58, { solid: [28, 8] });
@@ -935,7 +1010,9 @@ function build(): MapDef {
       'X': { base: 'town/grass', scatter: 'lush', solid: true },
       'p': { base: 'town/grass', blob: 'path' },
       'c': { base: 'town/grass', blob: 'cobble' },
-      'd': { base: 'town/grass', blob: 'dirt' },
+      // Dirt carries a scatter as well as its blob: bare lanes are the largest
+      // single-tone areas in the map and need grit and weeds on top of them.
+      'd': { base: 'town/grass', blob: 'dirt', scatter: 'rut' },
       'x': { base: 'town/soil', scatter: 'grit' },
       's': { base: 'town/grass', blob: 'sand' },
       'g': { base: 'town/soil', blob: 'sand' },
@@ -969,6 +1046,7 @@ function build(): MapDef {
         tiles: [['scatter/tuft_sm', 5], ['scatter/pebbles', 4], ['scatter/tuft_md', 2], ['', 5]],
       },
       grit: { density: 0.3, tiles: [['scatter/pebbles', 4], ['scatter/tuft_sm', 1], ['', 3]] },
+      rut: { density: 0.42, tiles: [['scatter/pebbles', 5], ['scatter/tuft_sm', 3], ['scatter/tuft_md', 1], ['', 6]] },
       rail_n: { density: 1, tiles: [['bridge/rail_n', 1]] },
       rail_s: { density: 1, tiles: [['bridge/rail_s', 1]] },
       fence_h: { density: 1, tiles: [['fence/h', 1]] },

@@ -21,7 +21,7 @@
  * Echo is the shrine, escalated.
  */
 import {
-  type Rack, addTicker, bell, clamp, mtof, noise, pluck, ramp, rand, tone,
+  type Rack, addTicker, bell, clamp, createSends, mtof, noise, pluck, ramp, rand, tone,
 } from './synth';
 
 // ── data model ──────────────────────────────────────────────────────────────
@@ -240,11 +240,11 @@ const VOICES: Record<string, Voice> = {
   tom: ({ r, dest, t, vel, pan, freq }) => {
     tone(r, t, {
       freq: freq || 62, type: 'sine', slideFrom: 1.9, slideTime: 0.09,
-      attack: 0.001, decay: 0.42, gain: 0.4 * vel, pan, dest, reverb: 0.2,
+      attack: 0.001, decay: 0.42, gain: 1.0 * vel, pan, dest, reverb: 0.25,
     });
     noise(r, t, {
       duration: 0.09, filterType: 'lowpass', filterFreq: 700, q: 1.2,
-      gain: 0.11 * vel, attack: 0.001, pan, dest,
+      gain: 0.28 * vel, attack: 0.001, pan, dest,
     });
   },
 
@@ -316,13 +316,13 @@ const VOICES: Record<string, Voice> = {
       filter: { type: 'lowpass', freq: 260, q: 5, sweepTo: 120, sweepTime: Math.max(0.1, secs) },
       attack: 0.004, decay: 0.09, sustain: 0.55,
       hold: Math.max(0.03, secs * 0.55), release: 0.1,
-      gain: 0.3 * vel, pan, dest,
+      gain: 0.95 * vel, pan, dest,
     });
     // A click of definition on top, so the pulse reads on small speakers.
     tone(r, t, {
       freq: freq * 4, type: 'triangle',
       filter: { type: 'lowpass', freq: 900, q: 1 },
-      attack: 0.002, decay: 0.07, gain: 0.06 * vel, pan, dest,
+      attack: 0.002, decay: 0.07, gain: 0.2 * vel, pan, dest,
     });
   },
 };
@@ -447,7 +447,7 @@ const TOWN: TrackDef = {
   bpm: 96,
   loop: 64,
   introBeats: 8,
-  gain: 0.76,
+  gain: 0.95,
   intro: [
     { voice: 'guitar', gain: 0.85, notes: fingerpick(['D', 'A'], PICK, 1.1) },
     { voice: 'pad', gain: 0.7, notes: chordPart(['D', 'A'], TRIAD, 3.8, 0.7) },
@@ -506,7 +506,7 @@ const INN: TrackDef = {
   bpm: 74,
   loop: 32,
   introBeats: 4,
-  gain: 0.36,
+  gain: 0.26,
   intro: [
     { voice: 'harp', gain: 0.7, reverb: 0.4, notes: [N(0, 2, 40, 0.7), N(2, 2, 59, 0.5)] },
   ],
@@ -606,13 +606,14 @@ const FESTIVAL: TrackDef = {
   bpm: 132,
   loop: 32,
   introBeats: 4,
-  gain: 0.86,
+  gain: 1.25,
   // A four-beat pickup: drum, a tambourine roll that never stops, and the
   // fiddle scooping up into the downbeat.
   intro: [
-    { voice: 'drum', gain: 0.9, notes: [N(0, 0.4, 36, 0.8), N(1, 0.4, 36, 0.5), N(2, 0.4, 36, 0.9), N(3, 0.4, 41, 0.6), N(3.5, 0.4, 41, 0.7)] },
-    { voice: 'tamb', gain: 0.7, notes: Array.from({ length: 8 }, (_, i) => N(i * 0.5, 0.2, 60, 0.35 + i * 0.08)) },
-    { voice: 'fiddle', gain: 0.8, pan: 0.18, notes: [N(2, 1, 69, 0.5), N(3, 0.5, 71, 0.7), N(3.5, 0.5, 73, 0.85)] },
+    { voice: 'bass', gain: 0.9, notes: [N(0, 4, 38, 0.75)] },
+    { voice: 'drum', gain: 1.1, notes: [N(0, 0.4, 36, 0.9), N(1, 0.4, 36, 0.6), N(2, 0.4, 36, 1), N(3, 0.4, 41, 0.7), N(3.5, 0.4, 41, 0.85)] },
+    { voice: 'tamb', gain: 1.5, notes: Array.from({ length: 8 }, (_, i) => N(i * 0.5, 0.2, 60, 0.6 + i * 0.05)) },
+    { voice: 'fiddle', gain: 0.85, pan: 0.18, notes: [N(2, 1, 69, 0.55), N(3, 0.5, 71, 0.75), N(3.5, 0.5, 73, 0.9)] },
   ],
   parts: [
     { voice: 'guitar', notes: festGuitar(), pan: -0.2, gain: 0.85 },
@@ -648,10 +649,10 @@ const WOODS: TrackDef = {
   bpm: 68,
   loop: 32,
   introBeats: 8,
-  gain: 0.52,
+  gain: 0.36,
   intro: [
     { voice: 'drone', gain: 0.8, notes: [N(0, 8, 38, 0.7)] },
-    { voice: 'harp', gain: 0.5, reverb: 0.5, notes: [N(4, 3, 62, 0.5)] },
+    { voice: 'harp', gain: 0.6, reverb: 0.5, notes: [N(0, 3, 50, 0.5), N(4, 3, 62, 0.5)] },
   ],
   parts: [
     // The pedal D that never leaves.
@@ -706,7 +707,7 @@ const SHRINE: TrackDef = {
   loop: 32,
   introBeats: 2,
   intensity: 0,
-  gain: 0.44,
+  gain: 0.24,
   intro: [
     { voice: 'drone', gain: 0.6, notes: [N(0, 2, 36, 0.5)] },
   ],
@@ -735,13 +736,14 @@ const SHRINE: TrackDef = {
     {
       voice: 'pulse',
       minIntensity: 0.45,
-      gain: 1,
+      gain: 2.4,
+      reverb: 0.2,
       notes: Array.from({ length: 32 }, (_, i) => N(i, 0.85, i % 4 === 0 ? 36 : 36, i % 4 === 0 ? 1 : 0.55)),
     },
     {
       voice: 'chime',
       minIntensity: 0.6,
-      gain: 0.8,
+      gain: 1.1,
       reverb: 0.5,
       notes: [
         N(3.55, 1, 78, 0.5), N(8.15, 1, 84, 0.45), N(12.4, 1, 66, 0.6),
@@ -751,7 +753,7 @@ const SHRINE: TrackDef = {
     {
       voice: 'tom',
       minIntensity: 0.72,
-      gain: 1,
+      gain: 2.4,
       notes: Array.from({ length: 8 }, (_, bar) => [
         N(bar * 4, 0.5, 36, 1), N(bar * 4 + 1.5, 0.5, 36, 0.55),
         N(bar * 4 + 2.5, 0.5, 38, 0.75), N(bar * 4 + 3.25, 0.5, 33, 0.5),
@@ -760,7 +762,7 @@ const SHRINE: TrackDef = {
     {
       voice: 'strings',
       minIntensity: 0.72,
-      gain: 2.2,
+      gain: 9,
       reverb: 0.35,
       notes: [
         N(0, 8, 48, 0.9), N(8, 8, 49, 0.9), N(16, 8, 54, 0.95), N(24, 8, 55, 1),
@@ -799,6 +801,13 @@ interface LivePart {
 interface Playing {
   def: TrackDef;
   out: GainNode;
+  /**
+   * A view of the rack whose effect sends feed this track's own output, so the
+   * reverb tail belongs to the track and fades with it.
+   */
+  rack: Rack;
+  /** Send-chain nodes, torn down with the track (the delay loop is a cycle). */
+  sends: AudioNode[];
   parts: LivePart[];
   /** ctx time of beat 0. */
   origin: number;
@@ -818,6 +827,8 @@ export class MusicPlayer {
   private detach: (() => void) | null = null;
   private duckUntil = 0;
   private duckRelease = 0.4;
+  /** Incremented per track start; QA uses it to prove music does not restart. */
+  starts = 0;
   /** Offline players are pumped by hand; they must not join the global clock. */
   private offline: boolean;
 
@@ -868,9 +879,12 @@ export class MusicPlayer {
     out.gain.exponentialRampToValueAtTime(Math.max(0.0001, def.gain ?? 1), now + fadeMs / 1000);
     out.connect(this.duck);
 
+    const sends = createSends(this.r.ctx, out);
     const p: Playing = {
       def,
       out,
+      rack: { ...this.r, reverbSend: sends.reverbSend, delaySend: sends.delaySend },
+      sends: sends.nodes,
       parts: [],
       origin: now + 0.06,
       cursor: now + 0.06,
@@ -886,6 +900,7 @@ export class MusicPlayer {
     }
     this.playing.push(p);
     this.current = p;
+    this.starts++;
     this.ensureTicker();
   }
 
@@ -950,7 +965,10 @@ export class MusicPlayer {
     for (let i = this.playing.length - 1; i >= 0; i--) {
       const p = this.playing[i];
       if (now > p.stopAt + 0.4) {
-        try { p.out.disconnect(); } catch { /* already gone */ }
+        try {
+          for (const n of p.sends) n.disconnect();
+          p.out.disconnect();
+        } catch { /* already gone */ }
         this.playing.splice(i, 1);
         if (this.current === p) this.current = null;
         continue;
@@ -993,7 +1011,7 @@ export class MusicPlayer {
         const voice = VOICES[lp.def.voice];
         if (!voice) return;
         voice({
-          r: this.r,
+          r: p.rack,
           dest: lp.gain,
           t,
           freq: mtof(note.n + tr),

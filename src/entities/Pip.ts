@@ -130,6 +130,9 @@ export class Pip {
     this.target = null;
     this.followTarget = null;
     this.bolting = false;
+    // Snap the smoothed value, or he spends a second easing out of a posture
+    // he was never in.
+    this.shownFear = this.fear;
     this.applyAnchoredPosition(true);
   }
 

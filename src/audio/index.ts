@@ -195,6 +195,11 @@ class WebAudio implements AudioApi {
   currentTrack(): string | null {
     return this.player?.currentId ?? null;
   }
+
+  /** How many times a track has actually been started, for QA. */
+  musicStarts(): number {
+    return this.player?.starts ?? 0;
+  }
 }
 
 const api = new WebAudio();
@@ -332,6 +337,7 @@ export interface AudioDebug {
   listSfx(): string[];
   listMusic(): string[];
   currentTrack(): string | null;
+  musicStarts(): number;
   ready(): boolean;
   renderSfx(name: string, seconds?: number): Promise<SoundAnalysis>;
   renderMusic(name: string, seconds?: number): Promise<SoundAnalysis>;
@@ -353,6 +359,7 @@ if (typeof window !== 'undefined') {
     listSfx: () => sfxNames(),
     listMusic: () => trackNames(),
     currentTrack: () => api.currentTrack(),
+    musicStarts: () => api.musicStarts(),
     ready: () => api.ready,
     renderSfx,
     renderMusic,

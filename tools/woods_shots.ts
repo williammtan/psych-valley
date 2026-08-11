@@ -111,22 +111,21 @@ async function main(): Promise<void> {
 
   const { browser, page, server, base } = await boot();
   mkdirSync(OUT, { recursive: true });
-  const results: Array<{ name: string; note: string; errors: string[] }> = [];
+  const results: Array<Record<string, unknown>> = [];
 
   try {
-    await page.goto(`${base}?skiptitle=1&map=woods`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(
-      () => !!(window as unknown as { __psyche?: { ready: boolean } }).__psyche?.ready,
-      undefined, { timeout: 30000 },
-    );
-    await page.waitForTimeout(900);
-
     for (const shot of list) {
-      // A clean slate per shot: no leftover enemies from the previous capture.
-      await page.evaluate(() => {
-        const p = (window as unknown as { __psyche: { scene: { enemies: { clear(): void } } } }).__psyche;
-        p.scene.enemies.clear();
-      });
+      // A fresh page per shot. Driving one long-lived session drifts: leftover
+      // enemies, lights and tweens accumulate until a capture is of somewhere
+      // other than where it says, which is the worst possible failure mode for
+      // a tool whose entire job is evidence.
+      await page.goto(`${base}?skiptitle=1&map=woods`, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(
+        () => !!(window as unknown as { __psyche?: { ready: boolean } }).__psyche?.ready,
+        undefined, { timeout: 30000 },
+      );
+      await page.waitForTimeout(700);
+
       for (const f of shot.flags ?? []) {
         await page.evaluate((flag) => (window as unknown as { __psyche: { setFlag(f: string): void } }).__psyche.setFlag(flag), f);
       }
@@ -146,12 +145,25 @@ async function main(): Promise<void> {
         noHud,
       );
       await page.waitForTimeout(shot.settle ?? 800);
-      await page.screenshot({ path: join(OUT, `${shot.name}${noHud ? '_nohud' : ''}.png`) });
+      await page.screenshot({ path: join(OUT, `${shot.name}${noHud ? '_nohud' : ''}.png`), timeout: 60000 });
+
+      // Capture where the game actually thinks the player is. A shot that
+      // silently drifted somewhere else is worse than a missing shot, because
+      // it gets reviewed as if it were the place it claims to be.
+      const state = await page.evaluate(() => {
+        const st = (window as unknown as { __psyche: { state(): Record<string, unknown> } }).__psyche.state();
+        const p = st.player as { tx: number; ty: number };
+        return { map: st.map as string, tx: p.tx, ty: p.ty };
+      });
+      const drifted = state.map !== 'woods' || Math.abs(state.tx - shot.at[0]) > 1 || Math.abs(state.ty - shot.at[1]) > 1;
 
       const errs = [...((page as unknown as { __errors: string[] }).__errors ?? [])];
       (page as unknown as { __errors: string[] }).__errors.length = 0;
-      results.push({ name: shot.name, note: shot.note, errors: errs });
-      console.log(`  shots/woods/${shot.name}.png${errs.length ? `  ⚠ ${errs.length} error(s)` : ''}`);
+      results.push({ name: shot.name, note: shot.note, errors: errs, at: shot.at, actual: state });
+      console.log(
+        `  shots/woods/${shot.name}.png${errs.length ? `  ⚠ ${errs.length} error(s)` : ''}` +
+        (drifted ? `  ⚠ DRIFTED: asked ${shot.at} got ${state.map} ${state.tx},${state.ty}` : ''),
+      );
       errs.slice(0, 3).forEach((e) => console.log(`      ${e.slice(0, 200)}`));
     }
     writeFileSync(join(OUT, 'report.json'), JSON.stringify({ at: new Date().toISOString(), results }, null, 2));

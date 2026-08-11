@@ -34,6 +34,10 @@ export type LanternId = 'a' | 'b' | 'c';
 const ORDER: LanternId[] = ['a', 'b', 'c'];
 const NUMERAL: Record<LanternId, string> = { a: '1', b: '2', c: '3' };
 
+/** The answer prompt's box. Kept small so it never sits on top of the crowd. */
+const PROMPT_H = 76;
+const PROMPT_Y = GAME_H - PROMPT_H - 4;
+
 interface Bubble {
   id: string;
   answer: LanternId;
@@ -63,6 +67,9 @@ export class LanternTrial {
     on('trial:round', (p: { n: number; total: number; label?: string }) => this.showRound(p.n, p.total, p.label));
     on('trial:roundOff', () => this.hideRound());
     on('trial:ask', (p: { mode: 'private' | 'public'; start?: LanternId }) => this.ask(p.mode, p.start));
+    // Also closes for a programmatically submitted answer (the QA harness),
+    // so the prompt can never outlive the question it is asking.
+    on('trial:answer', () => this.closeAsk());
     on('trial:end', () => { this.closeAsk(); this.clearBubbles(); this.hideRound(); });
 
     scene.input.keyboard?.on('keydown', (e: KeyboardEvent) => this.onKey(e));
@@ -87,7 +94,10 @@ export class LanternTrial {
       b = { id: p.id, answer: p.answer, wx: p.wx, wy: p.wy, root, gfx, label };
       this.bubbles.push(b);
       root.setScale(0.2);
-      this.scene.tweens.add({ targets: root, scale: 1, duration: 190, ease: 'Back.easeOut' });
+      this.scene.tweens.add({
+        targets: root, scale: 1, duration: 190, ease: 'Back.easeOut',
+        onComplete: () => root.setScale(1),
+      });
     }
     b.wx = p.wx;
     b.wy = p.wy;
@@ -97,8 +107,14 @@ export class LanternTrial {
 
     if (p.changed && moved) {
       // A shove, not a fade — this is the moment the player is meant to catch.
+      // Kill anything already animating this bubble first: the pop-in and the
+      // shove both drive `scale`, and letting them overlap leaves bubbles
+      // stranded at a fraction of full size.
+      this.scene.tweens.killTweensOf(b.root);
+      b.root.setScale(1);
       this.scene.tweens.add({
         targets: b.root, scaleX: 1.35, scaleY: 0.72, duration: 90, yoyo: true, ease: 'Sine.easeOut',
+        onComplete: () => b.root.setScale(1),
       });
       Audio.sfx('ui_move', { volume: 0.4, rate: 0.8 });
     }
@@ -125,6 +141,7 @@ export class LanternTrial {
 
   private clearBubbles(): void {
     for (const b of this.bubbles) {
+      this.scene.tweens.killTweensOf(b.root);
       this.scene.tweens.add({
         targets: b.root, alpha: 0, y: b.root.y - 5, duration: 180,
         onComplete: () => { b.label.destroy(); b.root.destroy(); },
@@ -189,19 +206,20 @@ export class LanternTrial {
     this.asking = true;
     this.cursor = start ? ORDER.indexOf(start) : 1;
 
-    const w = 224;
-    const h = 66;
+    const w = 230;
     const x = (GAME_W - w) / 2;
-    const y = GAME_H - h - 8;
+    const y = PROMPT_Y;
     const c = this.scene.add.container(0, 0).setDepth(DEPTH.HUD + 30).setAlpha(0);
-    c.add(Panel.build(this.scene, x, y, w, h, 'dark'));
+    c.add(Panel.build(this.scene, x, y, w, PROMPT_H, 'dark'));
 
-    const q = makeText(this.scene, GAME_W / 2, y + 11, 'Which lantern matched?', 'body', { tint: COLORS.parchment });
+    const q = makeText(this.scene, GAME_W / 2, y + 9, 'Which lantern matched?', 'body', { tint: COLORS.parchment });
     q.setOrigin(0.5, 0.5);
     c.add(q.obj);
 
+    // The social condition of the round, stated plainly. In round one this is
+    // the reassurance; from round two on it is the whole of the pressure.
     const note = makeText(
-      this.scene, GAME_W / 2, y + 21,
+      this.scene, GAME_W / 2, y + 19,
       mode === 'private' ? 'nobody can see your answer' : 'out loud, in front of everyone',
       'body', { tint: mode === 'private' ? COLORS.good : COLORS.goldLight },
     );
@@ -216,18 +234,20 @@ export class LanternTrial {
       let art: Phaser.GameObjects.Image | undefined;
       const frame = `prop/fest/trial_lantern_${id}`;
       if (hasFrame(this.scene, frame)) {
-        art = this.scene.add.image(cx, y + 44, 'atlas', frame).setOrigin(0.5, 1).setScale(0.62);
+        // The real lantern, so the chip and the thing on the stage are visibly
+        // the same object.
+        art = this.scene.add.image(cx, y + 58, 'atlas', frame).setOrigin(0.5, 1).setScale(0.55);
         c.add(art);
       }
-      const num = makeText(this.scene, cx, y + 51, NUMERAL[id], 'body', { tint: COLORS.parchmentDim });
+      const num = makeText(this.scene, cx - 12, y + 33, NUMERAL[id], 'body', { tint: COLORS.parchmentDim });
       num.setOrigin(0.5, 0.5);
       c.add(num.obj);
       this.chips.push({ box, art, num, x: cx });
     });
 
-    const hint = makeText(this.scene, GAME_W / 2, y + h - 6, '← → listen    SPACE answer    ↓ reference', 'body', { tint: COLORS.inkSoft });
+    // ASCII only: the generated bitmap font has no arrow glyphs.
+    const hint = makeText(this.scene, GAME_W / 2, y + PROMPT_H - 9, '< >  listen     SPACE  answer     v  hear it again', 'body', { tint: 0x9a8fb5 });
     hint.setOrigin(0.5, 0.5);
-    hint.setTint(0x9a8fb5);
     c.add(hint.obj);
 
     this.prompt = c;
@@ -243,18 +263,18 @@ export class LanternTrial {
       const id = ORDER[i];
       const active = i === this.cursor;
       const g = chip.box;
-      const y = GAME_H - 66 - 8;
+      const y = PROMPT_Y;
       g.clear();
       g.fillStyle(COLORS.ink, active ? 0.95 : 0.6);
-      g.fillRoundedRect(chip.x - 17, y + 26, 34, 30, 4);
+      g.fillRoundedRect(chip.x - 18, y + 28, 36, 32, 4);
       g.lineStyle(1, active ? COLORS.goldLight : 0x4a3f66, 1);
-      g.strokeRoundedRect(chip.x - 17, y + 26, 34, 30, 4);
+      g.strokeRoundedRect(chip.x - 18, y + 28, 36, 32, 4);
       if (active) {
-        g.fillStyle(TRIAL_COLORS[id], 0.22);
-        g.fillRoundedRect(chip.x - 16, y + 27, 32, 28, 4);
+        g.fillStyle(TRIAL_COLORS[id], 0.24);
+        g.fillRoundedRect(chip.x - 17, y + 29, 34, 30, 4);
       }
-      chip.art?.setAlpha(active ? 1 : 0.55);
-      chip.art?.setPosition(chip.x, y + 44 + (active ? -2 : 0));
+      chip.art?.setAlpha(active ? 1 : 0.5);
+      chip.art?.setPosition(chip.x, y + 58 + (active ? -2 : 0));
       chip.num.setTint(active ? COLORS.goldLight : 0x7d7196);
     });
   }
