@@ -69,11 +69,11 @@ function build(): MapDef {
   // ── water and moss ───────────────────────────────────────────────────────
   // The spring comes down the stair and pools at the low west end.
   for (let y = 3; y <= 8; y++) g.setIf(SHAFT.x + 1, y, 'w', ['x', '.']);
-  g.blob(14.5, 10.5, 3.6, 1.6, 'w', 11, 0.5);
-  g.blob(14.5, 11.5, 5.4, 2.4, '*', 13, 0.6);
-  g.blob(5.5, 20, 3.2, 1.9, 'w', 17, 0.55);
-  g.blob(5.5, 20, 4.6, 2.8, '*', 19, 0.6);
-  g.scatter('*', ['.'], 0.28, 23, { x: HALL.x, y: HALL.y, w: HALL.w, h: 2 });
+  g.blob(14.5, 10.2, 3.2, 1.2, 'w', 11, 0.5);
+  g.blob(14.5, 10.8, 4.2, 1.7, '*', 13, 0.6);
+  g.blob(5.2, 20.4, 2.4, 1.4, 'w', 17, 0.55);
+  g.blob(5.2, 20.4, 3.6, 2.1, '*', 19, 0.6);
+  g.scatter('*', ['.'], 0.16, 23, { x: HALL.x, y: HALL.y, w: HALL.w, h: 1 });
 
   // Dry damage at the far end: cracked slabs, then rubble against the walls.
   g.blob(21, 18, 4.4, 2.6, ':', 29, 0.5);

@@ -1007,16 +1007,20 @@ function build(): MapDef {
       '"': { base: 'town/grass', scatter: 'lush' },
       '*': { base: 'town/grass', scatter: 'meadow' },
       ';': { base: 'town/grass', scatter: 'verge' },
-      'y': { base: 'town/grass_dry', scatter: 'verge' },
+      // Dry grass and worn earth are blob OVERLAYS, not base families. A base
+      // family swap paints hard tile-aligned rectangles, which a blind A/B
+      // review read as a rendering bug across the whole frame; the blob sets
+      // give the same variation an organic, wobbled boundary.
+      'y': { base: 'town/grass', blob: 'grass_dry', scatter: 'verge' },
       'X': { base: 'town/grass', scatter: 'lush', solid: true },
       'p': { base: 'town/grass', blob: 'path' },
       'c': { base: 'town/grass', blob: 'cobble' },
       // Dirt carries a scatter as well as its blob: bare lanes are the largest
       // single-tone areas in the map and need grit and weeds on top of them.
       'd': { base: 'town/grass', blob: 'dirt', scatter: 'rut' },
-      'x': { base: 'town/soil', scatter: 'grit' },
+      'x': { base: 'town/grass', blob: 'turf_worn', scatter: 'grit' },
       's': { base: 'town/grass', blob: 'sand' },
-      'g': { base: 'town/soil', blob: 'sand' },
+      'g': { base: 'town/grass', blob: 'sand' },
       '~': { base: 'town/grass', blob: 'water', solid: true },
       '=': { base: 'bridge/h' },
       'N': { base: 'bridge/h', scatter: 'rail_n', solid: true },

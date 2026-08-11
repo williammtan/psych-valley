@@ -122,10 +122,17 @@ function build(): MapDef {
     });
   });
 
-  // The jar's own light, so the focal object is the brightest thing in the room.
-  props.push({ key: 'prop/shrine/crystal_0', x: R1.jar.x + 1.4, y: R1.jar.y, spec: { anim: 'shrine_crystal' } });
-  lights.push(crystalLight(R1.jar.x + 1.4, R1.jar.y - 1, 54));
-  lights.push({ x: R1.jar.x, y: R1.jar.y - 1, radius: 44, color: 0xffe08a, intensity: 0.5, flicker: 0.3 });
+  // The jar itself, and its own light, so the focal object is the brightest
+  // thing in the room. The moth inside it is spawned by the area script.
+  props.push({ key: 'prop/shrine/moth_jar', x: R1.jar.x, y: R1.jar.y, spec: { solid: [12, 6] } });
+  props.push({ key: 'prop/shrine/crystal_0', x: R1.jar.x + 1.6, y: R1.jar.y + 0.4, spec: { anim: 'shrine_crystal' } });
+  lights.push(crystalLight(R1.jar.x + 1.6, R1.jar.y - 0.6, 54));
+  lights.push({ x: R1.jar.x, y: R1.jar.y - 1.2, radius: 52, color: 0xffe08a, intensity: 0.62, flicker: 0.3 });
+
+  // The plate gets a light of its own. A pressure plate that blends into the
+  // flagstone is a room that has failed, and this one is fourteen tiles from
+  // where the player is standing when they need to notice it.
+  lights.push({ x: R1.plate.x, y: R1.plate.y, radius: 46, color: SHRINE_VIOLET, intensity: 0.5, flicker: 0.12 });
 
   // Two braziers, at the two ends of the room's long axis.
   props.push({ key: 'prop/shrine/brazier_0', x: 4.5, y: 4.6, spec: { anim: 'shrine_brazier', solid: [14, 8] } });
@@ -134,6 +141,12 @@ function build(): MapDef {
   lights.push(brazierLight(25.5, 12, 66));
 
   props.push({ key: 'prop/shrine/broken_instrument_1', x: 25.6, y: 6.4, spec: { solid: [22, 10] } });
+  props.push({ key: 'prop/shrine/broken_instrument_2', x: 20.4, y: 4.4, spec: { solid: [22, 10] } });
+  // A collapsed column across the south-centre, so the walk from the jar to the
+  // plate is a route through something rather than a stroll across a car park.
+  props.push({ key: 'prop/shrine_ext/column_broken_0', x: 8.4, y: 12.6, spec: { solid: [20, 10] } });
+  props.push({ key: 'prop/shrine/rubble_1', x: 9.8, y: 13 });
+  props.push({ key: 'prop/shrine/rubble_0', x: 7.2, y: 13.2 });
   props.push({ key: 'prop/shrine/echo_pool_0', x: 5.6, y: 9.6, spec: { anim: 'shrine_echo_pool', depthBias: -60 } });
   lights.push({ x: 5.6, y: 9, radius: 44, color: SHRINE_VIOLET, intensity: 0.34, flicker: 0.24 });
 

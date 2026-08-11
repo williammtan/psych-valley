@@ -136,7 +136,8 @@ function armRoom(w: WorldScene): void {
   s.lure.held = false;
   s.lure.released = false;
   s.taken = false;
-  s.lure.sprite.setVisible(false);
+  s.lure.x = R1.jar.x * TILE + TILE / 2;
+  s.lure.y = R1.jar.y * TILE + TILE - 14;
   w.cues.clear();
 
   const home = tc(R1.creature.x, R1.creature.y);
@@ -162,8 +163,11 @@ registerArea('shrine_association', {
 
     const creature = spawnCreature(w);
     const home = tc(R1.creature.x, R1.creature.y);
+    // The moth is visible inside the jar from the moment you walk in. Half of
+    // §39's staging is "observe moth", and a moth you cannot see until after
+    // you have picked it up is staging that happens too late to be any use.
     const lure = new Lure(w, 'moth', R1.jar.x, R1.jar.y);
-    lure.sprite.setVisible(false);
+    lure.y -= 14;
 
     const state: S = {
       rig: new RoomRig(w),
@@ -200,7 +204,6 @@ registerArea('shrine_association', {
       onInteract: () => {
         if (state.taken) return;
         state.taken = true;
-        state.lure.sprite.setVisible(true);
         state.lure.pickUp();
         w.mote?.react('curious', 900);
         state.hints.progress();

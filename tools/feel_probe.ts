@@ -303,6 +303,11 @@ async function load(page: Page, base: string): Promise<void> {
     s.cutscene.active = false;
     s.keys.enabled = true;
     s.player.unlock();
+    // The arrival cutscene that ran before the stub took hold left a per-frame
+    // movePlayer() handler attached to the scene UPDATE event. It never detaches
+    // once its target stops being reachable, and it drags the player about half
+    // a pixel every frame for the rest of the session.
+    s.events.removeAllListeners('update');
   });
 }
 
@@ -318,7 +323,7 @@ async function chooseArena(page: Page): Promise<string> {
     const r = await page.evaluate(async (m) => {
       const F = (window as any).__F;
       F.goto(m);
-      await new Promise((res) => setTimeout(res, 450));
+      await new Promise((res) => setTimeout(res, 700));
       // keys.enabled is scene-wide and sticky, so clear it before judging.
       F.scene.keys.enabled = true;
       const o = F.largestOpen();
@@ -326,7 +331,8 @@ async function chooseArena(page: Page): Promise<string> {
     }, map).catch(() => ({ size: 0, busy: true }));
     found.push({ map, ...r });
   }
-  const usable = found.filter((f) => !f.busy && f.size >= 7).sort((a, b) => b.size - a.size);
+  const usable = found.filter((f) => !f.busy && f.size >= 7)
+    .sort((a, b) => b.size - a.size || a.map.localeCompare(b.map));
   const best = usable[0] ?? { map: TOWN, size: 0, busy: false };
   await page.evaluate(async (m) => {
     const F = (window as any).__F;
@@ -1014,12 +1020,50 @@ async function fxCadence(ctx: Ctx): Promise<Row[]> {
   ];
 }
 
+/**
+ * Diagnostic: prints the arena as ASCII plus two trajectories. Only runs when
+ * named explicitly with --only dump; when an arena number looks impossible this
+ * is the fastest way to see whether the geometry is what the test assumed.
+ */
+async function dump(ctx: Ctx): Promise<Row[]> {
+  const r = await ctx.page.evaluate(async () => {
+    const F = (window as any).__F;
+    F.reset(); F.clean();
+    const o = F.arena();
+    const g = F.scene.collisionGrid();
+    const grid: string[] = [];
+    for (let y = o.y - 1; y <= o.y + o.h; y++) {
+      let line = String(y).padStart(3) + ' ';
+      for (let x = o.x - 1; x <= o.x + o.w; x++) line += g[y] && g[y][x] ? '#' : '.';
+      grid.push(line);
+    }
+    F.reset();
+    F.place(F.px(o.x + 1), F.py(o.y + o.h - 2), 's');
+    F.at(1, 'F.move(1,-1)');
+    const s = (await F.run(40)).slice();
+    F.move(0, 0); F.clean();
+    return {
+      map: F.scene.mapId, o, grid,
+      traj: s.slice(0, 24)
+        .map((x: any) => `${x.f} dt=${x.dt.toFixed(2)} x=${x.x} y=${x.y} vx=${x.vx} vy=${x.vy} ax=${x.ax},${x.ay} m=${x.mode}`),
+    };
+  }) as any;
+  console.log(`  map=${r.map} arena=${JSON.stringify(r.o)}`);
+  r.grid.forEach((l: string) => console.log('   ' + l));
+  r.traj.forEach((l: string) => console.log('   ' + l));
+  return [{ metric: 'dump', value: 'see above', target: '' }];
+}
+
 /* ─────────────────────────────── main ────────────────────────────────── */
 
 const TESTS: Record<string, (c: Ctx) => Promise<Row[]>> = {
   latency, ramp, diagonal, corners, wallslide: wallSlide, attack, hitstop,
   knockback, dash, telegraph: telegraphs, load: load20, fx: fxCadence, snag, stuck,
+  dump,
 };
+
+/** Diagnostics that only run when asked for by name. */
+const OPT_IN = new Set(['dump']);
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -1038,7 +1082,7 @@ async function main(): Promise<void> {
     console.log(`\nFEEL PROBE — median frame delta ${frameMs.toFixed(2)}ms\n${'='.repeat(64)}\n`);
 
     for (const [name, fn] of Object.entries(TESTS)) {
-      if (only && !only.includes(name)) continue;
+      if (only ? !only.includes(name) : OPT_IN.has(name)) continue;
       try {
         // Arena tests need the arena map; snag and stuck run on the town.
         const want = name === 'snag' || name === 'stuck' ? TOWN : arena;

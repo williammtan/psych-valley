@@ -217,6 +217,8 @@ async function main(): Promise<void> {
     check('Pip bolted', s.flags.includes('pip_bolted'));
     check('Pip is hiding, frightened', s.fear >= 99 && (s.pipState === 'hiding' || s.pipState === 'scared'), `fear=${s.fear} state=${s.pipState}`);
     check('Pip crossed the room to the settle', s.pipX > 300, `x=${Math.round(s.pipX)}`);
+    check('the storeroom is blocked while he is under there',
+      await page.evaluate(() => (window as any).__psyche.scene.collisionGrid()[7][21]));
     check('the quest is active with an objective', !!s.objective, s.objective ?? 'none');
     await shot(page, 'pip_bolted');
 
@@ -224,14 +226,14 @@ async function main(): Promise<void> {
     console.log('\nINVESTIGATION');
 
     // The new pipework, in the kitchen.
-    await at(page, 24, 7);
+    await at(page, 24.7, 5);
     await face(page, 'n');
     await interact(page);
     s = await probe(page);
     check('clue: the repaired pipe run', s.flags.includes('clue_pipes'));
 
-    // Claw marks under the settle.
-    await at(page, 22, 11);
+    // Claw marks in the boards in front of the settle.
+    await at(page, 22, 9);
     await face(page, 'n');
     await interact(page);
     s = await probe(page);
@@ -239,14 +241,14 @@ async function main(): Promise<void> {
     await shot(page, 'clue_scratches');
 
     // The basket under the window, across the room.
-    await at(page, 8, 5);
+    await at(page, 8.4, 5);
     await face(page, 'n');
     await interact(page);
     s = await probe(page);
     check('clue: the unused basket', s.flags.includes('clue_catbed'));
 
     // Mira's account: bell, then the pipe. Four nights. Leaning over the bar.
-    await at(page, 13, 7);
+    await at(page, 11, 7);
     await face(page, 'n');
     await interact(page);
     await clearDialogue(page);
@@ -258,7 +260,7 @@ async function main(): Promise<void> {
 
     // ── THE BELL ────────────────────────────────────────────────────────────
     console.log('\nTHE PUZZLE');
-    await at(page, 12.8, 7);
+    await at(page, 13.2, 7);
     await face(page, 'n');
     await interact(page);
     s = await probe(page);
@@ -266,7 +268,7 @@ async function main(): Promise<void> {
     await shot(page, 'bell_taken');
 
     // Out of earshot: a ring across the building does nothing to him.
-    await at(page, 6, 12);
+    await at(page, 6, 13);
     const beforeFar = (await probe(page)).fear;
     await safeRing(page);
     s = await probe(page);
@@ -275,7 +277,7 @@ async function main(): Promise<void> {
     await shot(page, 'ring_out_of_range');
 
     // In earshot. The first ring plays out and counts.
-    await at(page, 22, 11);
+    await at(page, 22, 8);
     await page.waitForTimeout(300);
     await safeRing(page);
     s = await probe(page);
@@ -285,17 +287,17 @@ async function main(): Promise<void> {
     await shot(page, 'first_ring');
 
     // A second safe ring — progress is monotonic while the room stays quiet.
-    await at(page, 22, 11);
+    await at(page, 22, 8);
     await safeRing(page);
     s = await probe(page);
     check('fear falls again on the second safe ring', s.fear < afterFirst, `fear ${afterFirst}→${s.fear}`);
-    check('Pip has come further out from under the settle', s.pipY > 150, `y=${Math.round(s.pipY)}`);
+    check('Pip has come further out from under the settle', s.pipY > 100, `y=${Math.round(s.pipY)}`);
     await shot(page, 'two_safe_rings');
 
     // ── THE MECHANIC: spoil a ring on purpose ───────────────────────────────
     console.log('\nRE-PAIRING (the ring that goes wrong)');
     const beforeSpoil = (await probe(page)).fear;
-    await at(page, 22, 11);
+    await at(page, 22, 8);
     await waitForQuietWindow(page);
     await press(page, 'interact');
     await page.waitForTimeout(500);
@@ -315,7 +317,7 @@ async function main(): Promise<void> {
     for (let i = 0; i < 6; i++) {
       s = await probe(page);
       if (s.flags.includes('pip_calm')) break;
-      await at(page, 22, 11);
+      await at(page, 22, 8);
       await safeRing(page);
       const now = await probe(page);
       console.log(`        ring ${i + 1}: rings=${now.calmRings} fear=${Math.round(now.fear)} state=${now.pipState}`);
@@ -349,13 +351,13 @@ async function main(): Promise<void> {
       const p = (window as any).__psyche;
       const g = p.scene.collisionGrid();
       // The tiles the crates and the settle were standing on.
-      return { crates: g[7][22], settle: g[10][21] };
+      return { crates: g[4][22], settle: g[7][21] };
     });
     check('the storeroom corner is clear again', !storeroom.crates && !storeroom.settle,
       `crates=${storeroom.crates} settle=${storeroom.settle}`);
 
     // The whole point of the epilogue: the same bell, and nothing happens.
-    await at(page, 22, 11);
+    await at(page, 22, 8);
     await page.waitForTimeout(400);
     const calmBefore = await probe(page);
     await press(page, 'interact');

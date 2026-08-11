@@ -63,9 +63,9 @@ import { registerArea } from '../registry';
 
 /** Where Pip is when the bell goes, and where he ends up. */
 const RUG: [number, number] = [5, 6.4];
-const HIDE: [number, number] = [21.5, 9];
-/** The route he takes to get there — through the arch, at speed. */
-const BOLT_PATH: Array<[number, number]> = [[8, 7], [13, 8.6], [17, 9], [20.4, 9]];
+const HIDE: [number, number] = [21.5, 6];
+/** The route he takes to get there — across the room, through the arch, fast. */
+const BOLT_PATH: Array<[number, number]> = [[8, 7.4], [13, 9], [17, 10], [20.2, 10], [21.5, 8]];
 
 /** How far the hand bell carries, in pixels. Shown by the ring, never stated. */
 const BELL_RANGE = 78;
@@ -98,7 +98,7 @@ const FEAR_PER_RING = 100 / RINGS_TO_CALM;
 const ATTACK_RANGE = 120;
 
 const WINDOW_PX: [number, number] = [8.5 * TILE + 8, 2 * TILE + 10];
-const RANGE_PX: [number, number] = [26.6 * TILE + 8, 6 * TILE + 12];
+const RANGE_PX: [number, number] = [26.6 * TILE + 8, 4 * TILE + 12];
 const CALM_RINGS = 'q1_calm_rings';
 /** TODO(dialogue): promote to FLAGS once quest1_bell.ts owns it. */
 const ASKED_MIRA = 'clue_mira_pipes';
@@ -266,8 +266,8 @@ registerArea('inn', {
     // because Mira shifts both of them at the end and static solids cannot be
     // taken back off the grid.
     if (!calm && !done) {
-      w.setDynamicSolidRect(21, 6, 3, 2, true);
-      w.setDynamicSolidRect(21, 9, 2, 2, true);
+      w.setDynamicSolidRect(21, 3, 3, 2, true);   // crates
+      w.setDynamicSolidRect(21, 6, 2, 2, true);   // settle
     } else {
       openStoreroom(w, true);
     }
@@ -276,14 +276,20 @@ registerArea('inn', {
     if (hasBell() && !done) giveBell(w, false);
     else if (!done) addBellPickup(w);
     addBarReach(w);
+    reachable(w, 'basin', 'clue.pipes', 'Look');
+    reachable(w, 'catbed', 'clue.catbed', 'Look');
+    reachable(w, 'pots', 'inn.pots', 'Look');
+    reachable(w, 'crates', 'prop.innCrates', 'Look', 22);
 
     // The claw marks have no prop — they are a place on the floor, which is the
     // point of them.
     w.addInteractable({
       id: 'clue.scratches',
+      // On the boards a tile clear of the settle, so that reading the floor and
+      // ringing the bell at the cat are not competing for the same button.
       x: HIDE[0] * TILE + 8,
-      y: HIDE[1] * TILE + 24,
-      radius: 8,
+      y: HIDE[1] * TILE + 42,
+      radius: 14,
       label: 'Look',
       observable: true,
       forbids: FLAGS.pipCalm,
@@ -444,6 +450,19 @@ function addBellPickup(w: WorldScene): void {
     observable: true,
     requires: FLAGS.q1Started,
   });
+}
+
+/**
+ * Re-anchor a prop's interaction to its base with a generous radius.
+ *
+ * `Interactions.rebuild` anchors a prop at its sprite's midpoint, which for a
+ * tall prop against a wall floats well above the nearest square a player can
+ * stand on. Anything the quest depends on gets an explicit, reachable anchor.
+ */
+function reachable(w: WorldScene, propId: string, id: string, label: string, radius = 18): void {
+  const p = w.prop(propId);
+  if (!p) return;
+  w.addInteractable({ id, x: p.sprite.x, y: p.sprite.y - 8, radius, label, observable: true });
 }
 
 function addBarReach(w: WorldScene): void {
@@ -945,8 +964,8 @@ function installQaHook(w: WorldScene): void {
 
 /** Mira shifts the settle, the crates go back, and the storeroom is a room. */
 function openStoreroom(w: WorldScene, instant: boolean): void {
-  w.setDynamicSolidRect(21, 6, 3, 2, false);
-  w.setDynamicSolidRect(21, 9, 2, 2, false);
+  w.setDynamicSolidRect(21, 3, 3, 2, false);
+  w.setDynamicSolidRect(21, 6, 2, 2, false);
 
   const crates = w.prop('crates');
   const settle = w.prop('settle');
@@ -966,20 +985,20 @@ function openStoreroom(w: WorldScene, instant: boolean): void {
   move(settle, -6, 46);
   if (!instant) {
     Audio.sfx('push_block', { volume: 0.6 });
-    w.fx.dust(21.5 * TILE, 8 * TILE);
+    w.fx.dust(21.5 * TILE, 5 * TILE);
     w.shake(0.003, 220);
   }
   // Whatever they end up standing on stays solid.
-  w.setDynamicSolidRect(23, 8, 3, 2, true);
-  w.setDynamicSolidRect(21, 12, 2, 1, true);
+  w.setDynamicSolidRect(23, 5, 3, 2, true);
+  w.setDynamicSolidRect(21, 9, 2, 1, true);
 
   // The room beyond is lit now, and reads as somewhere you could walk.
   try {
     for (const x of [21, 22]) {
-      w.world.ground.putTileAt(tileIndex('tile/int/doorway_lit_top'), x, 4);
-      w.world.ground.putTileAt(tileIndex('tile/int/doorway_lit_base'), x, 5);
+      w.world.ground.putTileAt(tileIndex('tile/int/doorway_lit_top'), x, 1);
+      w.world.ground.putTileAt(tileIndex('tile/int/doorway_lit_base'), x, 2);
     }
   } catch { /* a tileset without the lit variants is not worth crashing over */ }
-  w.lighting.add({ x: 21.5, y: 5.5, radius: 40, color: 0xffc47a, intensity: 0.4, flicker: 0.3 });
-  emit('puzzle:opened', { tx: 21, ty: 5 });
+  w.lighting.add({ x: 21.5, y: 2.5, radius: 40, color: 0xffc47a, intensity: 0.4, flicker: 0.3 });
+  emit('puzzle:opened', { tx: 21, ty: 2 });
 }

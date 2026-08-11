@@ -40,8 +40,8 @@ export const OUTLINE_WARM = '#3d2a2a';
 export const SHADOW_CAST = '#241d3355'; // drop shadow under entities
 
 // ── Terrain: town ─────────────────────────────────────────────────────────
-export const GRASS: Ramp = ['#1c3a2c', '#27543a', '#357049', '#4b8f56', '#6cb069'];
-export const GRASS_DRY: Ramp = ['#33452a', '#4a5f31', '#66793b', '#87964c', '#a8b062'];
+export const GRASS: Ramp = ['#23422e', '#315c3a', '#437a49', '#5c9a57', '#7fbc6a'];
+export const GRASS_DRY: Ramp = ['#4a5228', '#6b7038', '#8d9049', '#b0b064', '#d0cd88'];
 export const DIRT: Ramp = ['#402c22', '#5b4130', '#785640', '#957054', '#b28d6e'];
 export const PATH_STONE: Ramp = ['#4a3a2c', '#6a5541', '#8a7157', '#a68d6f', '#c2ab8b'];
 export const COBBLE: Ramp = ['#3f3a3c', '#5c5457', '#7a7071', '#98908c', '#b8b1a8'];
@@ -125,7 +125,7 @@ export const HAIR: Record<string, Ramp> = {
 export const CLOTH: Record<string, Ramp> = {
   sera: ['#2a3b4a', '#3c5566', '#527389', '#6d94a8', '#92b6c6'], // teal-grey coat
   mira: ['#6b2434', '#8f3548', '#b04d5e', '#c86c78', '#e0949a'], // warm red
-  oren: ['#3f4a20', '#586630', '#748443', '#93a25c', '#b3be7e'], // courier olive
+  oren: ['#2b331a', '#3e4a24', '#556431', '#6f8043', '#8d9d5c'], // courier olive
   tavi: ['#7a3a12', '#a4551c', '#c8752b', '#e2984a', '#f5bd77'], // showy orange
   nia: ['#2e3a5c', '#41507a', '#586a98', '#7387b3', '#96a7cc'], // quiet blue
   elia: ['#4a2a5c', '#66407a', '#855a98', '#a377b3', '#c09acc'], // mayoral plum
@@ -265,12 +265,12 @@ export const COAL: Ramp = ['#191420', '#2c232e', '#463038', '#7a3320', '#b8471f'
 /** Tanned leather: boots, straps, satchels, bookbindings, armchairs. */
 export const LEATHER: Ramp = ['#361d16', '#523024', '#704634', '#8e6048', '#ab7f63'];
 export const METAL: Ramp = ['#2a2a36', '#41414f', '#5c5c6b', '#7e7e8b', '#a4a4ae'];
-export const CLOTH_MOSS: Ramp = ['#2e3f22', '#425831', '#5b7442', '#789356', '#98b073'];
+export const CLOTH_MOSS: Ramp = ['#16210f', '#20301a', '#2d4526', '#3e5f36', '#547d49'];
 export const CLOTH_CLAY: Ramp = ['#5b2f22', '#7b4530', '#9c5f40', '#bb7f57', '#d6a377'];
 export const CLOTH_SLATE: Ramp = ['#25293a', '#373d54', '#4e5570', '#6a728d', '#8b93aa'];
 export const CLOTH_WHEAT: Ramp = ['#6e5722', '#917632', '#b39647', '#d0b569', '#e8d495'];
 export const CLOTH_BERRY: Ramp = ['#4a1c36', '#6b2b4c', '#8f4166', '#b06083', '#cb87a3'];
-export const CLOTH_SAGE: Ramp = ['#2f4740', '#446056', '#5d7c6f', '#7e9c8c', '#a3bcac'];
+export const CLOTH_SAGE: Ramp = ['#1d3c47', '#2a5563', '#3a7183', '#5194a6', '#7bbccb'];
 
 // Pip the cat: warm tabby over a cream chest.
 export const PIP_FUR: Ramp = ['#4a2a14', '#6b3d1c', '#8f5626', '#b1783f', '#cf9d63'];

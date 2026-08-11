@@ -412,7 +412,7 @@ function build(): MapDef {
       { kind: 'camera', id: 'bounds', x: 0, y: 0, w: W, h: H },
       { kind: 'door', id: 'to_town', x: 21, y: H - 1, w: 5, h: 1, to: 'lumen_vale', spawn: 'north', facing: 's' },
       // Fires as the player comes under the arch, before they reach the crowd.
-      { kind: 'trigger', id: 'festival_arrival', x: 20, y: 30, w: 7, h: 2, forbids: 'q3_intro_done' },
+      { kind: 'trigger', id: 'festival_arrival', x: 20, y: 31, w: 7, h: 2, forbids: 'q3_intro_done' },
       // Stepping into the back of the arc is what starts the ceremony.
       { kind: 'trigger', id: 'trial_ready', x: 19, y: 29, w: 10, h: 2, forbids: 'q3_trial_done' },
     ],

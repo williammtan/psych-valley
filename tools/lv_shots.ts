@@ -75,12 +75,16 @@ await page.waitForFunction(() => !!(window as any).__psyche?.ready, undefined, {
 // abandoned choice would sit in the corner of all eighteen shots. The box
 // listens for real keydowns, not injected actions.
 await page.evaluate(() => (window as any).__psyche?.jump('town'));
-for (let i = 0; i < 40; i++) {
-  const busy = await page.evaluate(() => (window as any).__psyche?.state()?.cutscene !== false);
-  if (!busy) break;
+// The arrival holds the camera for a ~9s valley pan between its lines, so this
+// has to outlast the whole sequence, not just the dialogue.
+let settled = false;
+for (let i = 0; i < 160 && !settled; i++) {
+  settled = await page.evaluate(() => (window as any).__psyche?.state()?.cutscene === false);
+  if (settled) break;
   await page.keyboard.press('Space');
-  await page.waitForTimeout(280);
+  await page.waitForTimeout(300);
 }
+if (!settled) console.log('  ⚠ arrival cutscene never settled');
 await page.evaluate(() => (window as any).__psyche?.hideHud(true));
 await page.waitForTimeout(2600);   // let the location banner expire
 

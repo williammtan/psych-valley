@@ -50,6 +50,13 @@ export interface ObjectSpec {
   light?: { radius: number; color?: number; intensity?: number; flicker?: number };
   /** Always draw above the player regardless of Y. */
   over?: boolean;
+  /**
+   * Contact shadow on the ground beneath the prop. 'auto' sizes it from the
+   * sprite width, which is right for anything that stands up. Set 'none' for
+   * things that lie flat on the ground (flowerbeds, rugs, puddles) or hang in
+   * the air (laundry lines, bunting) — a shadow under those reads as a bug.
+   */
+  shadow?: 'auto' | 'none' | 'small' | 'med' | 'large';
   /** Interaction id resolved by the scene's interaction table. */
   interact?: string;
 }

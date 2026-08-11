@@ -136,6 +136,36 @@ window.__wt = {
     });
   },
   busy() { return window.__psyche.scene.cutscene.active; },
+  /** Why is the player not moving? Answers the only question that matters. */
+  diag() {
+    const sc = window.__psyche.scene;
+    const p = sc.player;
+    const g = sc.collisionGrid();
+    const tx = p.tileX, ty = p.tileY;
+    const rows = [];
+    for (let y = ty - 2; y <= ty + 3; y++) {
+      let r = String(y).padStart(3) + ' ';
+      for (let x = tx - 4; x <= tx + 4; x++) {
+        r += (y < 0 || y >= g.length || x < 0 || x >= g[0].length) ? '?' : (g[y][x] ? '#' : '.');
+      }
+      rows.push(r);
+    }
+    return {
+      tile: [tx, ty],
+      pos: [Math.round(p.x), Math.round(p.y)],
+      mode: p.mode,
+      interactTarget: sc.interactions.target ? sc.interactions.target.id : null,
+      keysEnabled: sc.keys.enabled,
+      scripted: sc.keys.scripted ? sc.keys.scripted.axis : null,
+      cutscene: sc.cutscene.active,
+      timeScale: sc.timeScale,
+      dtScale: sc.time.timeScale,
+      vel: [Math.round(p.vx), Math.round(p.vy)],
+      enemies: sc.enemies.aliveCount,
+      hp: window.__psyche.state().hp,
+      around: rows,
+    };
+  },
 };
 `;
 
@@ -252,6 +282,12 @@ async function main(): Promise<void> {
       criticalMs += r.ms;
       const at = await page.evaluate(() => (window as unknown as { __wt: { tile(): [number, number] } }).__wt.tile());
       ok(r.ok, `${step.name} — ${r.ok ? `arrived ${at} in ${(r.ms / 1000).toFixed(1)}s` : `STUCK at ${at}`}`);
+      if (!r.ok) {
+        const d = await page.evaluate(() => (window as unknown as { __wt: { diag(): unknown } }).__wt.diag());
+        console.log(`        ${JSON.stringify(d).slice(0, 700)}`);
+        // One stuck step poisons every later one; stop and report the cause.
+        break;
+      }
       if (step.expectEnemies !== undefined) {
         await page.waitForTimeout(400);
         const alive = await page.evaluate(() => (window as unknown as { __wt: { enemies(): number } }).__wt.enemies());

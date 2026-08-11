@@ -368,6 +368,63 @@ export function registerTerrain(b: ArtBuild): void {
     b.addTile(`tile/town/soil_${i}`, s);
   }
 
+  /**
+   * Ground-variation overlays.
+   *
+   * Dry grass and worn turf are blob sets rather than base-tile variants for a
+   * specific reason: a map author laying them as rectangles of a second base
+   * family produces axis-aligned patches that read as a tiling bug. As blob
+   * sets they get organic, wobbled boundaries for free, and because they carry
+   * a real value difference from the base grass they give the ground plane a
+   * tonal range instead of one flat field.
+   */
+  registerBlobSet(b, 'blob/grass_dry', 1801, (coverage, _mask, r) => {
+    const s = new Surface(TILE, TILE);
+    const n1 = periodicNoise(1801, 4);
+    const n2 = periodicNoise(1801 + 77, 2);
+    const vals: number[] = [];
+    const cells: Array<[number, number]> = [];
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      if (coverage.alphaAt(x, y) === 0) continue;
+      vals.push(n1(x, y, 4) * 0.6 + n2(x, y, 2) * 0.4);
+      cells.push([x, y]);
+    }
+    if (vals.length) {
+      const bands = rankQuantise(vals, [16, 68, 16]);
+      const shades = [P.GRASS_DRY[1], P.GRASS_DRY[2], P.GRASS_DRY[3]];
+      cells.forEach(([x, y], i) => s.px(x, y, shades[bands[i]]));
+    }
+    // Dry stalks catch the light; a few seed heads break the flat.
+    for (let i = 0; i < r.int(3, 6); i++) {
+      const bx = r.int(1, TILE - 2), by = r.int(2, TILE - 2);
+      if (coverage.alphaAt(bx, by) === 0) continue;
+      s.px(bx, by, P.GRASS_DRY[4]);
+      s.px(bx, by - 1, P.GRASS_DRY[4]);
+    }
+    // The boundary reads as grass thinning out, not as a cut edge.
+    const { top, bottom, side } = edgePixels(coverage);
+    for (const [x, y] of top) s.px(x, y, P.GRASS_DRY[3], 0.55);
+    for (const [x, y] of bottom) s.px(x, y, P.GRASS_DRY[1], 0.7);
+    for (const [x, y] of side) s.px(x, y, P.GRASS_DRY[2], 0.5);
+    return s;
+  }, { wobble: 2.1, radius: 5.5 });
+
+  registerBlobSet(b, 'blob/turf_worn', 1901, (coverage, _mask, r) => {
+    const s = new Surface(TILE, TILE);
+    const n1 = periodicNoise(1901, 4);
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+      if (coverage.alphaAt(x, y) === 0) continue;
+      const v = n1(x, y, 5);
+      s.px(x, y, v > 0.62 ? P.DIRT[3] : v > 0.34 ? P.DIRT[2] : P.GRASS[1]);
+    }
+    speckle(s, r, 1, 1, TILE - 2, TILE - 2, P.DIRT[4], 4, 0.35);
+    speckle(s, r, 1, 1, TILE - 2, TILE - 2, P.GRASS[2], 5, 0.5);
+    const { top, bottom } = edgePixels(coverage);
+    for (const [x, y] of top) s.px(x, y, P.GRASS[2], 0.6);
+    for (const [x, y] of bottom) s.px(x, y, P.DIRT[1], 0.55);
+    return s;
+  }, { wobble: 2.4, radius: 6 });
+
   // Overlay materials.
   registerBlobSet(b, 'blob/dirt', 2101, pathPainter(P.DIRT, 2101, 'dirt'));
   registerBlobSet(b, 'blob/path', 2201, pathPainter(P.PATH_STONE, 2201, 'flag'));

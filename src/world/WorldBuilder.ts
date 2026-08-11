@@ -134,6 +134,35 @@ export function buildWorld(scene: Phaser.Scene, def: MapDef): BuiltWorld {
     return usable[Math.floor(hash01(tx, ty, 53) * usable.length) % usable.length];
   };
 
+  /**
+   * Contact shadows.
+   *
+   * A blind A/B against a commercial reference called this "the cheapest single
+   * improvement in the whole list": without a shadow, a prop is a sticker on the
+   * floor rather than an object standing on it, and a scene full of stickers
+   * reads as a prototype no matter how good the individual sprites are.
+   *
+   * Skipped for over-layer props (they are above the player, not on the ground)
+   * and for anything the author marks flat.
+   */
+  const dropShadow = (spec: ObjectSpec, sprite: Phaser.GameObjects.Sprite, over: boolean) => {
+    const mode = spec.shadow ?? 'auto';
+    if (mode === 'none' || over) return;
+    const w = sprite.width;
+    const size = mode === 'auto'
+      ? (w <= 18 ? 'small' : w <= 40 ? 'med' : 'large')
+      : mode;
+    const frame = `fx/shadow_${size}`;
+    if (!hasFrame(scene, frame)) return;
+    const img = scene.add.image(sprite.x, sprite.y - 1, 'atlas', frame)
+      .setOrigin(0.5, 0.5)
+      .setAlpha(0.34)
+      .setDepth(DEPTH.SHADOW);
+    // Wide props need a wider shadow than the largest authored ellipse.
+    if (w > 56) img.setScale(Math.min(2.6, w / 46), 1);
+    return img;
+  };
+
   const place = (spec: ObjectSpec, tx: number, ty: number, id?: string, forceOver = false) => {
     const keys = Array.isArray(spec.key) ? spec.key : [spec.key];
     const key = resolve(keys, tx, ty);
@@ -146,6 +175,7 @@ export function buildWorld(scene: Phaser.Scene, def: MapDef): BuiltWorld {
     if (spec.anim) sprite.play(spec.anim);
     const over = forceOver || spec.over;
     sprite.setDepth(over ? DEPTH.OVER + ty : DEPTH.ENTITY_BASE + py + (spec.depthBias ?? 0));
+    dropShadow(spec, sprite, !!over);
 
     if (spec.solid) {
       const bw = spec.solid === true ? sprite.width : spec.solid[0];
@@ -187,6 +217,7 @@ export function buildWorld(scene: Phaser.Scene, def: MapDef): BuiltWorld {
     const sprite = scene.add.sprite(px, py, 'atlas', key).setOrigin(0.5, 1);
     if (spec.anim) sprite.play(spec.anim);
     sprite.setDepth(spec.over ? DEPTH.OVER + p.y : DEPTH.ENTITY_BASE + py + (spec.depthBias ?? 0));
+    dropShadow(spec, sprite, !!spec.over);
     if (spec.solid) {
       const bw = spec.solid === true ? sprite.width : spec.solid[0];
       const bh = spec.solid === true ? 8 : spec.solid[1];
