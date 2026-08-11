@@ -128,7 +128,7 @@ export class Journal {
       tx += label.width + 14;
     }
 
-    const hint = this.text(GAME_W - 38, y, '← → tabs   TAB close', 'body', 0x5d4e78);
+    const hint = this.text(GAME_W - 38, y, 'A D tabs   TAB close', 'body', 0x5d4e78);
     hint.setOrigin(1, 0);
 
     y += 22;
@@ -188,7 +188,7 @@ export class Journal {
       this.text(x, ly, `${active ? '▸ ' : '  '}${CONCEPTS[id].name}`, 'body', active ? COLORS.goldLight : 0x8b8898);
       ly += 12;
     });
-    this.text(x, ly + 8, '↑↓ concept', 'body', 0x463a5c);
+    this.text(x, ly + 8, 'W S concept', 'body', 0x463a5c);
     this.text(x, ly + 19, 'SPACE turn page', 'body', 0x463a5c);
 
     const id = unlocked[this.detailIndex];

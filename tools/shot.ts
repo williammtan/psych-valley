@@ -59,7 +59,7 @@ export const SHOTS: ShotSpec[] = [
   { name: 'shrine_conformity', checkpoint: 'shrine_conformity', settle: 1400, note: 'Dungeon room 4 — conformity' },
   { name: 'shrine_combination', checkpoint: 'shrine_combination', settle: 1400, note: 'Dungeon room 5 — combination' },
   { name: 'boss', checkpoint: 'boss', settle: 1600, note: 'The Echo — boss chamber' },
-  { name: 'journal_insights', checkpoint: 'q3_done', settle: 900, setup: `window.__psyche.press('journal')`, note: 'Journal, Insights tab' },
+  { name: 'journal_insights', checkpoint: 'q3_done', settle: 900, setup: `window.__psyche.press('journal'); setTimeout(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd' })), 400);`, note: 'Journal, Insights tab' },
 ];
 
 async function boot(): Promise<{ browser: Browser; page: Page; server: ViteDevServer; base: string }> {

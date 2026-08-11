@@ -27,7 +27,7 @@ import { makeText, type TextHandle } from '@/ui/text';
 import { TALK, playExchange, type CutsceneLike } from '@/data/dialogue';
 import { EchoBoss, type Phase } from '@/entities/EchoBoss';
 import { registerArea } from '../registry';
-import { CHAMBER, RUNE_TILES } from '../maps/shrine_boss';
+import { CHAMBER } from '../maps/shrine_boss';
 import type { WorldScene } from '@/scenes/WorldScene';
 import type { CutsceneContext } from '@/systems/Cutscene';
 
@@ -57,7 +57,6 @@ function onEnter(w: WorldScene): void {
     home: CHAMBER.home,
     grate: CHAMBER.grate,
     braziers: CHAMBER.braziers,
-    runeTiles: RUNE_TILES,
     onPhase: (p) => { if (room) room.checkpointPhase = p; },
     onDefeated: () => { void ending(w); },
     onStuck: (p) => hint(w, p),

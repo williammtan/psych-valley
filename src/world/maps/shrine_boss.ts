@@ -12,15 +12,24 @@
  *      that was already here. Nothing in it is interactive — it is there so the
  *      player understands what the place was for without a line of dialogue.
  *
- *   2. THE BASIN. The floor is inscribed: a ring of rune plates on an ellipse,
- *      a drain grate at the exact centre, moss creeping in from the wall line.
- *      The ring is the arena's readable centre and the thing the Echo circles.
+ *   2. THE DAIS. The room is a rectangle but the FLOOR is an oval island: the
+ *      four corners of the rectangle are void, and inside the island a raised
+ *      platform of a stone used nowhere else in the shrine carries a hard,
+ *      shadowed south edge. Two inlaid courses ring a drain at the exact centre.
+ *      A stair causeway climbs onto it from the barred door, so the door, the
+ *      steps, the inlaid path, the drain and the great seal above it all sit on
+ *      one vertical axis — and that axis terminates on the Echo's spawn point.
+ *      Nothing stands on the dais except the four braziers: the dais is the fight.
  *
  *   3. FOUR BRAZIERS, one per quadrant. They are cold when you arrive. In phase
  *      two the Echo relights whichever one it has just passed, and the attack
  *      indicators standing in that light are the ones that are actually coming.
  *      They are placed here, in the architecture, rather than spawned by the
  *      fight, because the cue has to look like part of the room.
+ *
+ * The floor carries no rune glyphs. That vocabulary encodes puzzle state in the
+ * memory room, and thirty of them used as decoration here would have cost them
+ * their meaning; the platform is inlaid flagstone instead.
  *
  * The chamber is exactly one screen (30x17 = 480x272 against a 480x270 view),
  * so the entire problem is visible at all times — no camera work can hide a
@@ -33,7 +42,7 @@ import {
   ROOM_H, ROOM_W, SHRINE_LEGEND, SHRINE_OBJECTS, SHRINE_CYAN, SHRINE_VIOLET, shell, type Rect,
 } from './shrine_common';
 
-/** The playable floor, in tiles. Wider than a puzzle room: you have to dodge. */
+/** The playable floor, in tiles. */
 export const FLOOR = { x: 2, y: 3, w: 26, h: 11 };
 
 const TILE = 16;
@@ -41,95 +50,150 @@ const TILE = 16;
 const px = (tx: number) => tx * TILE + TILE / 2;
 const py = (ty: number) => ty * TILE + TILE;
 
+/** Centre of the room, in tiles. Everything here is concentric about it. */
+const CX = 14.5;
+const CY = 8;
+/** Beyond this the floor is gone: the four corners of the rectangle are void. */
+const ISLAND = { rx: 12.4, ry: 5.4 };
+/** The raised platform. Different stone, hard south edge, and the whole fight. */
+const DAIS = { rx: 11.0, ry: 4.4 };
+/** The causeway columns, which is where the ring opens. */
+const GATE_X0 = 13;
+const GATE_X1 = 16;
+
+const norm = (x: number, y: number, r: { rx: number; ry: number }) =>
+  Math.hypot((x - CX) / r.rx, (y - CY) / r.ry);
+const inside = (x: number, y: number, r: { rx: number; ry: number }) => norm(x, y, r) <= 1;
+
 /**
  * Everything the encounter needs to know about the room's shape, in PIXELS.
  * The area script and EchoBoss import this rather than re-deriving tile maths,
  * so the arena and the fight can never disagree about where the walls are.
  */
 export const CHAMBER = {
-  /** Bounds for an entity's feet — inset from the walls by half a tile. */
-  arena: {
-    x0: FLOOR.x * TILE + 10,
-    y0: FLOOR.y * TILE + 14,
-    x1: (FLOOR.x + FLOOR.w) * TILE - 10,
-    y1: (FLOOR.y + FLOOR.h) * TILE - 2,
-  },
-  /** Dead centre of the rune basin. */
-  centre: { x: 240, y: 136 },
+  /**
+   * Where the fight may PUT things — boss, attack markers, followers.
+   *
+   * This is the largest axis-aligned rectangle that fits inside the dais
+   * ellipse, so nothing is ever spawned on a tile the player cannot stand on.
+   * The player's own movement is not limited to it; they have the whole dais.
+   */
+  arena: { x0: 100, y0: 96, x1: 380, y1: 194 },
+  /** Dead centre of the dais, the drain, and the sightline. */
+  centre: { x: 240, y: 144 },
   /** Where the Echo hangs when it is not committed to anything. */
-  home: { x: 240, y: 118 },
-  /** The drain it eventually goes down. */
+  home: { x: 240, y: 126 },
+  /** The drain it comes up out of and eventually goes back down. */
   grate: { x: 240, y: 136 },
-  /** One per quadrant, at the flame bowl rather than the base. */
+  /** One per quadrant of the dais, well inside the ledge. */
   braziers: [
     { x: px(7.5), y: py(5.5), flame: { x: px(7.5), y: py(5.5) - 20 } },
     { x: px(21.5), y: py(5.5), flame: { x: px(21.5), y: py(5.5) - 20 } },
-    { x: px(7.5), y: py(11.5), flame: { x: px(7.5), y: py(11.5) - 20 } },
-    { x: px(21.5), y: py(11.5), flame: { x: px(21.5), y: py(11.5) - 20 } },
+    { x: px(7.5), y: py(10.5), flame: { x: px(7.5), y: py(10.5) - 20 } },
+    { x: px(21.5), y: py(10.5), flame: { x: px(21.5), y: py(10.5) - 20 } },
   ],
-  /** Just inside the barred door. Also the respawn point (plan.md §67). */
-  entrance: { x: px(14.5), y: py(12.5) },
+  /** On the causeway, just inside the barred door. Also the respawn point. */
+  entrance: { x: px(14.5), y: py(13) },
 } as const;
-
-/** The rune ring the basin is inscribed with, in tile coords. */
-const RUNE_RING: Array<[number, number]> = [];
-{
-  const seen = new Set<string>();
-  for (let i = 0; i < 40; i++) {
-    const a = (i / 40) * Math.PI * 2;
-    const t: [number, number] = [
-      Math.round(14.5 + Math.cos(a) * 10.6),
-      Math.round(7.6 + Math.sin(a) * 4.2),
-    ];
-    const key = `${t[0]},${t[1]}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    RUNE_RING.push(t);
-  }
-}
-/** Exported so the encounter can light the arc nearest a flaring brazier. */
-export const RUNE_TILES: ReadonlyArray<readonly [number, number]> = RUNE_RING;
 
 const LEGEND: Record<string, Material> = {
   ...SHRINE_LEGEND,
-  /** Dead rune plate. The encounter swaps these to the lit family in phase two. */
-  'g': { base: 'tile/shrine/rune_floor_dim' },
+  /** The dais: a different stone from the rest of the shrine, used nowhere else. */
+  'd': { base: 'tile/shrine/shrine_floor' },
+  /** Flagstone apron and causeway. */
+  'f': { base: 'tile/shrine_ext/flag' },
+  /** Worn flagstone, for the inlaid courses on the dais. */
+  'F': { base: 'tile/shrine_ext/flag_cracked' },
+  /** The dais edge. Solid, so the platform has a real lip you can be backed against. */
+  'L': { base: 'tile/shrine/ledge_s', solid: true },
+  'M': { base: 'tile/shrine/ledge_sw', solid: true },
+  'm': { base: 'tile/shrine/ledge_se', solid: true },
+  'n': { base: 'tile/shrine/ledge_n', solid: true },
 };
 
 const OBJECTS: Record<string, ObjectSpec> = {
   ...SHRINE_OBJECTS,
-  /** Non-solid rubble, for texture along the wall line. */
+  /** Non-solid rubble, for texture on the apron. */
   'R': { key: ['prop/shrine/rubble_0', 'prop/shrine/rubble_1', 'prop/shrine/rubble_2'] },
 };
 
 function build(): MapDef {
   const g = shell(ROOM_W, ROOM_H, FLOOR as Rect);
 
-  // ── the basin ───────────────────────────────────────────────────────────
-  // Worn stone spreading out from the middle, mossy where the wall meets the
-  // floor. The centre is the most damaged part of the room, because it is the
-  // part something has been standing on for a very long time.
-  g.blob(14.5, 7.6, 9, 3.6, ':', 17, 0.22);
-  g.blob(14.5, 7.6, 5, 2.1, '%', 23, 0.3);
-  for (const [x, y] of RUNE_RING) g.set(x, y, 'g');
+  // ── the island ──────────────────────────────────────────────────────────
+  // The room is a rectangle; the FLOOR is not. Cutting the four corners to void
+  // is what stops this reading as another store room with props in it, and it
+  // is the one piece of geometry that exists nowhere else in the shrine.
+  for (let y = FLOOR.y; y < FLOOR.y + FLOOR.h; y++) {
+    for (let x = FLOOR.x; x < FLOOR.x + FLOOR.w; x++) {
+      if (!inside(x, y, ISLAND)) g.set(x, y, 'o');
+      else if (inside(x, y, DAIS)) g.set(x, y, 'd');
+      else g.set(x, y, 'f');
+    }
+  }
+
+  // ── the causeway ────────────────────────────────────────────────────────
+  // A processional path from the barred door to the middle of the dais. It is
+  // the room's sightline: door, steps, path, drain, and the great seal above it
+  // are all on one vertical axis, and that axis terminates exactly where the
+  // Echo comes up.
+  for (let x = GATE_X0; x <= GATE_X1; x++) {
+    for (let y = 12; y <= 13; y++) if (g.get(x, y) !== '#') g.set(x, y, 'f');
+    g.set(x, 13, 'x');
+  }
+  for (let y = 9; y <= 12; y++) for (let x = 14; x <= 15; x++) g.set(x, y, 'f');
+
+  // ── the dais edge ───────────────────────────────────────────────────────
+  // In a top-down view elevation is sold almost entirely by the south-facing
+  // edge, so the bottom of the platform gets a real ledge course with a hard
+  // shadow under it. The causeway is the one gap in it.
+  for (let x = FLOOR.x; x < FLOOR.x + FLOOR.w; x++) {
+    if (x >= GATE_X0 && x <= GATE_X1) continue;
+    let lowest = -1;
+    let highest = -1;
+    for (let y = FLOOR.y; y < FLOOR.y + FLOOR.h; y++) {
+      if (g.get(x, y) !== 'd') continue;
+      if (highest < 0) highest = y;
+      lowest = y;
+    }
+    if (lowest < 0) continue;
+    const leftEdge = highest === lowest || !inside(x - 1, lowest, DAIS);
+    const rightEdge = !inside(x + 1, lowest, DAIS);
+    g.set(x, lowest, leftEdge ? 'M' : rightEdge ? 'm' : 'L');
+    if (highest !== lowest) g.set(x, highest, 'n');
+  }
+
+  // ── the inlay ───────────────────────────────────────────────────────────
+  // Two concentric courses set into the platform. Deliberately NOT rune plates:
+  // those glyphs carry puzzle state elsewhere in the dungeon and using thirty of
+  // them as wallpaper would strip them of meaning.
+  for (let y = FLOOR.y; y < FLOOR.y + FLOOR.h; y++) {
+    for (let x = FLOOR.x; x < FLOOR.x + FLOOR.w; x++) {
+      if (g.get(x, y) !== 'd') continue;
+      const outer = Math.abs(norm(x, y, { rx: 8.4, ry: 3.4 }) - 1);
+      const inner = Math.abs(norm(x, y, { rx: 4.6, ry: 1.9 }) - 1);
+      if (outer < 0.1 || inner < 0.13) g.set(x, y, 'F');
+    }
+  }
+
+  // The drain, dead centre, where it comes up and where it goes back down.
   g.rect(14, 7, 2, 2, '=');
 
-  // Moss creeps in from the wall line, heaviest in the corners.
-  g.scatter('*', ['.'], 0.5, 31, { x: FLOOR.x, y: FLOOR.y, w: FLOOR.w, h: 1 });
-  g.scatter('*', ['.'], 0.45, 37, { x: FLOOR.x, y: FLOOR.y + FLOOR.h - 1, w: FLOOR.w, h: 1 });
-  g.scatter('*', ['.'], 0.4, 41, { x: FLOOR.x, y: FLOOR.y, w: 2, h: FLOOR.h });
-  g.scatter('*', ['.'], 0.4, 43, { x: FLOOR.x + FLOOR.w - 2, y: FLOOR.y, w: 2, h: FLOOR.h });
-  g.scatter(':', ['.'], 0.14, 47);
+  // Wear: heaviest in the middle, where something has been standing a long time.
+  g.blob(CX, CY, 4.4, 1.9, ':', 23, 0.26);
+  g.scatter('*', ['f'], 0.34, 41);
+  g.scatter(':', ['d'], 0.1, 47);
 
   const ground = g.rows();
 
   // ── loose dressing ──────────────────────────────────────────────────────
+  // Only on the apron: nothing is allowed to stand on the dais except the four
+  // braziers, because the dais is the fight.
   const o = new GridPainter(ROOM_W, ROOM_H, ' ');
-  o.scatter('R', [' '], 0.55, 53, { x: FLOOR.x, y: FLOOR.y, w: FLOOR.w, h: 1 });
-  o.scatter('R', [' '], 0.35, 59, { x: FLOOR.x, y: FLOOR.y + FLOOR.h - 1, w: FLOOR.w, h: 1 });
-  // Never let dressing stand inside the ring the fight uses.
-  for (let y = FLOOR.y + 1; y < FLOOR.y + FLOOR.h - 1; y++) {
-    for (let x = FLOOR.x; x < FLOOR.x + FLOOR.w; x++) o.set(x, y, ' ');
+  for (let y = FLOOR.y; y < FLOOR.y + FLOOR.h; y++) {
+    for (let x = FLOOR.x; x < FLOOR.x + FLOOR.w; x++) {
+      if (g.get(x, y) === 'f' && (x + y * 3) % 7 === 0) o.set(x, y, 'R');
+    }
   }
 
   // Roots hang through the ceiling above the wall band, breaking its straight
@@ -154,22 +218,22 @@ function build(): MapDef {
     // registered for them, so the bars are static. Frame 0 reads correctly.
     { key: 'prop/shrine/door_barred_0', x: 14.5, y: 14, spec: { offset: [0, 6], depthBias: -90 }, id: 'door' },
 
-    // The ring of pillars. Six, on the same ellipse as the rune plates, so the
-    // architecture and the inscription agree about where the middle is.
-    { key: 'prop/shrine/pillar_0', x: 25.5, y: 7.5, spec: { solid: [20, 10] } },
-    { key: 'prop/shrine/pillar_1', x: 20, y: 11.4, spec: { solid: [20, 10] } },
-    { key: 'prop/shrine/pillar_2', x: 9, y: 11.4, spec: { solid: [20, 10] } },
-    { key: 'prop/shrine/pillar_0', x: 3.5, y: 7.5, spec: { solid: [20, 10] } },
-    { key: 'prop/shrine/pillar_1', x: 9, y: 3.6, spec: { solid: [20, 10] } },
-    { key: 'prop/shrine/pillar_2', x: 20, y: 3.6, spec: { solid: [20, 10] } },
+    // The ring of pillars, pushed out onto the apron so they frame the arena
+    // instead of standing in it. Six, on the island's own ellipse.
+    { key: 'prop/shrine/pillar_0', x: 26.1, y: 8, spec: { solid: [20, 10] } },
+    { key: 'prop/shrine/pillar_1', x: 22.9, y: 11.6, spec: { solid: [20, 10] } },
+    { key: 'prop/shrine/pillar_2', x: 6.1, y: 11.6, spec: { solid: [20, 10] } },
+    { key: 'prop/shrine/pillar_0', x: 2.9, y: 8, spec: { solid: [20, 10] } },
+    { key: 'prop/shrine/pillar_1', x: 6.1, y: 4.4, spec: { solid: [20, 10] } },
+    { key: 'prop/shrine/pillar_2', x: 22.9, y: 4.4, spec: { solid: [20, 10] } },
 
     // Cold braziers. The fight lights them; see areas/shrine_boss.ts.
     { key: 'prop/shrine/brazier_0', x: 7.5, y: 5.5, spec: {}, id: 'brazier0' },
     { key: 'prop/shrine/brazier_0', x: 21.5, y: 5.5, spec: {}, id: 'brazier1' },
-    { key: 'prop/shrine/brazier_0', x: 7.5, y: 11.5, spec: {}, id: 'brazier2' },
-    { key: 'prop/shrine/brazier_0', x: 21.5, y: 11.5, spec: {}, id: 'brazier3' },
+    { key: 'prop/shrine/brazier_0', x: 7.5, y: 10.5, spec: {}, id: 'brazier2' },
+    { key: 'prop/shrine/brazier_0', x: 21.5, y: 10.5, spec: {}, id: 'brazier3' },
 
-    { key: 'prop/shrine/echo_pool_0', x: 14.5, y: 8.6, spec: { anim: 'shrine_echo_pool', depthBias: -60 } },
+    { key: 'prop/shrine/echo_pool_0', x: 14.5, y: 8.4, spec: { anim: 'shrine_echo_pool', depthBias: -60 } },
   ];
 
   /**
@@ -189,7 +253,7 @@ function build(): MapDef {
     { x: 3.2, y: 2.6, radius: 62, color: SHRINE_CYAN, intensity: 0.5, flicker: 0.14 },
     { x: 25.8, y: 2.6, radius: 62, color: SHRINE_CYAN, intensity: 0.5, flicker: 0.14 },
     // The pool over the drain: the room's centre, and where it goes at the end.
-    { x: 14.5, y: 7.8, radius: 70, color: SHRINE_VIOLET, intensity: 0.3, flicker: 0.3 },
+    { x: 14.5, y: 8.2, radius: 70, color: SHRINE_VIOLET, intensity: 0.32, flicker: 0.3 },
     // The door you came in by stays lit, so the room always has a bottom edge.
     { x: 14.5, y: 13.4, radius: 56, color: SHRINE_VIOLET, intensity: 0.4, flicker: 0.1 },
   ];
@@ -216,14 +280,14 @@ function build(): MapDef {
       // trigger here rather than on entry means the player gets a beat to look
       // at the room first — and it keeps a plain map screenshot free of a
       // dialogue box.
-      { kind: 'trigger', id: 'boss_wake', x: 10, y: 8, w: 10, h: 5 },
+      { kind: 'trigger', id: 'boss_wake', x: 10, y: 7, w: 10, h: 5 },
       { kind: 'camera', id: 'bounds', x: 0, y: 0, w: ROOM_W, h: ROOM_H },
     ],
     spawns: {
-      default: { x: 14.5, y: 12.5, facing: 'n' },
+      default: { x: 14.5, y: 13, facing: 'n' },
       /** plan.md §67: death puts you back at the door, not back in the dungeon. */
-      respawn: { x: 14.5, y: 12.5, facing: 'n' },
-      south: { x: 14.5, y: 12.5, facing: 'n' },
+      respawn: { x: 14.5, y: 13, facing: 'n' },
+      south: { x: 14.5, y: 13, facing: 'n' },
     },
   };
 }

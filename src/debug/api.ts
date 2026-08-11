@@ -92,6 +92,22 @@ export const CHECKPOINTS: Record<string, { map: string; spawn?: string; flags: s
   boss: { map: 'shrine_boss', flags: ['all_quests', 'shrine_r1_done', 'shrine_r2_done', 'shrine_r3_done', 'shrine_r4_done', 'shrine_r5_done'], abilities: ['observe', 'link', 'recall', 'dissent'] },
 };
 
+/** Story flag -> the quest it completes, so a jump leaves a coherent journal. */
+const QUEST_FOR_FLAG: Record<string, string> = {
+  q1_complete: 'q1_pip',
+  q2_complete: 'q2_oren',
+  q3_complete: 'q3_lanterns',
+  game_complete: 'q4_shrine',
+};
+
+/** Story flag -> people the player must have met by then. */
+const PEOPLE_FOR_FLAG: Record<string, string[]> = {
+  intro_done: ['mira'],
+  q1_complete: ['mira', 'pip', 'sera'],
+  q2_complete: ['mira', 'pip', 'sera', 'oren'],
+  q3_complete: ['mira', 'pip', 'sera', 'oren', 'tavi', 'nia', 'elia'],
+};
+
 const ALL_QUEST_FLAGS = [
   'met_mira', 'intro_done', 'bell_rang', 'q1_started', 'q1_complete', 'met_sera',
   'q2_started', 'met_oren', 'q2_complete', 'festival_started', 'q3_started', 'q3_complete',
@@ -100,9 +116,23 @@ const ALL_QUEST_FLAGS = [
 
 export function installDebugApi(scene: WorldScene): void {
   const applyFlags = (flags: string[]) => {
+    const all: string[] = [];
     for (const f of flags) {
-      if (f === 'all_quests') { State.setAll(ALL_QUEST_FLAGS); continue; }
+      if (f === 'all_quests') { State.setAll(ALL_QUEST_FLAGS); all.push(...ALL_QUEST_FLAGS); continue; }
       State.set(f);
+      all.push(f);
+    }
+    // Bring the derived state in line with the flags, so the journal, the
+    // objective line and the People tab all read as they would in real play.
+    for (const f of all) {
+      const q = QUEST_FOR_FLAG[f];
+      if (q) { State.startQuest(q); State.completeQuest(q); }
+      for (const person of PEOPLE_FOR_FLAG[f] ?? []) State.meet(person);
+    }
+    for (const [flag, concept] of [['insight_conditioning', 'conditioning'],
+                                   ['insight_interference', 'interference'],
+                                   ['insight_conformity', 'conformity']] as const) {
+      if (all.includes(flag)) State.unlockInsight(concept);
     }
   };
 

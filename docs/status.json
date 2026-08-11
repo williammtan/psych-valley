@@ -1,7 +1,7 @@
 {
-  "updated": "2026-08-12T03:30:00Z",
-  "phase": "Vertical slice playable end to end",
-  "headline": "The whole golden path now runs: 18 of 18 beats clean at 60fps, from arrival in Lumen Vale through all three psychology quests, Whisper Woods, five Echo Shrine rooms and the boss chamber, with the continuity probe confirming a fresh save starts correctly and nothing downstream is reachable early.",
+  "updated": "2026-08-12T06:00:00Z",
+  "phase": "Gauntlet rounds on the finished slice",
+  "headline": "The whole slice runs end to end at 60fps. The Echo's three phases are measurable: two bots with identical reflexes and different knowledge finish in 40.0s and 77.5s, and the mechanism shows in the counters \u2014 the informed bot was punished four times and blocked zero, the naive bot blocked five and punished zero. A dungeon critic then measured every interactive object against its floor and found none of them escape the floor's luminance envelope; that pass is running now.",
   "areas": [
     {
       "name": "Art pipeline",
@@ -65,8 +65,8 @@
     },
     {
       "name": "Lumen Vale map",
-      "state": "critiqued",
-      "note": "Round 2: gap is one ground-plane pass wide; polish pass running"
+      "state": "good",
+      "note": "Market Green, path encroachment, variant spread, closed frame"
     },
     {
       "name": "Quest 1 \u2014 Pip",
@@ -90,13 +90,13 @@
     },
     {
       "name": "Echo Shrine dungeon",
-      "state": "good",
-      "note": "All five rooms + entrance; 74 assertions, 0 failures"
+      "state": "critiqued",
+      "note": "Room logic is there; figure-ground contrast pass running"
     },
     {
       "name": "The Echo boss",
-      "state": "critiqued",
-      "note": "Phases passed the audit; the map currently hangs"
+      "state": "good",
+      "note": "Informed 40.0s vs naive 77.5s; ending wired and timeout-raced"
     },
     {
       "name": "Audio",
@@ -110,10 +110,47 @@
     },
     {
       "name": "Combat feel",
-      "state": "building"
+      "state": "good",
+      "note": "Measured before/after; four real bugs fixed"
     }
   ],
   "findings": [
+    {
+      "area": "Echo Shrine",
+      "severity": "blocker",
+      "status": "open",
+      "text": "Measured: no interactive object escapes the floor's luminance envelope. Memory slabs 1.12:1, Combination switch-nodes 1.02:1, statues 1.57-1.64:1, enemies 1.34-1.60:1 \u2014 in every case the object's darkest pixel falls inside the floor's own range. The reference's Armos spans L 65-254 against a floor spanning 101-136."
+    },
+    {
+      "area": "Echo Shrine",
+      "severity": "major",
+      "status": "open",
+      "text": "The four rune glyphs that encode the Memory room's puzzle sequence are also used as floor decoration elsewhere and wallpaper the boss chamber, so puzzle state and scenery are indistinguishable."
+    },
+    {
+      "area": "Boss",
+      "severity": "major",
+      "status": "open",
+      "text": "The boss chamber has no unique geometry \u2014 a critic said it would read as a storeroom without the caption. Needs a raised dais with a hard shadowed edge and a floor material change."
+    },
+    {
+      "area": "QA",
+      "severity": "major",
+      "status": "fixed",
+      "text": "The town shot harness teleported the player onto the inn's door tile, so 8 of 18 screens in a previous sweep were photographs of the pub interior. Third harness-corruption bug this run."
+    },
+    {
+      "area": "UI",
+      "severity": "minor",
+      "status": "fixed",
+      "text": "Panels scaled their 9-slice instead of tiling it, stretching an 8px paper grain into visible blotches across the widest and most-seen panel in the game."
+    },
+    {
+      "area": "Debug",
+      "severity": "minor",
+      "status": "fixed",
+      "text": "Checkpoints set story flags but never marked quests complete or people met, so jumping to a late checkpoint showed an empty journal at exactly the points a reviewer would inspect it."
+    },
     {
       "area": "Engine",
       "severity": "blocker",
@@ -143,24 +180,6 @@
       "severity": "minor",
       "status": "fixed",
       "text": "CueFollower refused to move when its direct line was blocked, wedging a puzzle creature permanently against any pillar."
-    },
-    {
-      "area": "Boss",
-      "severity": "blocker",
-      "status": "open",
-      "text": "shrine_boss hangs the renderer on load \u2014 never produces a frame, 30s timeout. Blocks the whole-game playthrough harness."
-    },
-    {
-      "area": "Lumen Vale",
-      "severity": "major",
-      "status": "open",
-      "text": "A dead zone in the upper-middle grass band measures the lowest structural energy in the frame; that is where the square wants to be. Plus uniform-width paths, a path that dissolves into grass, a store with no door, and ~12 identical trees at the same orientation."
-    },
-    {
-      "area": "Buildings",
-      "severity": "minor",
-      "status": "open",
-      "text": "Doors are narrower than the characters who must walk through them."
     }
   ],
   "comparisons": [

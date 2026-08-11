@@ -176,8 +176,6 @@ export interface EchoBossOpts {
   home: { x: number; y: number };
   grate: { x: number; y: number };
   braziers: ReadonlyArray<{ x: number; y: number; flame: { x: number; y: number } }>;
-  /** Tiles of the inscribed ring, so a flare can wake the arc nearest it. */
-  runeTiles: ReadonlyArray<readonly [number, number]>;
   onPhase?(p: Phase): void;
   onDefeated?(): void;
   /** Fired once per phase if the player has made no progress for a long time. */
@@ -295,7 +293,7 @@ class Brazier {
     flame: { x: number; y: number },
     private sprite?: Phaser.GameObjects.Sprite,
   ) {
-    this.light = scene.lighting.addPixel(flame.x, flame.y, 88, COLORS.amber, Brazier.COLD_ALPHA, 0.5);
+    this.light = scene.lighting.addPixel(flame.x, flame.y, 104, COLORS.amber, Brazier.COLD_ALPHA, 0.5);
     this.light.intensity = Brazier.COLD_ALPHA;
     this.sprite?.setTint(Brazier.COLD_TINT);
   }
@@ -533,7 +531,6 @@ export class EchoBoss {
   private waveState: 'idle' | 'flare' | 'read' | 'settle' = 'idle';
   private waveAt = 0;
   private waveClean = true;
-  private litRunes: Array<[number, number]> = [];
 
   // phase three
   private group?: ConformityGroup;
@@ -637,7 +634,6 @@ export class EchoBoss {
     this.indicators.forEach((i) => i.destroy());
     this.indicators = [];
     this.braziers.forEach((b) => b.setLit(false, 120));
-    this.dimRunes();
     this.clearGhost();
     this.history = [];
     this.predicted = null;
@@ -1010,8 +1006,6 @@ export class EchoBoss {
         const lit = count >= 6 ? 2 : 1;
         const order = [0, 1, 2, 3].sort(() => Math.random() - 0.5).slice(0, lit);
         this.braziers.forEach((b, i) => b.setLit(order.includes(i)));
-        this.litRunes = [];
-        for (const i of order) this.litRuneArc(this.opts.braziers[i]);
         this.play('echo_tell_sweep', true);
         Audio.sfx('echo_hum', { volume: 0.4 });
         this.waveState = 'flare';
@@ -1030,7 +1024,6 @@ export class EchoBoss {
         // Everything has gone off by now. A clean read over-commits it.
         this.indicators.forEach((i) => i.fade());
         this.braziers.forEach((b) => b.setLit(false, 420));
-        this.dimRunes();
         this.waveState = 'settle';
         if (this.waveClean) {
           this.staggerUntil = now + P2.STAGGER_MS;
@@ -1085,50 +1078,15 @@ export class EchoBoss {
     }
   }
 
-  /** Wake the arc of the inscribed ring nearest a burning brazier. A second,
-   *  redundant statement of the same cue, because this is the one thing in the
-   *  fight the player absolutely has to be able to read. */
-  private litRuneArc(b: { x: number; y: number }): void {
-    for (const [tx, ty] of this.opts.runeTiles) {
-      const cx = tx * 16 + 8;
-      const cy = ty * 16 + 8;
-      if (Math.hypot(cx - b.x, cy - (b.y - 8)) > 74) continue;
-      this.setRune(tx, ty, true);
-      this.litRunes.push([tx, ty]);
-    }
-  }
-
-  private dimRunes(): void {
-    for (const [tx, ty] of this.litRunes) this.setRune(tx, ty, false);
-    this.litRunes = [];
-  }
-
-  private setRune(tx: number, ty: number, lit: boolean): void {
-    const layer = this.scene.world?.ground;
-    if (!layer) return;
-    const tile = layer.getTileAt(tx, ty);
-    if (!tile) return;
-    // The lit and dim rune plates are parallel families in the tileset; the
-    // index offset between them is constant, so a swap is one putTileAt.
-    const fam = lit ? 'tile/shrine/rune_floor' : 'tile/shrine/rune_floor_dim';
-    const idx = this.runeIndex(fam, tx, ty);
-    if (idx >= 0) layer.putTileAt(idx, tx, ty);
-  }
-
-  private runeCache = new Map<string, number[]>();
-  private runeIndex(fam: string, tx: number, ty: number): number {
-    let list = this.runeCache.get(fam);
-    if (!list) {
-      const index = (this.scene.cache.json.get('art') as
-        { tileset?: { index?: Record<string, number> } } | undefined)?.tileset?.index;
-      if (!index) return -1;
-      list = Object.keys(index).filter((k) => k.replace(/_\d+$/, '') === fam).sort().map((k) => index[k]);
-      this.runeCache.set(fam, list);
-    }
-    if (!list.length) return -1;
-    return list[(tx * 7 + ty * 13) % list.length];
-  }
-
+  /**
+   * The braziers ARE the cue.
+   *
+   * An earlier version also woke an arc of rune plates under each burning
+   * quadrant as a second, redundant statement of the same thing. Those glyphs
+   * encode puzzle state in the memory room, so spending them on decoration here
+   * would have cost them their meaning everywhere else. The fire is louder than
+   * the glyphs were anyway.
+   */
   private resolveP2Swing(now: number, player: Player): void {
     if (!this.staggered) {
       // It is six overlapping copies of itself; the sword goes through them.
