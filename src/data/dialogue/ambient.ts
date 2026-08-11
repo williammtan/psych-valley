@@ -111,7 +111,7 @@ export const AMBIENT: Record<string, AmbientProfile> = {
     ]),
     idle: {
       arrival: [
-        'Do not rush him. Frightened creatures need extremely boring evenings.',
+        'He has been under that dresser since the storm. Mira has stopped asking.',
         'I have written down every time that bell rang this month. It is a problem I have.',
         'Ask Mira about the pipes. Do not say why. You will get the better version.',
         'There is a cat-shaped dent in that basket and nothing has been in it for a week.',

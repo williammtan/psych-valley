@@ -157,7 +157,7 @@ export const Q1: ExchangeMap = namespaced('q1', {
     say('sera', 'And tonight you spent an hour teaching him it does not mean it any more.'),
     say('sera', 'There is a name for the first half of that.'),
     insight('conditioning'),
-    say('sera', 'Pip. Bell. Crash. That is the whole of it, and you will not forget it now.'),
+    say('sera', 'Pip. Bell. Crash. That is the whole of it.'),
   ], 'NAMING MOMENT 1 — recognition, not instruction'),
 
   // ── ability ───────────────────────────────────────────────────────────────

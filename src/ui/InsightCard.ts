@@ -60,7 +60,7 @@ export class InsightCard {
       this.scene.tweens.add({ targets: burst, alpha: 0, scale: 2.2, duration: 1400, onComplete: () => burst.destroy() });
     }
 
-    const eyebrow = makeText(this.scene, 0, -cardH / 2 + 16, 'YOU UNDERSTAND SOMETHING', 'body', { tint: 0xa87a22 });
+    const eyebrow = makeText(this.scene, 0, -cardH / 2 + 16, 'FROM YOUR NOTEBOOK', 'body', { tint: 0xa87a22 });
     eyebrow.setOrigin(0.5, 0.5);
     card.add(eyebrow.obj);
     this.items.push(eyebrow);

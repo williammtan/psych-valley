@@ -25,6 +25,7 @@ export class Journal {
   private tab: Tab = 'Quests';
   private open = false;
   private detailIndex = 0;
+  private insightPage = 0;
 
   constructor(private scene: Phaser.Scene) {
     scene.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
@@ -35,6 +36,7 @@ export class Journal {
       if (k === 'arrowright' || k === 'd') this.cycleTab(1);
       if (k === 'arrowup' || k === 'w') this.moveDetail(-1);
       if (k === 'arrowdown' || k === 's') this.moveDetail(1);
+      if (k === ' ' && this.tab === 'Insights') { this.insightPage = 1 - this.insightPage; Audio.sfx('ui_move', { volume: 0.3 }); this.render(); }
     });
   }
 
@@ -80,12 +82,14 @@ export class Journal {
     const i = TABS.indexOf(this.tab);
     this.tab = TABS[(i + d + TABS.length) % TABS.length];
     this.detailIndex = 0;
+    this.insightPage = 0;
     Audio.sfx('ui_move', { volume: 0.3 });
     this.render();
   }
 
   private moveDetail(d: number): void {
     this.detailIndex = Math.max(0, this.detailIndex + d);
+    this.insightPage = 0;
     Audio.sfx('ui_move', { volume: 0.25 });
     this.render();
   }
@@ -157,6 +161,18 @@ export class Journal {
     }
   }
 
+  /**
+   * The Insights tab — the player's psychology notebook.
+   *
+   * Two pages per concept, and the order matters. Page one is what happened to
+   * *you*: the sentence, the evening it came from, and the thing people usually
+   * get wrong about it. Page two is the formal vocabulary, where each term is
+   * anchored to the moment in your own playthrough that produced it, plus the
+   * examples you personally witnessed.
+   *
+   * Putting the vocabulary second is the whole design: this is a notebook that
+   * happens to contain AP terms, not a term list with flavour text attached.
+   */
   private renderInsights(x: number, y: number): void {
     const unlocked = CONCEPT_ORDER.filter((id) => State.insightUnlocked(id));
     if (!unlocked.length) {
@@ -164,37 +180,74 @@ export class Journal {
       return;
     }
     this.detailIndex = Math.min(this.detailIndex, unlocked.length - 1);
-    // Left column: list. Right column: detail.
+
+    // Left column: the concepts you have. Right column: the open one.
     let ly = y;
     unlocked.forEach((id, i) => {
       const active = i === this.detailIndex;
       this.text(x, ly, `${active ? '▸ ' : '  '}${CONCEPTS[id].name}`, 'body', active ? COLORS.goldLight : 0x8b8898);
       ly += 12;
     });
+    this.text(x, ly + 8, '↑↓ concept', 'body', 0x463a5c);
+    this.text(x, ly + 19, 'SPACE turn page', 'body', 0x463a5c);
 
-    const c = CONCEPTS[unlocked[this.detailIndex]];
+    const id = unlocked[this.detailIndex];
+    const c = CONCEPTS[id];
     const dx = x + 118;
+    const width = GAME_W - dx - 44;
     let dy = y;
-    this.text(dx, dy, c.apUnit, 'body', 0x5d4e78);
-    dy += 13;
-    const def = wrapText(this.scene, c.definition, 'body', GAME_W - dx - 44);
-    const t = this.text(dx, dy, def, 'body', COLORS.parchment);
-    dy += t.height + 8;
 
-    for (const line of c.illustration) {
-      this.text(dx, dy, line, 'body', 0xa69fb8);
-      dy += 10;
+    const heading = (label: string) => {
+      dy += 4;
+      this.text(dx, dy, label, 'body', 0xa87a22);
+      dy += 12;
+    };
+    const para = (s2: string, tint = COLORS.parchment, indent = 0) => {
+      const t = this.text(dx + indent, dy, wrapText(this.scene, s2, 'body', width - indent), 'body', tint);
+      dy += t.height + 3;
+    };
+
+    if (this.insightPage === 0) {
+      this.text(dx, dy, c.apUnit, 'body', 0x5d4e78);
+      dy += 13;
+      para(c.definition);
+      dy += 5;
+      heading('WHAT HAPPENED');
+      for (const line of c.illustration) {
+        this.text(dx, dy, line, 'body', 0xa69fb8);
+        dy += 10;
+      }
+      dy += 4;
+      heading('WHAT PEOPLE GET WRONG');
+      para(c.misconception, 0xa69fb8);
+    } else {
+      heading('FORMAL TERMS');
+      for (const term of c.terms) {
+        this.text(dx, dy, term.term, 'body', COLORS.goldLight);
+        dy += 10;
+        para(term.meaning, 0x8b8898, 6);
+        para(term.inGame, 0x7389a0, 6);
+        dy += 2;
+      }
+      dy += 2;
+      heading('ELSEWHERE');
+      for (const line of c.realWorld) {
+        this.text(dx, dy, `· ${line}`, 'body', 0xa69fb8);
+        dy += 10;
+      }
+      // Examples the player actually witnessed, recorded as they happened.
+      const seen = State.insights[id]?.examples ?? [];
+      if (seen.length) {
+        dy += 4;
+        heading('YOU SAW');
+        for (const line of seen) para(`· ${line}`, 0xa69fb8);
+      }
     }
-    dy += 6;
-    this.text(dx, dy, 'FORMAL TERMS', 'body', 0xa87a22);
-    dy += 12;
-    for (const term of c.terms) {
-      this.text(dx, dy, term.term, 'body', COLORS.goldLight);
-      dy += 10;
-      const m = wrapText(this.scene, `${term.meaning}  —  ${term.inGame}`, 'body', GAME_W - dx - 44);
-      const mt = this.text(dx + 6, dy, m, 'body', 0x8b8898);
-      dy += mt.height + 4;
-    }
+
+    // Page marker, bottom right of the panel.
+    const pages = `${this.insightPage + 1}/2`;
+    const marker = this.text(GAME_W - 44, GAME_H - 34, pages, 'body', 0x5d4e78);
+    marker.setOrigin(1, 0);
   }
 
   private renderPeople(x: number, y: number): void {
