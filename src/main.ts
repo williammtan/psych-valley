@@ -6,6 +6,7 @@ import { TitleScene } from './scenes/TitleScene';
 import { WorldScene } from './scenes/WorldScene';
 import { UIScene } from './scenes/UIScene';
 import './world/maps';
+import '@/audio/index';
 
 const game = new Phaser.Game({
   type: Phaser.WEBGL,

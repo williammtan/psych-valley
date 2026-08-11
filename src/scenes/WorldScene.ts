@@ -15,6 +15,7 @@ import { Interactions, type Interactable } from '@/systems/Interactions';
 import { Cutscene } from '@/systems/Cutscene';
 import { Mote } from '@/entities/Mote';
 import { CueBus, RecallSystem } from '@/systems/Abilities';
+import { GameFlow } from '@/systems/GameFlow';
 import { Audio } from '@/audio/Audio';
 import { installDebugApi } from '@/debug/api';
 
@@ -33,6 +34,8 @@ export class WorldScene extends Phaser.Scene {
   cues!: CueBus;
   /** Context evidence the player can read (RECALL). */
   recall!: RecallSystem;
+  /** Death, respawn and autosave. */
+  flow!: GameFlow;
 
   area?: AreaScript;
   mapId = '';
@@ -62,6 +65,7 @@ export class WorldScene extends Phaser.Scene {
     this.cutscene = new Cutscene(this);
     this.cues = new CueBus(this);
     this.recall = new RecallSystem(this);
+    this.flow = new GameFlow(this);
 
     installDebugApi(this);
 

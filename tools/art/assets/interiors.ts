@@ -1334,14 +1334,19 @@ function innPotsHanging(): Surface {
     s.px(Math.round(cx) + 1, 1, P.IRON[1]);
     // the pan: a disc seen face-on, with a rim and a bowl
     const y = hang - d + 1;
-    s.ellipse(x, y, d, d, ramp[1]);
+    // A rim ring and a flat face — concentric rings would read as a sphere,
+    // and a hanging pan has to read as a disc.
+    s.ellipse(x, y, d, d, ramp[3]);
     s.ellipse(x + 1, y + 1, d - 2, d - 2, ramp[2]);
-    s.ellipse(x + 1, y + 1, d - 4, d - 4, ramp[3]);
-    s.ellipse(x + 2, y + 2, Math.max(2, d - 7), Math.max(2, d - 7), ramp[4], 0.75);
-    s.ellipseOutline(x, y, d, d, ramp[0], 0.85);
-    s.ellipseOutline(x + 1, y + 1, d - 2, d - 2, ramp[4], 0.35);
-    // hammer marks
-    for (let k = 0; k < 4; k++) s.px(x + 3 + (k % 2) * 3, y + 4 + k, ramp[1], 0.4);
+    s.ellipseOutline(x, y, d, d, ramp[0], 0.9);
+    s.ellipseOutline(x + 1, y + 1, d - 2, d - 2, ramp[4], 0.55);
+    for (let j = 0; j < d; j++) for (let i = 0; i < d; i++) {
+      if (s.alphaAt(x + i, y + j) === 0) continue;
+      if (i + j > d + 1) s.px(x + i, y + j, ramp[1], 0.5);       // the far side falls off
+      if (i + j > d * 1.5) s.px(x + i, y + j, ramp[0], 0.35);
+    }
+    for (let k = 0; k < 3; k++) s.px(x + 2 + k, y + 3 - k, ramp[4], 0.8);  // a crescent of light
+    for (let k = 0; k < 3; k++) s.px(x + 3 + k, y + 5 + (k % 2), ramp[1], 0.35); // hammer marks
     if (handle) { // a riveted handle sticking out to the right
       s.hline(x + d - 1, y + Math.floor(d / 2), 5, P.IRON[3]);
       s.hline(x + d - 1, y + Math.floor(d / 2) + 1, 5, P.IRON[0]);

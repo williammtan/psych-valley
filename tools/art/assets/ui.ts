@@ -586,16 +586,22 @@ const ICONS: Record<string, (s: Surface) => void> = {
     s.outline(INK, true);
   },
 
-  // MAP — three folded panels, so the silhouette steps up and down.
+  // MAP — three folded panels. The middle one hangs lower and sits in its own
+  // shadow, which is what stops this reading as "another book".
   map: (s) => {
-    const cols: Array<[number, number, number]> = [[1, 2, 5], [6, 3, 5], [11, 2, 4]];
-    for (const [x, y, w] of cols) {
-      s.rect(x, y, w, 11, P.UI_VELLUM[3]);
-      s.vline(x, y, 11, P.UI_VELLUM[4]);
-      s.vline(x + w - 1, y, 11, P.UI_VELLUM[1]);
+    const cols: Array<[number, number, number, number]> = [
+      [1, 1, 5, 3], [6, 4, 5, 2], [11, 1, 4, 3],
+    ];
+    for (const [x, y, w, tone] of cols) {
+      s.rect(x, y, w, 11, P.UI_VELLUM[tone]);
+      s.vline(x, y, 11, P.UI_VELLUM[tone + 1]);
+      s.vline(x + w - 1, y, 11, P.UI_VELLUM[tone - 2]);
     }
-    for (let x = 2; x < 12; x += 2) s.pxOver(x, 9 - Math.round(Math.sin(x * 0.6) * 2), P.UI_HEART[1]);
-    for (const [x, y] of [[12, 5], [13, 6], [13, 5], [12, 6]] as const) s.pxOver(x, y, P.UI_HEART[2]);
+    // A route with a cross at the end of it.
+    for (const [x, y] of [[3, 8], [4, 7], [5, 7], [6, 9], [7, 9], [8, 10], [9, 8], [10, 7]] as const) {
+      s.pxOver(x, y, P.UI_HEART[1]);
+    }
+    for (const [x, y] of [[11, 3], [12, 4], [12, 3], [11, 4]] as const) s.pxOver(x, y, P.UI_HEART[2]);
     s.outline(INK, true);
   },
 
@@ -654,17 +660,23 @@ const ICONS: Record<string, (s: Surface) => void> = {
     s.outline(INK, true);
   },
 
-  // PACKAGE — Oren's parcel. Kraft paper, twine cross, a lopsided bow.
+  // PACKAGE — Oren's parcel. A lid you can see the top of, so it reads as a
+  // box and not as a window, plus one off-centre twine and a lopsided bow.
   package: (s) => {
-    s.rect(2, 3, 12, 11, P.SAND[2]);
-    s.hline(2, 3, 12, P.SAND[4]);
+    s.rect(2, 6, 12, 9, P.SAND[2]);
+    s.rect(1, 3, 14, 3, P.SAND[3]);
+    s.hline(1, 3, 14, P.SAND[4]);
+    s.hline(1, 5, 14, P.SAND[0]);
     s.innerShade(P.SAND[0], 1, [[0, 1], [1, 0]]);
-    s.vline(7, 3, 11, P.WOOD[1]);
-    s.hline(2, 8, 12, P.WOOD[1]);
-    s.vline(8, 3, 11, P.WOOD[3], 0.45);
-    for (const [x, y] of [[6, 1], [5, 2], [6, 2], [9, 1], [10, 2], [9, 2]] as const) s.px(x, y, P.WOOD[2]);
-    s.px(7, 2, P.WOOD[3]);
-    s.px(8, 2, P.WOOD[3]);
+    s.vline(6, 3, 12, P.WOOD[1]);
+    s.vline(7, 3, 12, P.WOOD[3], 0.45);
+    s.hline(2, 10, 12, P.WOOD[1]);
+    s.hline(2, 11, 12, P.WOOD[3], 0.35);
+    for (const [x, y] of [[4, 0], [3, 1], [4, 1], [9, 0], [10, 1], [9, 1]] as const) s.px(x, y, P.WOOD[2]);
+    s.px(5, 2, P.WOOD[3]);
+    s.px(6, 2, P.WOOD[3]);
+    s.px(7, 2, P.WOOD[2]);
+    s.px(8, 1, P.WOOD[2]);
     s.outline(INK, true);
   },
 
@@ -687,17 +699,22 @@ const ICONS: Record<string, (s: Surface) => void> = {
     s.outline(INK, true);
   },
 
-  // PAW — Pip. One pad, four toes, nothing else.
+  // PAW — Pip. One pad, four toes, an ink gap between them, nothing else.
   paw: (s) => {
     const fur = P.SAND;
-    s.ellipse(3, 7, 10, 8, fur[2]);
-    s.ellipse(1, 3, 4, 5, fur[2]);
-    s.ellipse(5, 1, 4, 5, fur[2]);
-    s.ellipse(9, 1, 4, 5, fur[2]);
-    s.ellipse(12, 3, 4, 5, fur[2]);
-    s.innerShade(fur[0], 1, [[0, 1], [1, 0]]);
-    s.innerShade(fur[4], 1, [[0, -1], [-1, 0]]);
-    s.outline(INK, true);
+    const blob = (x: number, y: number, w: number, h: number) => {
+      const t = new Surface(16, 16);
+      t.ellipse(x, y, w, h, fur[2]);
+      t.innerShade(fur[0], 1, [[0, 1], [1, 0]]);
+      t.innerShade(fur[4], 1, [[0, -1], [-1, 0]]);
+      t.outline(INK, true);
+      return t;
+    };
+    s.blit(blob(3, 8, 10, 7));
+    s.blit(blob(1, 3, 4, 4));
+    s.blit(blob(5, 1, 4, 4));
+    s.blit(blob(9, 1, 4, 4));
+    s.blit(blob(12, 3, 4, 4));
   },
 };
 
@@ -754,7 +771,7 @@ function registerJournal(b: ArtBuild): void {
     s.innerShade(P.UI_VELLUM[1], 1, [[0, 1], [1, 0]]);
     s.innerShade(P.UI_VELLUM[4], 1, [[0, -1], [-1, 0]]);
     for (let k = 0; k < 3; k++) {
-      const y = up ? 6 - k : 4 + k;
+      const y = up ? 4 + k : 6 - k;
       s.pxOver(5 - k, y, INK);
       s.pxOver(5 + k, y, INK);
       s.pxOver(5 - k, y + (up ? -1 : 1), P.UI_VELLUM[4], 0.8);

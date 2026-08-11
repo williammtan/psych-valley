@@ -1,35 +1,55 @@
 {
-  "updated": "2026-08-11T21:00:00Z",
-  "phase": "Wave 1 — art production",
-  "headline": "Engine, art pipeline and capture harness are online. Eleven art modules are in production in parallel; maps, quests and the dungeon follow once art lands.",
+  "updated": "2026-08-11T21:20:00Z",
+  "phase": "Wave 2 — world, quests and dungeon",
+  "headline": "All eleven art modules have landed: 1,877 sprites and 1,272 tiles, every pixel generated from code. Maps, the three psychology quests, the Echo Shrine and the boss are being built in parallel now, with fresh-context critics reviewing rendered output against the reference pack.",
   "areas": [
-    { "name": "Art pipeline", "state": "good", "note": "Code-generated tiles + atlas, blob autotiler, inspection sheets" },
-    { "name": "Player movement", "state": "building", "note": "Corner-assist collision, input buffering, dash i-frames" },
-    { "name": "Town terrain", "state": "critiqued", "note": "Seamless tone-matched grass; path/cobble still mechanical" },
-    { "name": "Characters", "state": "building" },
-    { "name": "Buildings", "state": "building" },
-    { "name": "Town props", "state": "building" },
-    { "name": "Interiors", "state": "building" },
-    { "name": "Echo Shrine art", "state": "building" },
-    { "name": "Enemies + boss art", "state": "building" },
-    { "name": "VFX", "state": "building" },
+    { "name": "Art pipeline", "state": "good", "note": "Resilient to concurrent edits; 4x inspection sheets per module" },
+    { "name": "Town terrain", "state": "good", "note": "Seamless tone-matched grass, cellular flagstone, rutted dirt tracks" },
+    { "name": "Characters", "state": "critiqued", "note": "Full cast + Pip + Mote; parameterised humanoid rig, 688 sprites" },
+    { "name": "Buildings", "state": "good", "note": "5 landmarks + 5 cottages + outbuildings, distinct silhouettes and roof colours" },
+    { "name": "Town props", "state": "good", "note": "120 sprites — trees, fountain, carts, laundry, livestock" },
+    { "name": "Interiors", "state": "good", "note": "3 wall styles, rug blob sets, 106 props across inn/workshop/courier" },
+    { "name": "Echo Shrine art", "state": "good", "note": "213 tiles + 84 props; architecture dark, gameplay objects lit" },
+    { "name": "Enemies + boss art", "state": "good", "note": "193 sprites; live vs stale attack indicators readable apart" },
+    { "name": "VFX", "state": "good", "note": "205 sprites; effects built as light fields, dithered falloff" },
+    { "name": "Festival art", "state": "good", "note": "Three trial lanterns separated on shape, colour, mount and motion" },
+    { "name": "Whisper Woods art", "state": "good", "note": "377 tiles incl. cliff set; over-layer canopy for depth" },
     { "name": "UI + fonts", "state": "building" },
-    { "name": "Whisper Woods art", "state": "building" },
-    { "name": "Festival art", "state": "building" },
-    { "name": "Lumen Vale map", "state": "not-started", "note": "Scaffold only — full composition pass pending" },
-    { "name": "Quest 1 — Pip", "state": "not-started" },
-    { "name": "Quest 2 — Oren", "state": "not-started" },
-    { "name": "Quest 3 — Lantern Trial", "state": "not-started" },
-    { "name": "Echo Shrine dungeon", "state": "not-started" },
-    { "name": "The Echo boss", "state": "not-started" },
-    { "name": "Audio", "state": "not-started" }
+    { "name": "Lumen Vale map", "state": "building", "note": "Composition pass in progress; critic findings sent back" },
+    { "name": "Quest 1 — Pip", "state": "building" },
+    { "name": "Quest 2 — Oren", "state": "building" },
+    { "name": "Quest 3 — Lantern Trial", "state": "building" },
+    { "name": "Whisper Woods map", "state": "building" },
+    { "name": "Echo Shrine dungeon", "state": "building" },
+    { "name": "The Echo boss", "state": "building" },
+    { "name": "Audio", "state": "building" },
+    { "name": "Dialogue", "state": "building" },
+    { "name": "Combat feel", "state": "building" }
   ],
   "findings": [
     { "area": "Rendering", "severity": "blocker", "status": "fixed", "text": "Phaser getFrame() returns the __BASE frame for unknown names, so every missing-art guard was drawing the entire 2048px atlas across the scene." },
     { "area": "Terrain", "severity": "major", "status": "fixed", "text": "Tile families were keyed by leaf name, so tile/woods/grass_* merged with tile/town/grass_* and the town field rendered as a two-tone checkerboard." },
-    { "area": "Terrain", "severity": "major", "status": "fixed", "text": "Grass variants were tone-mismatched and non-periodic, producing visible per-tile seams and brightness checkerboarding." },
-    { "area": "Terrain", "severity": "minor", "status": "open", "text": "Flagstone path pattern is mechanical and too light against the grass; needs irregular stone shapes and a warmer, dirtier tone." },
-    { "area": "Lumen Vale", "severity": "major", "status": "open", "text": "Scaffold map only: large empty grass fields, no landmark hierarchy, buildings not yet integrated into terrain." }
+    { "area": "Terrain", "severity": "major", "status": "fixed", "text": "edgePixels treated a tile's own border as a material edge, putting a lit line on the top row of every interior tile — a horizontal band across every path and every water surface in the game." },
+    { "area": "Terrain", "severity": "major", "status": "fixed", "text": "Grass variants were tone-mismatched and non-periodic, producing per-tile seams and brightness checkerboarding. Now seamless and rank-quantised." },
+    { "area": "Terrain", "severity": "minor", "status": "fixed", "text": "Flagstone stamped one identical stone pattern on every tile; now a per-tile cellular partition with the mortar groove and lit bevel on separate pixels." },
+    { "area": "Build", "severity": "major", "status": "fixed", "text": "One agent's in-progress edit broke every other agent's art build. Modules now load dynamically and a broken one is skipped and reported." },
+    { "area": "Build", "severity": "major", "status": "fixed", "text": "The hand-maintained map import list was a shared file every map author had to edit; one stale import broke the whole game. Maps and areas are now discovered by glob." },
+    { "area": "Lumen Vale", "severity": "major", "status": "open", "text": "Building footprints render as bare brown rectangles extending past the building sprites; ground under a building should match its surroundings." },
+    { "area": "Lumen Vale", "severity": "major", "status": "open", "text": "Town Square flagstone is one uniform slab and density falls off sharply outside it; flowerbed prop repeats too evenly across open grass." },
+    { "area": "Festival", "severity": "minor", "status": "open", "text": "The three trial lanterns read as floating; they need visible mounts so their role is legible before the trial starts." }
   ],
-  "comparisons": []
+  "comparisons": [
+    {
+      "title": "Town Square vs Stardew Valley world density",
+      "ours": "town_square",
+      "reference": "stardew/stardew_farm_world_density.png",
+      "verdict": "Under blind A/B review. Buildings, props and NPC routines have landed; the open ground between districts is the current gap."
+    },
+    {
+      "title": "Festival Plaza vs Stardew Night Market",
+      "ours": "map_festival",
+      "reference": "stardew/stardew_night_market_festival.png",
+      "verdict": "The event transformation reads: string lights, bunting, a lit ceremonial carpet, stalls and a gathered crowd. Trial lanterns still need mounts."
+    }
+  ]
 }
