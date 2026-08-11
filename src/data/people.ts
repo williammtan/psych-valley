@@ -54,6 +54,11 @@ export const PEOPLE: Record<string, Person> = {
     color: 0x8ce6e6,
     blurb: 'Found near the shrine road. Does not speak. Watches everything.',
   },
+  echo: {
+    id: 'echo', name: 'The Echo', role: '?',
+    color: 0xb08ae0,
+    blurb: 'Speaks only in sentences it has heard someone else say first.',
+  },
   villager_a: { id: 'villager_a', name: 'Bram', role: 'Farmer', color: 0xa69fb8, blurb: 'Grows more turnips than the valley needs.' },
   villager_b: { id: 'villager_b', name: 'Hesta', role: 'Baker', color: 0xa69fb8, blurb: 'Up before the bell, every day.' },
   villager_c: { id: 'villager_c', name: 'Dov', role: 'Fisher', color: 0xa69fb8, blurb: 'Claims the river has changed. Nobody has checked.' },

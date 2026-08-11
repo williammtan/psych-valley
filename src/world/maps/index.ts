@@ -3,3 +3,5 @@
  * Map modules self-register via `registerMap(...)` at import time.
  */
 import './lumen_vale';
+import './courier';
+import './festival';

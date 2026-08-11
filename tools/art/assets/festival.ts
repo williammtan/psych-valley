@@ -2766,14 +2766,20 @@ function drinkBarrel(): Surface {
     const hh = halfAt(x);
     for (let y = Math.round(cy - hh); y <= Math.round(cy + hh); y++) {
       const v = (y - (cy - hh)) / Math.max(1, hh * 2);
-      const c = v < 0.10 ? P.WOOD[1] : v < 0.28 ? P.WOOD[3] : v < 0.42 ? P.WOOD[4] : v < 0.70 ? P.WOOD[2] : v < 0.88 ? P.WOOD[1] : P.WOOD[0];
+      const R = P.WOOD_LIGHT;
+      const c = v < 0.10 ? R[1] : v < 0.26 ? R[3] : v < 0.44 ? R[4] : v < 0.70 ? R[2] : v < 0.88 ? R[1] : R[0];
       s.px(x, y, c);
     }
   }
   // staves
   for (let x = 5; x <= 24; x += 3) {
     const hh = halfAt(x);
-    for (let y = Math.round(cy - hh) + 1; y <= Math.round(cy + hh) - 1; y++) s.px(x, y, P.WOOD[0], 0.22);
+    for (let y = Math.round(cy - hh) + 1; y <= Math.round(cy + hh) - 1; y++) s.px(x, y, P.WOOD[0], 0.18);
+  }
+  // the top of the barrel catches the lantern light
+  for (let x = 3; x <= 25; x++) {
+    const hh = halfAt(x);
+    s.px(x, Math.round(cy - hh) + 1, P.WOOD_LIGHT[4], 0.5);
   }
   // iron hoops
   for (const bx of [7, 15, 22]) {

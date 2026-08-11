@@ -1313,31 +1313,42 @@ function innShelf(kind: 'bottles' | 'mugs' | 'crocks'): Surface {
 }
 
 function innPotsHanging(): Surface {
-  const s = new Surface(32, 20);
-  // the rail
-  s.hline(0, 3, 32, P.IRON[3]);
-  s.hline(0, 4, 32, P.IRON[1]);
-  s.hline(0, 5, 32, P.IRON[0], 0.7);
-  const r = rng(3371);
-  let x = 3;
-  for (let i = 0; i < 4; i++) {
-    const w = r.int(7, 9), h = r.int(6, 8);
-    const ramp = i % 2 ? P.COPPER : P.CERAMIC;
-    s.vline(x + w / 2, 5, 2, P.IRON[2]);   // hook
-    // body: a squat pan seen from the front
-    s.rect(x, 7, w, h, ramp[2]);
-    metal(s, x, 7, w, h, ramp);
-    s.hline(x, 7, w, ramp[4], 0.9);
-    s.hline(x, 6, w, ramp[3]);
-    s.hline(x, 7 + h - 1, w, P.OUTLINE, 0.85);
-    s.ellipse(x, 7 + h - 2, w, 3, ramp[1], 0.8);
-    if (i % 2) { // a long handle sticking out
-      s.hline(x + w, 9, 4, P.IRON[2]);
-      s.hline(x + w, 10, 4, P.IRON[0]);
+  const s = new Surface(34, 22);
+  // a substantial iron rail, not a hairline
+  s.rect(0, 2, 34, 3, P.IRON[2]);
+  s.hline(0, 2, 34, P.IRON[4], 0.9);
+  s.hline(0, 4, 34, P.IRON[0]);
+  s.rect(0, 1, 3, 5, P.IRON[3]);   // the brackets it hangs from
+  s.rect(31, 1, 3, 5, P.IRON[1]);
+  const pans: Array<[number, number, number, Ramp, boolean]> = [
+    [4, 11, 10, P.COPPER, true],
+    [15, 9, 8, P.COPPER, false],
+    [24, 12, 9, P.IRON, true],
+  ];
+  for (const [x, d, hang, ramp, handle] of pans) {
+    const cx = x + d / 2;
+    // the hook: a visible S over the rail
+    s.vline(Math.round(cx), 5, hang - d + 1, P.IRON[2]);
+    s.px(Math.round(cx) - 1, 1, P.IRON[3]);
+    s.px(Math.round(cx), 0, P.IRON[4]);
+    s.px(Math.round(cx) + 1, 1, P.IRON[1]);
+    // the pan: a disc seen face-on, with a rim and a bowl
+    const y = hang - d + 1;
+    s.ellipse(x, y, d, d, ramp[1]);
+    s.ellipse(x + 1, y + 1, d - 2, d - 2, ramp[2]);
+    s.ellipse(x + 1, y + 1, d - 4, d - 4, ramp[3]);
+    s.ellipse(x + 2, y + 2, Math.max(2, d - 7), Math.max(2, d - 7), ramp[4], 0.75);
+    s.ellipseOutline(x, y, d, d, ramp[0], 0.85);
+    s.ellipseOutline(x + 1, y + 1, d - 2, d - 2, ramp[4], 0.35);
+    // hammer marks
+    for (let k = 0; k < 4; k++) s.px(x + 3 + (k % 2) * 3, y + 4 + k, ramp[1], 0.4);
+    if (handle) { // a riveted handle sticking out to the right
+      s.hline(x + d - 1, y + Math.floor(d / 2), 5, P.IRON[3]);
+      s.hline(x + d - 1, y + Math.floor(d / 2) + 1, 5, P.IRON[0]);
+      s.px(x + d + 3, y + Math.floor(d / 2), P.IRON[4]);
     }
-    x += w + r.int(1, 2);
   }
-  wallShadow(s, 1, 2, 0.26);
+  wallShadow(s, 1, 2, 0.28);
   return finish(s, 'lamp');
 }
 
@@ -3036,18 +3047,31 @@ function postRoster(): Surface {
 }
 
 function postBell(): Surface {
-  const s = new Surface(12, 11);
-  contact(s, 6, 10, 11, 3, 0.3);
-  s.ellipse(1, 7, 10, 3, P.WOOD_LIGHT[2]);
-  s.ellipse(2, 7, 8, 2, P.WOOD_LIGHT[4], 0.7);
-  s.ellipse(2, 2, 8, 7, P.BRONZE[2]);
-  metal(s, 2, 2, 8, 6, P.BRONZE);
-  s.ellipse(2, 5, 8, 3, P.BRONZE[1]);
-  s.hline(2, 7, 8, P.BRONZE[0], 0.9);
-  s.px(5, 1, P.BRONZE[3]);
-  s.px(5, 0, P.BRONZE[4]);
-  s.ellipseOutline(2, 2, 8, 7, P.BRONZE[0], 0.6);
-  s.px(4, 3, P.BRONZE[4]);
+  const s = new Surface(14, 13);
+  contact(s, 7, 12, 13, 4, 0.3);
+  // a pale wooden base, so the brass dome has something to sit against
+  s.ellipse(1, 8, 12, 4, P.WOOD_LIGHT[2]);
+  s.ellipse(2, 8, 10, 3, P.WOOD_LIGHT[4], 0.85);
+  s.ellipseOutline(1, 8, 12, 4, P.WOOD[0], 0.8);
+  s.hline(3, 11, 8, P.OUTLINE, 0.7);
+  // the dome, lit hard from the upper left
+  s.ellipse(2, 2, 10, 8, P.BRONZE[2]);
+  for (let j = 0; j < 8; j++) {
+    for (let i = 0; i < 10; i++) {
+      if (s.alphaAt(2 + i, 2 + j) === 0) continue;
+      const u = (i / 9) * 0.55 + (j / 7) * 0.45;
+      s.px(2 + i, 2 + j, u < 0.2 ? P.BRONZE[4] : u < 0.4 ? P.BRONZE[3] : u < 0.68 ? P.BRONZE[2] : u < 0.86 ? P.BRONZE[1] : P.BRONZE[0]);
+    }
+  }
+  s.px(4, 3, P.UI_GOLD[4]);          // specular
+  s.px(5, 3, P.UI_GOLD[4]);
+  s.ellipse(2, 7, 10, 3, P.BRONZE[1]);
+  s.hline(3, 9, 8, P.BRONZE[0], 0.9);
+  s.ellipseOutline(2, 2, 10, 8, P.BRONZE[0], 0.5);
+  // the plunger on top
+  s.vline(6, 0, 2, P.BRONZE[3]);
+  s.px(6, 0, P.UI_GOLD[4]);
+  s.px(7, 1, P.BRONZE[1]);
   return finish(s, 'lamp');
 }
 

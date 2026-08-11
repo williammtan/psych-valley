@@ -31,11 +31,6 @@ function fMax(F: Field, x: number, y: number, val: number): void {
   if (val > F.v[i]) F.v[i] = val;
 }
 
-function fAdd(F: Field, x: number, y: number, val: number): void {
-  if (x < 0 || y < 0 || x >= F.w || y >= F.h) return;
-  F.v[y * F.w + x] += val;
-}
-
 const BAYER = [
   [0, 8, 2, 10],
   [12, 4, 14, 6],
@@ -676,7 +671,7 @@ function pickupSparkleFrames(): Surface[] {
  * A drifting leaf, seen tumbling: broad face, tilted, edge-on, tilted back.
  * Four frames is enough for the eye to invent the rotation between them.
  */
-function leafFrames(ramp: readonly string[], seed: number): Surface[] {
+function leafFrames(ramp: readonly string[]): Surface[] {
   // Four hand-set poses of one tumbling leaf: broad face, three-quarter,
   // edge-on (a 1 px sliver — that frame is what sells the spin), and back.
   const poses = [
@@ -709,10 +704,9 @@ function leafFrames(ramp: readonly string[], seed: number): Surface[] {
       '....o..',
     ],
   ];
-  const r = rng(seed);
-  return poses.map((rows, i) => {
+  return poses.map((rows) => {
     const s = new Surface(9, 9);
-    const oy = 2 + (i === 2 ? 0 : 0);
+    const oy = 2;
     for (let y = 0; y < rows.length; y++) {
       for (let x = 0; x < rows[y].length; x++) {
         const ch = rows[y][x];
@@ -721,7 +715,6 @@ function leafFrames(ramp: readonly string[], seed: number): Surface[] {
         s.px(x + 1, y + oy, c);
       }
     }
-    void r;
     return s;
   });
 }
@@ -729,7 +722,6 @@ function leafFrames(ramp: readonly string[], seed: number): Surface[] {
 /** Warm daytime motes. Sparse, tiny, and never bright enough to distract. */
 function pollenFrames(): Surface[] {
   const S = 10;
-  const r = rng(8801);
   const motes = [
     { x: 2.5, y: 6.5, ph: 0 },
     { x: 6.0, y: 3.5, ph: 1.7 },
@@ -746,7 +738,6 @@ function pollenFrames(): Surface[] {
       const amp = 0.75 + 0.45 * Math.sin(m.ph + t * Math.PI * 2 + j);
       fDot(F, x, y, 1.5, amp, 1.8);
     });
-    void r;
     return paint(s, F, bands(P.LANTERN, 0.3, 1.15, 0.34));
   });
 }
@@ -1633,9 +1624,9 @@ export function registerFx(b: ArtBuild): void {
   b.addStrip('fx/pickup_sparkle', pickupSparkleFrames(), { key: 'fx_pickup_sparkle', frameRate: 16, repeat: 0 });
 
   // ── environmental life ───────────────────────────────────────────────────
-  b.addStrip('fx/leaf_green', leafFrames(P.TREE_WARM, 8101), { key: 'fx_leaf_green', frameRate: 6, repeat: -1 });
-  b.addStrip('fx/leaf_gold', leafFrames(P.TREE_AUTUMN, 8102), { key: 'fx_leaf_gold', frameRate: 6, repeat: -1 });
-  b.addStrip('fx/leaf_red', leafFrames(P.LEAF_RED, 8103), { key: 'fx_leaf_red', frameRate: 6, repeat: -1 });
+  b.addStrip('fx/leaf_green', leafFrames(P.TREE_WARM), { key: 'fx_leaf_green', frameRate: 6, repeat: -1 });
+  b.addStrip('fx/leaf_gold', leafFrames(P.TREE_AUTUMN), { key: 'fx_leaf_gold', frameRate: 6, repeat: -1 });
+  b.addStrip('fx/leaf_red', leafFrames(P.LEAF_RED), { key: 'fx_leaf_red', frameRate: 6, repeat: -1 });
   b.addStrip('fx/pollen', pollenFrames(), { key: 'fx_pollen', frameRate: 5, repeat: -1 });
   b.addStrip('fx/firefly', fireflyFrames(), { key: 'fx_firefly', frameRate: 6, repeat: -1 });
   b.addStrip('fx/smoke', smokeFrames(), { key: 'fx_smoke', frameRate: 6, repeat: 0 });

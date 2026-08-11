@@ -115,7 +115,21 @@ if (existsSync(PREVIEW)) rmSync(PREVIEW, { recursive: true, force: true });
 
 function sheet(items: { name: string; s: Surface }[], title: string, cols = 12) {
   if (!items.length) return;
-  const scale = 4;
+  // One oversized sprite (the 480x270 vignette lives in fx/) would otherwise set
+  // the cell size for the whole sheet and blow it up to tens of thousands of
+  // pixels, making the review sheet unreadable. Anything much larger than its
+  // peers gets its own sheet instead.
+  const heights = items.map((i) => i.s.h).sort((a, b) => a - b);
+  const medianH = heights[Math.floor(heights.length / 2)];
+  const cap = Math.max(48, medianH * 4);
+  const oversized = items.filter((i) => i.s.h > cap || i.s.w > cap * 2);
+  const normal = items.filter((i) => !(i.s.h > cap || i.s.w > cap * 2));
+  if (oversized.length && normal.length) {
+    sheet(normal, title, cols);
+    sheet(oversized, `${title}_large`, Math.min(4, oversized.length));
+    return;
+  }
+  const scale = items.some((i) => i.s.w > 96 || i.s.h > 96) ? 2 : 4;
   const cellW = Math.max(...items.map((i) => i.s.w)) * scale + 8;
   const cellH = Math.max(...items.map((i) => i.s.h)) * scale + 8;
   const rows = Math.ceil(items.length / cols);

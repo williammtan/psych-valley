@@ -135,11 +135,13 @@ function panelPiece(st: PanelStyle, dx: number, dy: number): Surface {
       if (d === 1) { s.px(x, y, lit ? st.bandLit : st.bandDim); continue; }
       if (d === 2) { s.px(x, y, lit ? st.ruleLit : st.ruleDim); continue; }
 
+      // The field repeats every `size` px — that is what 9-slicing is — so the
+      // grain has to be quiet enough to read as tooth rather than as a motif.
       const h = hash2(x, y, seed);
       let c = st.fill[fi];
       if (grain > 0) {
-        if (h < 0.13 * grain) c = P.mix(st.fill[fi], st.fill[Math.max(0, fi - 1)], 0.55);
-        else if (h > 1 - 0.10 * grain) c = P.mix(st.fill[fi], st.fill[Math.min(st.fill.length - 1, fi + 1)], 0.7);
+        if (h < 0.10 * grain) c = P.mix(st.fill[fi], st.fill[Math.max(0, fi - 1)], 0.34);
+        else if (h > 1 - 0.07 * grain) c = P.mix(st.fill[fi], st.fill[Math.min(st.fill.length - 1, fi + 1)], 0.45);
       }
       s.px(x, y, c);
     }
@@ -753,8 +755,10 @@ function registerJournal(b: ArtBuild): void {
     s.innerShade(P.UI_VELLUM[4], 1, [[0, -1], [-1, 0]]);
     for (let k = 0; k < 3; k++) {
       const y = up ? 6 - k : 4 + k;
-      s.pxOver(5 - k, y, P.UI_BRASS[1]);
-      s.pxOver(5 + k, y, P.UI_BRASS[1]);
+      s.pxOver(5 - k, y, INK);
+      s.pxOver(5 + k, y, INK);
+      s.pxOver(5 - k, y + (up ? -1 : 1), P.UI_VELLUM[4], 0.8);
+      s.pxOver(5 + k, y + (up ? -1 : 1), P.UI_VELLUM[4], 0.8);
     }
     s.outline(INK, true);
     return s;
@@ -784,8 +788,8 @@ function registerJournal(b: ArtBuild): void {
   // Bullet: a brass lozenge, the smallest piece of hardware in the game.
   const bullet = new Surface(7, 7);
   for (let k = 0; k < 3; k++) for (let i = -k; i <= k; i++) {
-    bullet.px(3 + i, 1 + (2 - k), P.UI_BRASS[3]);
-    bullet.px(3 + i, 5 - (2 - k), P.UI_BRASS[1]);
+    bullet.px(3 + i, 1 + k, P.UI_BRASS[3]);
+    bullet.px(3 + i, 5 - k, P.UI_BRASS[1]);
   }
   bullet.px(2, 2, P.UI_BRASS[4]);
   bullet.outline(INK);
@@ -838,10 +842,13 @@ function registerInsight(b: ArtBuild): void {
         const y = name === 't' ? 3 : 8;
         for (let x = 0; x < 12; x += 3) { s.pxOver(x, y, P.UI_GOLD[3]); s.pxOver(x + 1, y, P.UI_GOLD[1]); }
       }
-      // Rays behind the heading. The period divides 12, so the edge still tiles.
+      // Rays behind the heading, fanning down off the top rail. The period
+      // divides 12, so the edge still tiles seamlessly at any panel width.
       if (name === 't') {
         for (let x = 0; x < 12; x++) for (let y = 5; y < 12; y++) {
-          if (Math.abs(((x + y * 2) % 12) - 6) < 1.2) s.pxOver(x, y, P.UI_GOLD[4], 0.18);
+          const d = Math.abs(((x + y * 2) % 12) - 6);
+          if (d < 1) s.pxOver(x, y, P.UI_GOLD[2], 0.34 - (y - 5) * 0.03);
+          else if (d < 2) s.pxOver(x, y, P.UI_GOLD[2], 0.14);
         }
       }
     },
@@ -868,22 +875,29 @@ function registerInsight(b: ArtBuild): void {
   seal.outline(INK, true);
   b.add('ui/insight_seal', seal);
 
-  // Rays behind the seal: four frames, slowly turning.
+  // Rays behind the seal: eight tapered wedges plus a soft core, turning
+  // slowly. Wedges rather than hairlines — a 1 px ray at 1x is just noise.
   const rays: Surface[] = [];
   for (let f = 0; f < 4; f++) {
     const s = new Surface(37, 37);
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2 + (f / 4) * (Math.PI / 6);
+    const cx = 18, cy = 18;
+    s.ellipse(cx - 9, cy - 9, 19, 19, P.UI_GOLD[4], 0.1);
+    s.ellipse(cx - 6, cy - 6, 13, 13, P.UI_GOLD[4], 0.12);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + (f / 4) * (Math.PI / 4);
       const long = i % 2 === 0;
-      const len = long ? 18 : 12;
-      for (let r = 8; r < len; r++) {
-        const fade = 1 - (r - 8) / (len - 8);
-        s.px(
-          Math.round(18 + Math.cos(a) * r),
-          Math.round(18 + Math.sin(a) * r),
-          long ? P.UI_GOLD[4] : P.UI_GOLD[3],
-          0.14 + fade * 0.46,
-        );
+      const len = long ? 18 : 13;
+      for (let r = 6; r < len; r++) {
+        const t = (r - 6) / (len - 6);
+        const half = Math.max(0, 1.6 * (1 - t));
+        for (let o = -half; o <= half; o += 0.5) {
+          s.px(
+            Math.round(cx + Math.cos(a) * r - Math.sin(a) * o),
+            Math.round(cy + Math.sin(a) * r + Math.cos(a) * o),
+            long ? P.UI_GOLD[4] : P.UI_GOLD[3],
+            0.16 + (1 - t) * 0.5,
+          );
+        }
       }
     }
     rays.push(s);
@@ -1221,6 +1235,46 @@ function assemble(b: ArtBuild, base: string, w: number, h: number): Surface {
   return out;
 }
 
+/**
+ * Every 9-slice, assembled at a size the runtime would actually ask for, at 1x
+ * beside 3x. Individual slices tell you nothing — a panel is only right or
+ * wrong once it is built.
+ */
+function panelSheet(b: ArtBuild, body: BuiltFont): Surface {
+  const sets: Array<[string, number, number]> = [
+    ['ui/panel', 120, 54],
+    ['ui/panelDark', 120, 54],
+    ['ui/panelEcho', 120, 54],
+    ['ui/dialogue', 150, 46],
+    ['ui/name_tag', 52, 15],
+    ['ui/tab_active', 44, 16],
+    ['ui/tab_inactive', 44, 15],
+    ['ui/insight_frame', 120, 60],
+    ['ui/clue_card', 44, 26],
+    ['ui/vote_bubble', 52, 22],
+    ['ui/key_prompt', 30, 13],
+    ['ui/minimap_frame', 56, 44],
+  ];
+  const built = sets.map(([n, w, h]) => ({ n, s: assemble(b, n, w, h) }));
+  const rowH = Math.max(...built.map((p) => p.s.h)) * 3 + 14;
+  const colW = Math.max(...built.map((p) => p.s.w)) * 4 + 24;
+  const out = new Surface(colW * 3, rowH * Math.ceil(built.length / 3), P.UI_PANEL[0]);
+  built.forEach((p, i) => {
+    const ox = (i % 3) * colW + 8;
+    const oy = Math.floor(i / 3) * rowH + 10;
+    drawText(out, body, ox, oy - 9, p.n, P.UI_VELLUM[2]);
+    out.blit(p.s, ox, oy);
+    for (let y = 0; y < p.s.h; y++) for (let x = 0; x < p.s.w; x++) {
+      const c = p.s.get(x, y);
+      if (c[3] === 0) continue;
+      for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+        out.px(ox + p.s.w + 6 + x * 3 + dx, oy + y * 3 + dy, c);
+      }
+    }
+  });
+  return out;
+}
+
 /** A 480x270 dress rehearsal: real panels, real type, at 1x. */
 function uiMock(b: ArtBuild, body: BuiltFont, display: BuiltFont): Surface {
   const s = new Surface(480, 270, P.GRASS[2]);
@@ -1237,14 +1291,14 @@ function uiMock(b: ArtBuild, body: BuiltFont, display: BuiltFont): Surface {
   s.blit(assemble(b, 'ui/tab_active', 46, 16), 16, 28);
   s.blit(assemble(b, 'ui/tab_inactive', 46, 14), 64, 30);
   s.blit(assemble(b, 'ui/tab_inactive', 46, 14), 112, 30);
-  drawTextCentered(s, body, 39, 33, 'QUESTS', P.UI_VELLUM[4]);
-  drawTextCentered(s, body, 87, 35, 'PEOPLE', P.UI_VELLUM[1]);
-  drawTextCentered(s, body, 135, 35, 'MAP', P.UI_VELLUM[1]);
+  drawTextCentered(s, body, 39, 34, 'QUESTS', P.UI_INK);
+  drawTextCentered(s, body, 87, 35, 'PEOPLE', P.UI_VELLUM[0]);
+  drawTextCentered(s, body, 135, 35, 'MAP', P.UI_VELLUM[0]);
   sprite('ui/divider', 20, 60);
   const rows = ['The Bell and the Cat', 'The Mixed-Up Delivery', 'The Lantern Trial'];
   rows.forEach((t, i) => {
     sprite(i === 0 ? 'ui/checkbox_on' : 'ui/checkbox_off', 18, 68 + i * 16);
-    drawText(s, body, 31, 71 + i * 16, t, i === 0 ? P.UI_VELLUM[1] : P.UI_VELLUM[4]);
+    drawText(s, body, 31, 71 + i * 16, t, i === 0 ? P.UI_VELLUM[2] : P.UI_VELLUM[4]);
   });
   sprite('ui/bullet', 19, 120);
   drawText(s, body, 28, 120, 'Pip is afraid of the bell.', P.UI_VELLUM[3]);
@@ -1286,28 +1340,34 @@ function uiMock(b: ArtBuild, body: BuiltFont, display: BuiltFont): Surface {
   sprite('ui/objective_pin', 436, 44);
 
   // Dialogue.
-  s.blit(assemble(b, 'ui/dialogue', 400, 60), 40, 198);
-  sprite('ui/dialogue_tail_l', 76, 256);
-  s.blit(assemble(b, 'ui/name_tag', 44, 14), 48, 190);
-  drawTextCentered(s, body, 70, 193, 'SERA', P.UI_GOLD[3]);
-  drawText(s, body, 52, 210, 'The bell wasn’t frightening him.', P.UI_INK);
-  drawText(s, body, 52, 222, 'Somewhere along the way he learned what it', P.UI_INK);
-  drawText(s, body, 52, 234, 'meant — and now he braces every time.', P.UI_INK);
-  sprite('ui/advance_arrow_0', 424, 240);
+  s.blit(assemble(b, 'ui/dialogue', 400, 58), 40, 196);
+  sprite('ui/dialogue_tail_l', 74, 252);
+  s.blit(assemble(b, 'ui/name_tag', 44, 14), 48, 188);
+  drawTextCentered(s, body, 70, 191, 'SERA', P.UI_GOLD[3]);
+  drawText(s, body, 52, 206, 'The bell wasn’t frightening him.', P.UI_INK);
+  drawText(s, body, 52, 218, 'Somewhere along the way he learned what it', P.UI_INK);
+  drawText(s, body, 52, 230, 'meant — and now he braces every time.', P.UI_INK);
+  sprite('ui/advance_arrow_0', 422, 236);
 
-  // Vote bubbles + key prompts.
-  s.blit(assemble(b, 'ui/vote_bubble', 40, 20), 246, 168);
-  sprite('ui/vote_marker_b', 250, 170);
-  drawText(s, body, 266, 175, 'B!', P.UI_INK);
-  s.blit(assemble(b, 'ui/key_prompt', 16, 13), 8, 248);
-  sprite('ui/key_e', 13, 251);
-  drawText(s, body, 27, 250, 'talk', P.FONT_LIGHT);
-  s.blit(assemble(b, 'ui/key_prompt', 28, 13), 52, 248);
-  sprite('ui/key_esc', 57, 251);
-  drawText(s, body, 83, 250, 'back', P.FONT_LIGHT);
-  sprite('ui/quest_new', 200, 60);
-  sprite('ui/quest_done', 200, 80);
-  sprite('ui/cursor', 214, 60);
+  // Vote bubble + key prompts.
+  s.blit(assemble(b, 'ui/vote_bubble', 46, 20), 246, 168);
+  sprite('ui/vote_marker_b', 249, 170);
+  drawText(s, body, 266, 175, 'That one!', P.UI_INK);
+  const prompt = (x: number, glyph: string, word: string) => {
+    const g = b.sprites.find((q) => q.name === glyph)!.s;
+    const w = 10 + g.w;
+    s.blit(assemble(b, 'ui/key_prompt', w, 13), x, 250);
+    s.blit(g, x + 5, 253);
+    drawText(s, body, x + w + 3, 252, word, P.FONT_LIGHT);
+    return x + w + 6 + textWidth(body, word);
+  };
+  let px = 8;
+  px = prompt(px, 'ui/key_e', 'talk');
+  px = prompt(px, 'ui/key_esc', 'back');
+  prompt(px, 'ui/key_wasd', 'move');
+  sprite('ui/quest_new', 202, 58);
+  sprite('ui/quest_done', 202, 78);
+  sprite('ui/cursor', 216, 60);
   return s;
 }
 
@@ -1338,6 +1398,7 @@ export function registerUI(b: ArtBuild): void {
       writePNG(join(PREVIEW, 'font_ingame.png'), buildInGameMock(body, display));
       writePNG(join(PREVIEW, 'ui_sheet_4x.png'), uiContactSheet(b, 4, '#161327'));
       writePNG(join(PREVIEW, 'ui_sheet_1x.png'), uiContactSheet(b, 1, '#161327'));
+      writePNG(join(PREVIEW, 'ui_panels.png'), panelSheet(b, body));
       writePNG(join(PREVIEW, 'ui_mock_1x.png'), uiMock(b, body, display));
     } catch { /* an inspection sheet must never break the build */ }
   });
