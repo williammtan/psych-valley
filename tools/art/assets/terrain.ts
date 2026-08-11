@@ -162,18 +162,21 @@ function pebbles(seed: number, n: number): Surface {
 function pathPainter(ramp: readonly string[], seed: number, style: 'dirt' | 'flag' | 'cobble') {
   return (coverage: Surface, _mask: number, r: ReturnType<typeof rng>): Surface => {
     const s = new Surface(TILE, TILE);
-    const n1 = valueNoise(seed);
-    const n2 = valueNoise(seed + 313);
+    const n1 = periodicNoise(seed, 4);
+    const n2 = periodicNoise(seed + 313, 2);
+    const vals: number[] = [];
+    const cells: Array<[number, number]> = [];
     for (let y = 0; y < TILE; y++) {
       for (let x = 0; x < TILE; x++) {
         if (coverage.alphaAt(x, y) === 0) continue;
-        const v = n1(x, y, 3.4) * 0.6 + n2(x, y, 1.4) * 0.4;
-        let c = ramp[2];
-        if (v > 0.70) c = ramp[3];
-        else if (v > 0.86) c = ramp[4];
-        else if (v < 0.28) c = ramp[1];
-        s.px(x, y, c);
+        vals.push(n1(x, y, 4) * 0.6 + n2(x, y, 2) * 0.4);
+        cells.push([x, y]);
       }
+    }
+    if (vals.length) {
+      const bands = rankQuantise(vals, [8, 84, 8]);
+      const shades = [ramp[1], ramp[2], ramp[3]];
+      cells.forEach(([x, y], i) => s.px(x, y, shades[bands[i]]));
     }
 
     if (style === 'flag') {
@@ -236,8 +239,7 @@ function pathPainter(ramp: readonly string[], seed: number, style: 'dirt' | 'fla
       }
 
       // Wear: grit in the joints, a little polish on the stone faces.
-      speckle(s, r, 0, 0, TILE, TILE, ramp[1], 8, 0.35);
-      speckle(s, r, 0, 0, TILE, TILE, ramp[3], 4, 0.3);
+      speckle(s, r, 0, 0, TILE, TILE, ramp[1], 4, 0.3);
     } else if (style === 'cobble') {
       const r2 = rng(seed + 17);
       for (let cy = 1; cy < TILE; cy += 4) {
@@ -274,10 +276,9 @@ function pathPainter(ramp: readonly string[], seed: number, style: 'dirt' | 'fla
           else if (d >= 4) s.px(x, y, ramp[3], 0.28);
         }
       }
-      speckle(s, r, 0, 0, TILE, TILE, ramp[0], 6, 0.45);
-      speckle(s, r, 0, 0, TILE, TILE, ramp[4], 4, 0.4);
+      speckle(s, r, 0, 0, TILE, TILE, ramp[0], 3, 0.35);
       // A couple of half-buried stones per tile.
-      for (let i = 0; i < r.int(0, 2); i++) {
+      for (let i = 0; i < r.int(0, 1); i++) {
         const sx = r.int(1, TILE - 3), sy = r.int(1, TILE - 2);
         if (coverage.alphaAt(sx, sy) === 0) continue;
         s.px(sx, sy, ramp[4], 0.8);

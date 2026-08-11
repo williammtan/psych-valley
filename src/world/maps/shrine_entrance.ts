@@ -34,7 +34,7 @@ import { hasMap } from '../registry';
 import type { LightDef, MapDef, PropPlacement, Zone } from '../types';
 import {
   SHRINE_LEGEND, SHRINE_OBJECTS, brazierLight, crystalLight, doorLight, echoLight,
-  doorNorth, doorSouth, shell, southZoneY, type Rect,
+  doorNorth, doorSouth, roomFill, shell, southZoneY, type Rect,
 } from './shrine_common';
 
 const W = 30;
@@ -148,6 +148,7 @@ function build(): MapDef {
   // A chest by the west wall — the last thing you find before it gets serious.
   props.push({ key: 'prop/shrine/chest_closed', x: 4.6, y: 20.6, spec: { solid: [22, 10] }, id: 'chest' });
 
+  lights.push(roomFill(14.5, 9, 260, 0.46));
   lights.push(doorLight(14.5, HALL.y + HALL.h - 0.4));
   lights.push(doorLight(14.5, SHAFT.top - 0.4));
 
@@ -171,7 +172,7 @@ function build(): MapDef {
     music: 'shrine',
     indoor: false,
     tint: 0x0d1030,
-    darkness: 0.44,
+    darkness: 0.2,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

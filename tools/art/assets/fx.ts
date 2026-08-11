@@ -1417,28 +1417,70 @@ function vignette(): Surface {
   return s;
 }
 
-/** Radial light sprite, drawn white; the runtime tints and adds it. */
+/**
+ * Radial light sprite, drawn white; the runtime tints and adds it.
+ *
+ * WHY THIS IS NOT THE ORDERED-DITHER VERSION ANY MORE
+ * ───────────────────────────────────────────────────
+ * The previous build quantised `pow(1-d, 2)` into five bands and broke each
+ * band edge with the shared 4x4 Bayer matrix. Two things went wrong with that,
+ * and together they were the loudest "unfinished" tell in the whole dungeon:
+ *
+ *   1. THE KITE. The faintest band's threshold sat at 0.035, which `pow(1-d,2)`
+ *      crosses at d = 0.81 — so the sprite stopped dead well inside its own
+ *      radius, and the Bayer matrix's diagonal structure turned that circular
+ *      stop into a hard-edged diamond. Every brazier stamped the same kite on
+ *      the floor.
+ *   2. THE GRID. A 4x4 ordered matrix has a four-pixel period, and every light
+ *      in the game is placed at a tile centre — an exact multiple of 16 plus 8.
+ *      So the matrix landed in the same phase under every light and the dither
+ *      tiled with the 16 px tile grid, which is precisely the pattern a player
+ *      reads as "texture not finished".
+ *
+ * The replacement keeps the house rule — a fade made of pixels, never a smooth
+ * alpha ramp — but fixes both causes:
+ *
+ *   - the falloff is smoothstep-shouldered and reaches exactly zero at the
+ *     sprite's edge, so there is no cutoff contour to have a shape at all;
+ *   - coverage is quantised into twelve steps rather than five, so the bands
+ *     are below the eye's contour threshold before dithering even starts;
+ *   - the dither threshold is a per-pixel hash of the coordinate. Its period is
+ *     the whole sprite, not four pixels, so it cannot align with anything —
+ *     and its amplitude rises toward the rim, so the core stays solid and only
+ *     the outer edge dissolves.
+ */
 function softLight(size: number): Surface {
   const s = new Surface(size, size);
-  const F = field(size, size);
   const c = size / 2 - 0.5;
   const rad = size / 2;
+  const STEPS = 14;
+  const hash = (x: number, y: number) => {
+    let n = (x * 374761393 + y * 668265263 + size * 2246822519) | 0;
+    n = (n ^ (n >>> 13)) * 1274126177;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  };
+  // Grey value of each LIGHT_RAMP step, so a target intensity can be expressed
+  // as (the dimmest ramp colour that can carry it) x (a coverage alpha). That
+  // keeps the palette honest — the sprite is still made of ramp colours — while
+  // giving fourteen usable levels instead of five, which is what kills banding.
+  const greys = P.LIGHT_RAMP.map((h) => P.hex(h)[1]);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const d = Math.hypot(x + 0.5 - c, y + 0.5 - c) / rad;
       if (d >= 1) continue;
-      fMax(F, x, y, Math.pow(1 - d, 2.0));
+      const t = 1 - d;
+      const v = Math.pow(t, 1.7);            // broad shoulder, zero at the rim
+      // dither amplitude rises outward: a solid core, an edge that dissolves
+      const amp = 0.3 + d * d * 1.15;
+      const lvl = Math.round(v * STEPS + (hash(x, y) - 0.5) * amp);
+      if (lvl <= 0) continue;
+      const target = (Math.min(STEPS, lvl) / STEPS) * 255;
+      let k = 0;
+      while (k < greys.length - 1 && greys[k] < target) k++;
+      s.px(x, y, P.LIGHT_RAMP[k], Math.min(1, target / greys[k]));
     }
   }
-  // Every step dithers into the next: an undithered falloff bands into visible
-  // rings once the runtime tints and adds it.
-  return paint(s, F, [
-    [0.80, P.LIGHT_RAMP[4], 0.10],
-    [0.52, P.LIGHT_RAMP[3], 0.14],
-    [0.29, P.LIGHT_RAMP[2], 0.13],
-    [0.13, P.LIGHT_RAMP[1], 0.11],
-    [0.035, P.LIGHT_RAMP[0], 0.07],
-  ]);
+  return s;
 }
 
 /** Contact shadow: the thing that stops sprites reading as stickers. */

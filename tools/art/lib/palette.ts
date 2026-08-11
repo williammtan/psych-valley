@@ -42,7 +42,7 @@ export const SHADOW_CAST = '#241d3355'; // drop shadow under entities
 // ── Terrain: town ─────────────────────────────────────────────────────────
 export const GRASS: Ramp = ['#173d20', '#1e5629', '#2a7d38', '#3f9e49', '#5ebd60'];
 export const GRASS_DRY: Ramp = ['#22521f', '#2f7228', '#459436', '#5fb349', '#80cd66'];
-export const DIRT: Ramp = ['#5a3a22', '#7d5330', '#a1703f', '#c08f56', '#dcb078'];
+export const DIRT: Ramp = ['#7a5330', '#9d7044', '#c08f56', '#d8ab72', '#eec698'];
 export const PATH_STONE: Ramp = ['#6b563c', '#8e7553', '#b09675', '#cbb495', '#e2d0b4'];
 export const COBBLE: Ramp = ['#5c5450', '#7d7369', '#9d9284', '#bab0a0', '#d6cdbc'];
 export const SAND: Ramp = ['#977147', '#bd9560', '#dbb47e', '#efd2a4', '#fbe9cc'];
@@ -475,7 +475,7 @@ export const SHRINE_INK = '#08070f';
  * clear the floor's brightest pixel by a factor of three, which is the "rim"
  * half of the contract.
  */
-export const SHRINE_MARBLE: Ramp = ['#3d3a58', '#615d85', '#938fb8', '#c0bcdc', '#eeebfa'];
+export const SHRINE_MARBLE: Ramp = ['#4d4a6b', '#767295', '#a29ec4', '#cdc9e4', '#f4f2fd'];
 
 /** Live brass: fittings on things that still work. SHRINE_BRASS is dead metal. */
 export const SHRINE_BRASS_LIT: Ramp = ['#5e4415', '#906c22', '#c69a3b', '#ecc86e', '#fff2c4'];

@@ -159,27 +159,64 @@ export function northWallY(f: Rect = ROOM_FLOOR): number { return f.y - 1; }
 export function southWallY(f: Rect = ROOM_FLOOR): number { return f.y + f.h; }
 
 // ── lights ──────────────────────────────────────────────────────────────────
-// Every light in the shrine comes from an object the player can see. Nothing
-// is lit by ambience, because "where is the light coming from" is one of the
-// questions a dungeon room should always answer.
+//
+// THE BINARY
+// ──────────
+// The shrine's rooms used to sit at a median luminance of 30–59 with more than
+// half of every frame below L 32 — the band where human value discrimination is
+// at its worst — and out-of-bounds sat at L 21, which is inside the floor's own
+// range. So the whole screen was one dark field and nothing separated from
+// anything.
+//
+// The Stardew mine is *darker on average* than that and yet perfectly legible,
+// because it is not one field but two: 57% of the frame is true black
+// non-gameplay void and the playable 43% is warmly and properly lit. It is the
+// binary that carries the readability, never the average.
+//
+// So the shrine now runs both halves harder in opposite directions:
+//
+//   - `darkness` is roughly halved in every room, which lifts the playable
+//     floor out of the near-black band to a median around L 70–90;
+//   - out-of-bounds is painted in SHRINE_VOID (L ~4) rather than in a lit
+//     masonry cap, and a multiply layer cannot lift near-black, so lowering
+//     `darkness` makes the floor brighter WITHOUT making the void brighter.
+//     The gap between room and not-room widens as the room gets lighter.
+//
+// Every light still comes from an object the player can see, with one exception
+// that is declared rather than hidden: `roomFill`, the diffuse glow the Echo
+// growth itself gives off. It exists so the floor between the braziers is not
+// a value hole, and it is deliberately the coldest and flattest light in the
+// room so it never competes with a light that means something.
 
 export const SHRINE_AMBER = 0xffb937;
 export const SHRINE_CYAN = 0x8ce6e6;
 export const SHRINE_VIOLET = 0xa681e6;
+/** The Echo's own ambient glow. Cold, flat, and never used as a cue. */
+export const SHRINE_AMBIENT = 0x8a9ad8;
 
-export function brazierLight(x: number, y: number, radius = 62): LightDef {
-  return { x, y: y - 1, radius, color: SHRINE_AMBER, intensity: 0.62, flicker: 0.55 };
+export function brazierLight(x: number, y: number, radius = 78): LightDef {
+  return { x, y: y - 1, radius, color: SHRINE_AMBER, intensity: 0.66, flicker: 0.55 };
 }
 
-export function crystalLight(x: number, y: number, radius = 48): LightDef {
-  return { x, y: y - 1, radius, color: SHRINE_CYAN, intensity: 0.5, flicker: 0.16 };
+export function crystalLight(x: number, y: number, radius = 62): LightDef {
+  return { x, y: y - 1, radius, color: SHRINE_CYAN, intensity: 0.54, flicker: 0.16 };
 }
 
-export function echoLight(x: number, y: number, radius = 54): LightDef {
-  return { x, y, radius, color: SHRINE_VIOLET, intensity: 0.5, flicker: 0.22 };
+export function echoLight(x: number, y: number, radius = 66): LightDef {
+  return { x, y, radius, color: SHRINE_VIOLET, intensity: 0.52, flicker: 0.22 };
+}
+
+/**
+ * The room's diffuse floor. One per room, centred on the play space, sized to
+ * reach the walls — this is what raises the median off the floor of the
+ * histogram. It cannot brighten out-of-bounds because out-of-bounds is outside
+ * its radius and is near-black to begin with.
+ */
+export function roomFill(x: number, y: number, radius = 230, intensity = 0.5): LightDef {
+  return { x, y, radius, color: SHRINE_AMBIENT, intensity, flicker: 0 };
 }
 
 /** A door is always lit, so an exit is never something you have to hunt for. */
 export function doorLight(x: number, y: number): LightDef {
-  return { x, y, radius: 44, color: SHRINE_VIOLET, intensity: 0.42, flicker: 0.1 };
+  return { x, y, radius: 52, color: SHRINE_VIOLET, intensity: 0.46, flicker: 0.1 };
 }

@@ -33,7 +33,7 @@ import { hasMap, registerMap } from '../registry';
 import type { LightDef, MapDef, PropPlacement, Zone } from '../types';
 import {
   ROOM_FLOOR, ROOM_H, ROOM_W, SHRINE_LEGEND, SHRINE_OBJECTS, SHRINE_VIOLET,
-  brazierLight, crystalLight, doorLight, doorNorth, doorSouth, northZoneY, southZoneY,
+  brazierLight, crystalLight, doorLight, doorNorth, doorSouth, northZoneY, roomFill, southZoneY,
 } from './shrine_common';
 
 const F = ROOM_FLOOR;
@@ -136,7 +136,7 @@ function build(): MapDef {
   lights.push({ x: R1.plate.x, y: R1.plate.y, radius: 60, color: 0xffb937, intensity: 0.8, flicker: 0.1 });
   // The creature's end of the room needs enough light to watch it in. The whole
   // first half of this puzzle is the player standing still and looking.
-  lights.push({ x: 8, y: 7.6, radius: 128, color: 0x6c7bb8, intensity: 0.26, flicker: 0 });
+  lights.push(roomFill(15, 8.4, 245, 0.5));
 
   // Two braziers, at the two ends of the room's long axis.
   props.push({ key: 'prop/shrine/brazier_0', x: 4.5, y: 4.6, spec: { anim: 'shrine_brazier', solid: [14, 8] } });
@@ -180,7 +180,7 @@ function build(): MapDef {
     subtitle: 'the west chamber',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.42,
+    darkness: 0.18,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

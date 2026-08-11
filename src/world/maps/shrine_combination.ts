@@ -40,7 +40,7 @@ import { hasMap, registerMap } from '../registry';
 import type { LightDef, MapDef, PropPlacement, Zone } from '../types';
 import {
   ROOM_FLOOR, ROOM_H, ROOM_W, SHRINE_LEGEND, SHRINE_OBJECTS, SHRINE_VIOLET,
-  brazierLight, crystalLight, doorLight, doorNorth, doorSouth, northZoneY, southZoneY,
+  brazierLight, crystalLight, doorLight, doorNorth, doorSouth, northZoneY, roomFill, southZoneY,
 } from './shrine_common';
 
 const F = ROOM_FLOOR;
@@ -210,7 +210,7 @@ function build(): MapDef {
   }
   // A wash over the middle so the flock reads as four bodies rather than four
   // smudges. They are the piece of puzzle state the player has to count.
-  lights.push({ x: 14, y: 8.6, radius: 190, color: 0x7d8cc4, intensity: 0.38, flicker: 0 });
+  lights.push(roomFill(14.5, 8.6, 250, 0.5));
 
   lights.push(doorLight(R5.doorIn + 1, F.y - 0.6));
 
@@ -234,7 +234,7 @@ function build(): MapDef {
     subtitle: 'the last door',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.40,
+    darkness: 0.17,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

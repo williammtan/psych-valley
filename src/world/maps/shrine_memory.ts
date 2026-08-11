@@ -41,7 +41,7 @@ import type { Rune } from '@/systems/Puzzle';
 import type { LightDef, MapDef, PropPlacement, Zone } from '../types';
 import {
   ROOM_FLOOR, ROOM_H, ROOM_W, SHRINE_LEGEND, SHRINE_OBJECTS, SHRINE_VIOLET,
-  brazierLight, crystalLight, doorLight, doorNorth, doorSouth, northZoneY, southZoneY,
+  brazierLight, crystalLight, doorLight, doorNorth, doorSouth, northZoneY, roomFill, southZoneY,
 } from './shrine_common';
 
 const F = ROOM_FLOOR;
@@ -178,6 +178,11 @@ function build(): MapDef {
   props.push({ key: 'prop/shrine/broken_instrument_1', x: 8.6, y: 3.8, spec: { solid: [22, 10] } });
   props.push({ key: 'prop/shrine/broken_instrument_2', x: 20.6, y: 3.8, spec: { solid: [22, 10] } });
 
+  // The room's diffuse floor. Memory's cold-left / warm-right split is the
+  // design working — it only ever needed both halves lifted out of the
+  // near-black band so the split reads as temperature and not as darkness.
+  lights.push(roomFill(14.5, 8.4, 250, 0.48));
+
   lights.push(doorLight(R3.doorIn + 1, F.y - 0.6));
   lights.push(doorLight(DAMP.door + 1, F.y + F.h - 0.4));
   lights.push(doorLight(DRY.door + 1, F.y + F.h - 0.4));
@@ -202,7 +207,7 @@ function build(): MapDef {
     subtitle: 'the two ways down',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.42,
+    darkness: 0.18,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

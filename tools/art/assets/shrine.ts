@@ -140,13 +140,12 @@ function contact(s: Surface, cx: number, baseY: number, w: number, h = 4, alpha 
  * ground it was supposed to be darkening. A shadow that never gets darker than
  * the floor is not a shadow, it is a smudge, and the prop goes on floating.
  */
-function hardContact(s: Surface, cx: number, baseY: number, w: number, h = 5): void {
+function hardContact(s: Surface, cx: number, baseY: number, w: number, h = 4): void {
   const x0 = Math.round(cx - w / 2);
-  s.ellipse(x0, baseY - h + 1, w, h, INK, 0.9);
+  s.ellipse(x0, baseY - h + 1, w, h, INK, 0.92);
   s.ellipse(x0 + 1, baseY - h + 2, w - 2, h - 2, INK);
   // one dithered ring so the ellipse does not read as a painted-on decal
   for (let i = 0; i < w; i += 2) s.px(x0 + i, baseY - h, INK, 0.45);
-  for (let i = 1; i < w; i += 2) s.px(x0 + i, baseY + 1, INK, 0.4);
 }
 
 /**
@@ -179,7 +178,7 @@ function operable(
   fig.outline(INK, true);
   if (!shadow) return fig;
   const out = new Surface(fig.w, fig.h);
-  hardContact(out, shadow.cx, shadow.y, shadow.w, shadow.h ?? 5);
+  hardContact(out, shadow.cx, shadow.y, shadow.w, shadow.h ?? 4);
   out.blit(fig);
   return out;
 }
@@ -505,7 +504,13 @@ function floorTile(v: number): Surface {
   const r = rng(seed + 11);
   // Fine grain, not broad cloud: at a large noise scale the patches read as
   // smudges on the lens rather than as stone.
-  grain(s, 0, 0, TILE, TILE, FL, seed, [1, 2, 2], 2.8);
+  //
+  // Weighted to the two darkest usable steps on purpose. The floor is the
+  // reference value everything else in the room is judged against, so every
+  // point of luminance it gains is a point every interactive object has to gain
+  // twice over to stay three times brighter than it. Its brightness in play
+  // comes from the room's lights, not from its own pigment.
+  grain(s, 0, 0, TILE, TILE, FL, seed, [1, 1, 2], 2.8);
 
   // Slab joints: one horizontal, one vertical, both soft. A dungeon floor is
   // underfoot furniture; it does not get to have edges as strong as a wall's.
@@ -533,8 +538,8 @@ function floorTile(v: number): Surface {
     }
   }
 
-  speckle(s, r, 0, 0, TILE, TILE, FL[1], 5, 0.4);
-  speckle(s, r, 0, 0, TILE, TILE, FL[3], 3, 0.2);
+  speckle(s, r, 0, 0, TILE, TILE, FL[0], 5, 0.4);
+  speckle(s, r, 0, 0, TILE, TILE, FL[3], 2, 0.18);
   return s;
 }
 
@@ -613,10 +618,10 @@ function runePlateTile(g: Glyph, lit: boolean): Surface {
   s.ellipse(0, 1, TILE, TILE - 1, INK);
   // The plate itself. Two ramp steps plus a lit upper-left crescent, the same
   // way every other marble object in the dungeon is lit.
-  s.ellipse(1, 1, 14, 14, MB[1]);
-  s.ellipse(1, 1, 14, 13, MB[2]);
-  s.ellipse(2, 1, 12, 12, MB[3]);
-  s.ellipse(3, 2, 10, 9, MB[2]);
+  s.ellipse(1, 1, 14, 14, MB[2]);
+  s.ellipse(1, 1, 14, 13, MB[3]);
+  s.ellipse(2, 1, 12, 12, MB[4]);
+  s.ellipse(3, 2, 10, 9, MB[3]);
   s.ellipseOutline(1, 1, 14, 14, MB[4], 0.95);
   // and the shadowed lower-right quadrant of the bezel
   for (let y = 8; y < 15; y++) for (let x = 8; x < 15; x++) {
@@ -635,9 +640,9 @@ function runePlateTile(g: Glyph, lit: boolean): Surface {
     drawGlyph(s, g, 8, 8, 11, P.ECHO_RUNE, 1);
     drawGlyph(s, g, 8, 8, 11, P.ECHO_RUNE_CORE, 0.85, true);
   } else {
-    drawGlyph(s, g, 9, 9, 11, MB[4], 0.5);          // the groove's lit far lip
-    drawGlyph(s, g, 8, 8, 11, INK, 0.92);           // the groove
-    drawGlyph(s, g, 8, 8, 11, P.ECHO_RUNE_DIM, 0.55, true);
+    drawGlyph(s, g, 9, 9, 11, MB[4], 0.6);          // the groove's lit far lip
+    drawGlyph(s, g, 8, 8, 11, INK, 0.8);            // the groove
+    drawGlyph(s, g, 8, 8, 11, P.ECHO_RUNE_DIM, 0.75, true);
   }
   return s;
 }
@@ -1349,12 +1354,13 @@ function plate(down: boolean): Surface {
   } else {
     // socket: far inside wall dark, near inside wall catching the light — the
     // exact inverse of the raised bevel above, which is what sells "pressed"
-    s.ellipse(1, 5, 20, 13, P.OUTLINE, 0.9);
-    s.ellipse(2, 6, 18, 11, ST[0]);
+    s.ellipse(1, 5, 20, 13, ST[2], 0.9);
+    s.ellipse(2, 6, 18, 11, ST[1]);
     s.hline(5, 6, 12, P.OUTLINE);
     s.hline(5, 7, 12, P.OUTLINE, 0.7);
-    s.hline(5, 15, 12, ST[4], 0.85);
-    s.hline(5, 16, 12, ST[3], 0.6);
+    s.hline(5, 15, 12, ST[4], 0.95);
+    s.hline(5, 16, 12, ST[4], 0.7);
+    s.hline(5, 17, 12, ST[3], 0.5);
     halo(s, cx, 11, 11, P.ECHO_CYAN[2], 0.45, 2.0);
     s.ellipse(4, 8, 14, 8, ST[3]);
     s.ellipseOutline(4, 8, 14, 8, ST[4], 0.6);
@@ -1368,54 +1374,61 @@ function plate(down: boolean): Surface {
 
 // ── SWITCHES & LEVERS ──────────────────────────────────────────────────────
 
+/**
+ * The switch-node — the object that measured 1.02:1 against its own floor.
+ *
+ * It is now a marble post: a bezel head on a squat plinth, so it has a real
+ * silhouette from any distance, and the crystal in it only says *which state*
+ * it is in. Finding it must not depend on it being switched on.
+ */
 function switchProp(on: boolean): Surface {
-  const s = new Surface(16, 20);
-  contact(s, 8, 19, 13, 4, 0.34);
-  bevel(s, 2, 10, 12, 8, ST, 2);              // stone housing
-  s.hline(2, 10, 12, ST[4]);
-  s.rect(3, 8, 10, 3, BR[2]);                 // brass collar
-  s.hline(3, 8, 10, BR[4]);
-  s.hline(3, 10, 10, BR[0]);
+  const s = new Surface(18, 24);
+  bevel(s, 3, 15, 12, 7, ST, 2);              // plinth
+  s.hline(3, 15, 12, ST[4]);
+  s.hline(3, 21, 12, ST[0]);
+  bevel(s, 4, 12, 10, 4, ST, 3);              // neck
+  s.rect(3, 10, 12, 3, BR[2]);                // brass collar
+  s.hline(3, 10, 12, BR[4]);
+  s.hline(3, 12, 12, BR[0]);
+  // The bezel. Always pale, always the same shape, in both states.
+  s.ellipse(2, 1, 14, 12, ST[4]);
+  s.ellipse(3, 2, 12, 10, ST[3]);
+  s.ellipseOutline(2, 1, 14, 12, P.OUTLINE, 0.85);
   if (on) {
-    halo(s, 8, 6, 9, P.ECHO_CYAN[3], 0.42, 2.2);
-    s.ellipse(3, 1, 10, 9, P.ECHO_CYAN[2]);
-    s.ellipse(4, 2, 8, 6, P.ECHO_CYAN[3]);
-    s.ellipse(5, 3, 5, 4, P.ECHO_RUNE);
-    s.px(7, 4, P.ECHO_RUNE_CORE); s.px(8, 4, P.ECHO_RUNE_CORE);
+    halo(s, 9, 7, 10, P.ECHO_CYAN[3], 0.45, 2.2);
+    s.ellipse(4, 3, 10, 8, P.ECHO_CYAN[2]);
+    s.ellipse(5, 4, 8, 6, P.ECHO_CYAN[3]);
+    s.ellipse(6, 5, 6, 4, P.ECHO_RUNE);
+    s.px(8, 6, P.ECHO_RUNE_CORE); s.px(9, 6, P.ECHO_RUNE_CORE);
   } else {
-    // Unlit still has to be *findable*: a bright stone bezel around a dead
-    // crystal, rather than a dark lump on a dark floor.
-    s.ellipse(2, 1, 12, 11, ST[4]);
-    s.ellipse(3, 2, 10, 9, ST[2]);
-    s.ellipseOutline(2, 1, 12, 11, P.OUTLINE, 0.8);
-    s.ellipse(4, 3, 8, 6, TR[0]);
-    s.ellipseOutline(4, 3, 8, 6, TR[2], 0.7);
-    s.px(6, 5, TR[1]); s.px(9, 6, TR[1], 0.6);
-    s.hline(4, 10, 8, P.OUTLINE, 0.5);
+    s.ellipse(4, 3, 10, 8, TR[0]);
+    s.ellipseOutline(4, 3, 10, 8, TR[2], 0.8);
+    s.px(6, 5, TR[1]); s.px(10, 7, TR[1], 0.6);
+    s.hline(5, 11, 8, P.OUTLINE, 0.5);
   }
-  return s;
+  return operable(s, { cx: 9, y: 23, w: 14 });
 }
 
 function lever(right: boolean): Surface {
-  const s = new Surface(16, 24);
-  contact(s, 8, 23, 14, 4, 0.34);
-  bevel(s, 1, 14, 14, 8, ST, 2);
-  s.hline(1, 14, 14, ST[4]);
+  const s = new Surface(18, 26);
+  bevel(s, 2, 16, 14, 8, ST, 2);
+  s.hline(2, 16, 14, ST[4]);
+  s.hline(2, 23, 14, ST[0]);
   // the slot the handle travels in, so the two positions are legible as a pair
-  s.rect(3, 15, 10, 3, P.OUTLINE, 0.75);
-  s.hline(3, 18, 10, ST[3], 0.4);
-  const litX = right ? 10 : 4;
-  halo(s, litX + 1, 16, 5, right ? P.ECHO_CYAN[3] : P.ECHO_VIOLET[2], right ? 0.5 : 0.2, 2.2);
-  s.rect(litX, 15, 3, 3, right ? P.ECHO_RUNE : P.ECHO_VIOLET[1]);
+  s.rect(4, 17, 10, 3, P.OUTLINE, 0.8);
+  s.hline(4, 20, 10, ST[4], 0.5);
+  const litX = right ? 11 : 5;
+  halo(s, litX + 1, 18, 5, right ? P.ECHO_CYAN[3] : P.ECHO_VIOLET[2], right ? 0.5 : 0.2, 2.2);
+  s.rect(litX, 17, 3, 3, right ? P.ECHO_RUNE : P.ECHO_VIOLET[1]);
   // handle
-  const x0 = right ? 11 : 5, x1 = right ? 6 : 10;
-  s.line(x0, 15, x1, 4, BR[1]);
-  s.line(x0 + 1, 15, x1 + 1, 4, BR[3]);
-  s.line(x0 + 2, 15, x1 + 2, 4, BR[0]);
-  s.ellipse(x1 - 1, 1, 6, 6, BR[2]);
-  s.ellipse(x1, 2, 4, 3, BR[4]);
-  s.ellipseOutline(x1 - 1, 1, 6, 6, P.OUTLINE, 0.6);
-  return s;
+  const x0 = right ? 12 : 6, x1 = right ? 7 : 11;
+  s.line(x0, 17, x1, 5, BR[1]);
+  s.line(x0 + 1, 17, x1 + 1, 5, BR[3]);
+  s.line(x0 + 2, 17, x1 + 2, 5, BR[0]);
+  s.ellipse(x1 - 1, 2, 6, 6, BR[2]);
+  s.ellipse(x1, 3, 4, 3, BR[4]);
+  s.ellipseOutline(x1 - 1, 2, 6, 6, P.OUTLINE, 0.6);
+  return operable(s, { cx: 9, y: 25, w: 15 });
 }
 
 // ── STATUES ────────────────────────────────────────────────────────────────
@@ -1533,28 +1546,32 @@ function statue(dir: 'n' | 's' | 'e', mode: 'plain' | 'lit' | 'leader'): Surface
     fig.rect(hx + 4, 2, 2, 2, P.ECHO_GLOW);
   }
 
+  // The statue is an operable object — its facing IS the puzzle state — so it
+  // is marble, outlined and rim-lit like everything else the player can act on.
+  const body = operable(fig, null);
+  if (lit) {
+    const gc = mode === 'leader' ? P.ECHO_GLOW : P.ECHO_RUNE;
+    for (const [ex, ey] of eyes) {
+      body.rect(Math.round(ex - 0.5), Math.round(ey - 0.5), 2, 2, gc);
+      body.px(Math.round(ex), Math.round(ey), P.ECHO_RUNE_CORE);
+    }
+    if (dir === 'n') {
+      body.vline(hx + 4, 3, 7, gc, 0.7);                   // light in the back seam
+      body.vline(11, 15, 12, gc, 0.45);
+    }
+    if (dir === 's') { body.ellipse(10, 18, 4, 4, gc); body.px(11, 19, P.ECHO_RUNE_CORE); }
+    if (dir === 'e') { body.vline(16, 16, 7, gc); body.px(16, 19, P.ECHO_RUNE_CORE); }
+  }
+
   const out = new Surface(24, 36);
-  contact(out, 12, 35, 20, 5, 0.36);
+  hardContact(out, 12, 35, 20, 5);
   if (lit) {
     const gc = mode === 'leader' ? P.ECHO_GLOW : P.ECHO_RUNE;
     if (eyes.length) for (const [ex, ey] of eyes) halo(out, ex, ey, 7, gc, 0.5, 2.2);
     else halo(out, hx + 5, 5, 10, gc, 0.34, 2.4);          // facing away: rim bloom
     halo(out, 12, 18, 8, gc, 0.22, 2.6);
   }
-  out.blit(fig);
-  if (lit) {
-    const gc = mode === 'leader' ? P.ECHO_GLOW : P.ECHO_RUNE;
-    for (const [ex, ey] of eyes) {
-      out.rect(Math.round(ex - 0.5), Math.round(ey - 0.5), 2, 2, gc);
-      out.px(Math.round(ex), Math.round(ey), P.ECHO_RUNE_CORE);
-    }
-    if (dir === 'n') {
-      out.vline(hx + 4, 3, 7, gc, 0.7);                    // light in the back seam
-      out.vline(11, 15, 12, gc, 0.45);
-    }
-    if (dir === 's') { out.ellipse(10, 18, 4, 4, gc); out.px(11, 19, P.ECHO_RUNE_CORE); }
-    if (dir === 'e') { out.vline(16, 16, 7, gc); out.px(16, 19, P.ECHO_RUNE_CORE); }
-  }
+  out.blit(body);
   return out;
 }
 
@@ -1625,24 +1642,29 @@ function pillar(v: number): Surface {
 }
 
 function brazier(frame: number): Surface {
-  const s = new Surface(22, 32);
   const r = rng(7200 + frame * 17);
-  contact(s, 11, 31, 18, 5, 0.36);
-  halo(s, 11, 28, 12, P.ECHO_FLAME[2], 0.16, 2.6);        // light pooling on the floor
-  // tripod
+  // The fixture is the operable object; the flame is light and is composited
+  // over it afterwards so the contract's outline never runs around the fire.
+  const fig = new Surface(22, 32);
   for (const [x0, x1] of [[4, 2], [11, 11], [17, 19]] as const) {
-    s.line(x0, 18, x1, 29, BR[1]);
-    s.line(x0 + 1, 18, x1 + 1, 29, BR[3]);
-    s.px(x1, 29, BR[0]);
+    fig.line(x0, 18, x1, 29, BR[1]);
+    fig.line(x0 + 1, 18, x1 + 1, 29, BR[3]);
+    fig.px(x1, 29, BR[0]);
   }
-  s.ellipse(6, 27, 10, 3, BR[1]);
-  // bowl
-  s.ellipse(1, 12, 20, 10, BR[1]);
-  s.ellipse(1, 12, 20, 8, BR[2]);
-  s.ellipseOutline(1, 12, 20, 10, P.OUTLINE, 0.6);
-  s.ellipse(3, 13, 16, 5, BR[0]);
-  s.hline(2, 12, 18, BR[4], 0.9);
-  s.px(4, 16, BR[3]); s.px(16, 17, BR[0]);
+  fig.ellipse(6, 27, 10, 3, BR[2]);
+  fig.ellipse(1, 12, 20, 10, BR[2]);
+  fig.ellipse(1, 12, 20, 8, BR[3]);
+  fig.ellipseOutline(1, 12, 20, 10, P.OUTLINE, 0.6);
+  fig.ellipse(3, 13, 16, 5, BR[1]);
+  fig.hline(2, 12, 18, BR[4], 0.95);
+  fig.hline(2, 13, 18, BR[4], 0.5);
+  fig.px(4, 16, BR[4]); fig.px(16, 17, BR[1]);
+  const body = operable(fig, null);
+
+  const s = new Surface(22, 32);
+  hardContact(s, 11, 31, 18, 5);
+  halo(s, 11, 28, 12, P.ECHO_FLAME[2], 0.16, 2.6);        // light pooling on the floor
+  s.blit(body);
   // flame
   const sway = [0, 1, 0, -1][frame];
   const hgt = [10, 12, 11, 9][frame];
@@ -1662,47 +1684,57 @@ function brazier(frame: number): Surface {
 }
 
 function crystal(frame: number): Surface {
-  const s = new Surface(18, 26);
   const pulse = [0, 1, 2, 1][frame];
-  contact(s, 9, 25, 14, 4, 0.34);
-  halo(s, 9, 14, 10 + pulse * 2, P.ECHO_CYAN[3], 0.22 + pulse * 0.08, 2.3);
-  // rock cradle
-  s.ellipse(2, 19, 14, 6, ST[1]);
-  s.ellipse(3, 19, 12, 4, ST[2]);
-  s.ellipseOutline(2, 19, 14, 6, P.OUTLINE, 0.6);
+  const fig = new Surface(18, 26);
+  // dressed cradle — a crystal in this dungeon is always set in a cut socket,
+  // never simply growing out of the flagstone
+  fig.ellipse(1, 18, 16, 7, ST[2]);
+  fig.ellipse(2, 18, 14, 5, ST[3]);
+  fig.ellipse(3, 19, 12, 3, ST[4]);
+  fig.ellipseOutline(1, 18, 16, 7, P.OUTLINE, 0.7);
   const shard = (x: number, top: number, w: number, bot: number, tone: number) => {
-    s.poly([[x, top], [x + w, top + 3], [x + w - 1, bot], [x + 1, bot]], P.ECHO_CYAN[tone]);
-    s.line(x + 1, top + 2, x + 1, bot - 1, P.ECHO_CYAN[Math.min(4, tone + 1)]);
-    s.line(x + w - 1, top + 4, x + w - 1, bot - 1, P.ECHO_CYAN[Math.max(0, tone - 1)]);
-    s.px(x, top, P.ECHO_RUNE);
+    fig.poly([[x, top], [x + w, top + 3], [x + w - 1, bot], [x + 1, bot]], P.ECHO_CYAN[tone]);
+    fig.line(x + 1, top + 2, x + 1, bot - 1, P.ECHO_CYAN[Math.min(4, tone + 1)]);
+    fig.line(x + w - 1, top + 4, x + w - 1, bot - 1, P.ECHO_CYAN[Math.max(0, tone - 1)]);
+    fig.px(x, top, P.ECHO_RUNE);
   };
-  shard(3, 12, 4, 21, 1);
-  shard(11, 10, 4, 21, 1);
-  shard(6, 4, 6, 22, 2);
-  s.vline(8, 8, 12, P.ECHO_RUNE, 0.6 + pulse * 0.15);
-  s.px(8, 6, P.ECHO_RUNE_CORE, 0.7 + pulse * 0.1);
-  s.px(9, 7, P.ECHO_RUNE_CORE, 0.5);
-  s.outline(P.OUTLINE);
+  shard(3, 12, 4, 20, 2);
+  shard(11, 10, 4, 20, 2);
+  shard(6, 3, 6, 21, 3);
+  fig.vline(8, 7, 13, P.ECHO_RUNE, 0.7 + pulse * 0.12);
+  fig.vline(9, 9, 10, P.ECHO_RUNE, 0.4);
+  fig.px(8, 5, P.ECHO_RUNE_CORE, 0.8 + pulse * 0.07);
+  fig.px(9, 6, P.ECHO_RUNE_CORE, 0.6);
+  const body = operable(fig, null);
+
+  const s = new Surface(18, 26);
+  hardContact(s, 9, 25, 14, 4);
+  halo(s, 9, 14, 10 + pulse * 2, P.ECHO_CYAN[3], 0.22 + pulse * 0.08, 2.3);
+  s.blit(body);
   return s;
 }
 
 function runePillar(g: Glyph, lit: boolean): Surface {
-  const s = new Surface(18, 38);
-  contact(s, 9, 37, 16, 5, 0.36);
-  bevel(s, 1, 31, 16, 6, ST, 2);                 // base
-  s.poly([[3, 4], [14, 4], [15, 32], [2, 32]], ST[2]);
-  s.poly([[3, 4], [8, 4], [8, 32], [2, 32]], ST[3]);
-  s.poly([[12, 5], [14, 4], [15, 32], [12, 32]], ST[1]);
-  s.ellipse(3, 1, 12, 7, ST[3]);                 // rounded head
-  s.ellipse(4, 2, 10, 5, ST[2]);
-  s.outline(P.OUTLINE);
+  const fig = new Surface(18, 38);
+  bevel(fig, 1, 31, 16, 6, ST, 3);               // base
+  fig.poly([[3, 4], [14, 4], [15, 32], [2, 32]], ST[3]);
+  fig.poly([[3, 4], [8, 4], [8, 32], [2, 32]], ST[4]);
+  fig.poly([[12, 5], [14, 4], [15, 32], [12, 32]], ST[2]);
+  fig.ellipse(3, 1, 12, 7, ST[4]);               // rounded head
+  fig.ellipse(4, 2, 10, 5, ST[3]);
+  fig.outline(P.OUTLINE);
   // recessed panel
-  s.rect(4, 10, 10, 14, ST[1]);
-  s.hline(4, 10, 10, P.OUTLINE, 0.7);
-  s.vline(4, 10, 14, P.OUTLINE, 0.5);
-  s.hline(4, 23, 10, ST[3], 0.5);
-  glyphPlate(s, g, 9, 17, 11, lit);
-  if (lit) halo(s, 9, 34, 11, P.ECHO_CYAN[2], 0.2, 2.6);
+  fig.rect(4, 10, 10, 14, ST[1]);
+  fig.hline(4, 10, 10, P.OUTLINE, 0.7);
+  fig.vline(4, 10, 14, P.OUTLINE, 0.5);
+  fig.hline(4, 23, 10, ST[4], 0.6);
+  const body = operable(fig, null);
+  glyphPlate(body, g, 9, 17, 11, lit);
+
+  const s = new Surface(18, 38);
+  hardContact(s, 9, 37, 16, 5);
+  if (lit) halo(s, 9, 34, 11, P.ECHO_CYAN[2], 0.24, 2.6);
+  s.blit(body);
   return s;
 }
 
@@ -1711,20 +1743,18 @@ function runePillar(g: Glyph, lit: boolean): Surface {
 /** Movable block: brass corner brackets and a grip groove say "push me". */
 function blockPush(): Surface {
   const s = new Surface(22, 24);
-  contact(s, 11, 23, 20, 5, 0.4);
-  s.rect(1, 7, 20, 14, ST[2]);
-  s.rect(1, 1, 20, 6, ST[3]);                    // top face, seen in 3/4
-  s.hline(1, 1, 20, ST[4]);
-  s.hline(1, 6, 20, ST[1]);
+  s.rect(1, 7, 20, 14, ST[3]);
+  s.rect(1, 1, 20, 6, ST[4]);                    // top face, seen in 3/4
+  s.hline(1, 6, 20, ST[2]);
   s.hline(1, 7, 20, P.OUTLINE, 0.55);
-  s.vline(1, 1, 20, ST[3]);
-  s.vline(20, 1, 20, ST[0]);
-  s.hline(1, 20, 20, ST[0]);
-  s.rect(3, 10, 16, 4, ST[0], 0.85);             // grip groove
-  s.hline(3, 10, 16, P.OUTLINE, 0.8);
-  s.hline(3, 13, 16, ST[4], 0.55);
-  s.rect(5, 11, 3, 2, P.OUTLINE, 0.6);
-  s.rect(14, 11, 3, 2, P.OUTLINE, 0.6);
+  s.vline(1, 1, 20, ST[4]);
+  s.vline(20, 1, 20, ST[1]);
+  s.hline(1, 20, 20, ST[1]);
+  s.rect(3, 10, 16, 4, ST[1], 0.9);              // grip groove
+  s.hline(3, 10, 16, P.OUTLINE, 0.85);
+  s.hline(3, 13, 16, ST[4], 0.6);
+  s.rect(5, 11, 3, 2, P.OUTLINE, 0.65);
+  s.rect(14, 11, 3, 2, P.OUTLINE, 0.65);
   for (const [bx, by] of [[1, 4], [17, 4], [1, 16], [17, 16]] as const) {
     s.rect(bx, by, 4, 4, BR[2]);
     s.hline(bx, by, 4, BR[4], 0.8);
@@ -1732,8 +1762,7 @@ function blockPush(): Surface {
     s.px(bx + 1, by + 1, BR[4]);
     s.px(bx + 2, by + 2, BR[0]);
   }
-  s.outline(P.OUTLINE);
-  return s;
+  return operable(s, { cx: 11, y: 23, w: 20 });
 }
 
 /**
@@ -1744,15 +1773,14 @@ function blockPush(): Surface {
  */
 function chest(open: boolean): Surface {
   const s = new Surface(26, 24);
-  contact(s, 13, 23, 24, 5, 0.42);
   const lidBot = open ? 6 : 12;                  // where the lid stops
   // ── body: a stone box with brass straps, feet, and a lit top edge
-  s.rect(1, lidBot, 24, 22 - lidBot, ST[2]);
+  s.rect(1, lidBot, 24, 22 - lidBot, ST[3]);
   s.vline(1, lidBot, 22 - lidBot, ST[4]);
-  s.vline(24, lidBot, 22 - lidBot, ST[0]);
-  s.hline(1, 21, 24, ST[0]);
+  s.vline(24, lidBot, 22 - lidBot, ST[1]);
+  s.hline(1, 21, 24, ST[1]);
   s.hline(1, 22, 24, P.OUTLINE, 0.85);
-  for (let y = lidBot + 3; y < 21; y += 4) s.hline(2, y, 22, ST[1], 0.4);
+  for (let y = lidBot + 3; y < 21; y += 4) s.hline(2, y, 22, ST[2], 0.4);
   // Bands run *across* the body. Vertical straps at the corners read as table
   // legs, which turned the first version of this into an altar.
   brassBand(s, 1, lidBot + 1, 24);
@@ -1775,9 +1803,9 @@ function chest(open: boolean): Surface {
     s.hline(11, 11, 4, BR[4]);
     s.hline(11, 13, 4, BR[0]);
     s.ellipse(8, 3, 10, 9, BR[1]);               // seal plate on the lid face
-    s.ellipse(9, 4, 8, 7, ST[1]);
+    s.ellipse(9, 4, 8, 7, ST[2]);
     s.ellipseOutline(8, 3, 10, 9, BR[4], 0.8);
-    glyphPlate(s, 3, 13, 7, 7, false);
+    armillaryPlate(s, 13, 7, 3);                 // an instrument mark, not a rune
   } else {
     // ── lid up and back; the light that was shut in is out
     halo(s, 13, 6, 17, P.ECHO_CYAN[3], 0.42, 2.0);
@@ -1787,17 +1815,20 @@ function chest(open: boolean): Surface {
     s.hline(0, 3, 26, ST[0]);
     s.hline(0, 4, 26, P.OUTLINE, 0.85);
     for (const rx of [5, 19]) s.vline(rx, 0, 4, BR[1], 0.7);
-    // the open mouth
-    s.rect(2, 6, 22, 5, P.ECHO_DEEP[0]);
+    // The open mouth: light is pouring out of it, so the inside is the
+    // brightest part of the sprite rather than a black rectangle with a strip
+    // of cyan in it — an opened coffer should be legible from across the room.
+    s.rect(2, 6, 22, 5, P.ECHO_CYAN[0]);
     s.hline(2, 6, 22, P.OUTLINE);
-    s.rect(4, 7, 18, 3, P.ECHO_CYAN[1]);
-    s.rect(6, 7, 14, 2, P.ECHO_CYAN[3]);
-    s.hline(8, 7, 10, P.ECHO_RUNE);
+    s.rect(3, 7, 20, 4, P.ECHO_CYAN[2]);
+    s.rect(5, 7, 16, 3, P.ECHO_CYAN[3]);
+    s.rect(7, 7, 12, 2, P.ECHO_CYAN[4]);
+    s.hline(9, 7, 8, P.ECHO_RUNE_CORE);
     s.hline(1, 10, 24, ST[4], 0.9);              // near rim, lit from inside
     s.hline(1, 11, 24, ST[3]);
     for (let i = 0; i < 5; i++) s.px(7 + i * 3, 5 - (i & 1), P.ECHO_RUNE, 0.55);
   }
-  return s;
+  return operable(s, { cx: 13, y: 23, w: 24 });
 }
 
 function rubble(v: number): Surface {
@@ -1967,90 +1998,121 @@ function moth(frame: number): Surface {
 }
 
 function mothJar(): Surface {
-  const s = new Surface(16, 22);
-  contact(s, 8, 21, 12, 4, 0.34);
-  halo(s, 8, 12, 11, P.ECHO_CYAN[2], 0.3, 2.3);
+  const fig = new Surface(16, 22);
+  // dressed base — the jar is a specimen on a stand, and the stand is what
+  // makes it findable when the moth inside happens to be dim
+  fig.rect(2, 17, 12, 4, ST[3]);
+  fig.hline(2, 17, 12, ST[4]);
+  fig.hline(2, 20, 12, ST[1]);
   // glass
-  s.rect(2, 6, 12, 14, P.GLASS_COLD[1], 0.55);
-  s.ellipse(2, 17, 12, 5, P.GLASS_COLD[1], 0.55);
-  s.ellipse(2, 4, 12, 5, P.GLASS_COLD[2], 0.7);
-  s.vline(2, 8, 11, P.GLASS_COLD[4], 0.6);
-  s.vline(13, 8, 11, P.GLASS_COLD[0], 0.6);
-  s.px(4, 9, P.GLASS_COLD[4], 0.8); s.px(4, 10, P.GLASS_COLD[4], 0.5);
+  fig.rect(2, 6, 12, 12, P.GLASS_COLD[1], 0.55);
+  fig.ellipse(2, 15, 12, 5, P.GLASS_COLD[1], 0.55);
+  fig.ellipse(2, 4, 12, 5, P.GLASS_COLD[2], 0.7);
+  fig.vline(2, 8, 10, P.GLASS_COLD[4], 0.7);
+  fig.vline(13, 8, 10, P.GLASS_COLD[0], 0.6);
+  fig.px(4, 9, P.GLASS_COLD[4], 0.9); fig.px(4, 10, P.GLASS_COLD[4], 0.6);
   // the moth inside
-  s.blit(moth(1), 2, 6);
+  fig.blit(moth(1), 2, 5);
   // brass lid
-  s.rect(3, 1, 10, 4, BR[2]);
-  s.hline(3, 1, 10, BR[4]);
-  s.hline(3, 4, 10, BR[0]);
-  s.rect(5, 0, 6, 2, BR[3]);
-  s.rect(2, 5, 12, 2, BR[1]);
-  s.hline(2, 5, 12, BR[3]);
-  s.outline(P.OUTLINE);
+  fig.rect(3, 1, 10, 4, BR[2]);
+  fig.hline(3, 1, 10, BR[4]);
+  fig.hline(3, 4, 10, BR[0]);
+  fig.rect(5, 0, 6, 2, BR[3]);
+  fig.rect(2, 5, 12, 2, BR[1]);
+  fig.hline(2, 5, 12, BR[3]);
+  const body = operable(fig, null);
+
+  const s = new Surface(16, 22);
+  hardContact(s, 8, 21, 12, 4);
+  halo(s, 8, 12, 11, P.ECHO_CYAN[2], 0.3, 2.3);
+  s.blit(body);
   return s;
 }
 
 function echoPool(frame: number): Surface {
-  const s = new Surface(26, 16);
+  const s = new Surface(26, 18);
   const r = rng(7700 + frame * 13);
   const puff = [0, 1, 2, 1][frame];
-  halo(s, 13, 9, 13 + puff, P.ECHO_VIOLET[3], 0.22 + puff * 0.05, 2.5);
-  s.ellipse(1, 3, 24, 12, P.ECHO_VIOLET[0], 0.85);
-  s.ellipse(3, 4, 20, 10, P.ECHO_VIOLET[1]);
-  s.ellipse(5 + puff, 6, 16 - puff * 2, 6, P.ECHO_VIOLET[2]);
-  s.ellipse(8, 7, 10, 4, P.ECHO_VIOLET[3], 0.8);
-  s.ellipseOutline(1, 3, 24, 12, P.ECHO_GLOW, 0.5);
+  // A cut stone kerb. The pool used to be a violet puddle painted straight onto
+  // the flagstone with nothing to say where its edge was, and a puddle you can
+  // walk into is a very different object from one you touch on purpose.
+  const kerb = new Surface(26, 18);
+  kerb.ellipse(0, 2, 26, 15, ST[2]);
+  kerb.ellipse(0, 2, 26, 13, ST[4]);
+  kerb.ellipse(1, 4, 24, 12, ST[3]);
+  kerb.ellipse(2, 5, 22, 11, ST[1]);
+  kerb.ellipseOutline(0, 2, 26, 15, P.OUTLINE, 0.8);
+  const ring = operable(kerb, { cx: 13, y: 17, w: 24, h: 4 });
+  s.blit(ring);
+
+  halo(s, 13, 10, 13 + puff, P.ECHO_VIOLET[3], 0.22 + puff * 0.05, 2.5);
+  s.ellipse(3, 6, 20, 10, P.ECHO_VIOLET[1], 0.9);
+  s.ellipse(4, 6, 18, 9, P.ECHO_VIOLET[3]);
+  s.ellipse(6 + puff, 8, 14 - puff * 2, 5, P.ECHO_VIOLET[4]);
+  s.ellipse(9, 9, 8, 3, P.ECHO_GLOW, 0.9);
+  s.ellipseOutline(3, 6, 20, 10, P.ECHO_GLOW, 0.7);
   // motes lifting off the surface
   for (let i = 0; i < 4; i++) {
-    const x = r.int(4, 21), y = r.int(0, 6);
+    const x = r.int(5, 20), y = r.int(0, 6);
     s.px(x, y, P.ECHO_GLOW, 0.8);
     s.px(x, y + 1, P.ECHO_VIOLET[3], 0.4);
   }
-  for (let i = 0; i < 3; i++) s.px(r.int(6, 19), r.int(6, 11), P.ECHO_SPARK, 0.7);
+  for (let i = 0; i < 3; i++) s.px(r.int(7, 18), r.int(8, 13), P.ECHO_SPARK, 0.7);
   return s;
 }
 
-/** The boss door: an arch, four glyphs on a ring, violet chain across it. */
+/**
+ * The boss door: an arch with an armillary ring and a violet chain across it.
+ *
+ * This is the one place the four rune glyphs used to appear together as pure
+ * decoration — the dungeon's entire symbolic vocabulary, spent on a door the
+ * player cannot interact with. It now wears four armillary quadrants instead,
+ * which say "instrument" without saying "puzzle state".
+ */
 function bossSeal(frame: number): Surface {
-  const s = new Surface(48, 56);
+  const fig = new Surface(48, 56);
   const pulse = [0, 1, 2, 1][frame];
-  contact(s, 24, 55, 40, 6, 0.4);
   // jambs and arch
   for (const [jx, lit] of [[0, true], [40, false]] as const) {
-    bevel(s, jx, 10, 8, 46, ST, 2, false);
-    s.vline(lit ? jx : jx + 7, 10, 46, ST[lit ? 4 : 0]);
-    for (let y = 14; y < 56; y += 8) s.hline(jx, y, 8, P.OUTLINE, 0.5);
+    bevel(fig, jx, 10, 8, 46, ST, 2, false);
+    fig.vline(lit ? jx : jx + 7, 10, 46, ST[lit ? 4 : 0]);
+    for (let y = 14; y < 56; y += 8) fig.hline(jx, y, 8, P.OUTLINE, 0.5);
   }
-  s.rect(0, 4, 48, 8, ST[2]);
-  s.hline(0, 4, 48, ST[4]);
-  s.hline(0, 11, 48, ST[0]);
-  s.rect(2, 0, 44, 4, ST[3]);
-  s.hline(2, 0, 44, ST[4]);
-  for (let x = 6; x < 44; x += 7) s.vline(x, 0, 4, P.OUTLINE, 0.4);
+  fig.rect(0, 4, 48, 8, ST[2]);
+  fig.hline(0, 4, 48, ST[4]);
+  fig.hline(0, 11, 48, ST[0]);
+  fig.rect(2, 0, 44, 4, ST[3]);
+  fig.hline(2, 0, 44, ST[4]);
+  for (let x = 6; x < 44; x += 7) fig.vline(x, 0, 4, P.OUTLINE, 0.4);
   // the doorway, sealed
-  s.rect(8, 12, 32, 44, ST[1]);
-  s.rect(9, 13, 30, 42, ST[0]);
-  for (let y = 16; y < 54; y += 9) s.hline(9, y, 30, ST[1], 0.5);
-  s.vline(23, 13, 42, ST[1], 0.5);
+  fig.rect(8, 12, 32, 44, ST[2]);
+  fig.rect(9, 13, 30, 42, ST[1]);
+  for (let y = 16; y < 54; y += 9) fig.hline(9, y, 30, ST[3], 0.5);
+  fig.vline(23, 13, 42, ST[3], 0.5);
+  const body = operable(fig, { cx: 24, y: 55, w: 40, h: 6 });
+
   // ring
-  halo(s, 24, 32, 20 + pulse * 2, P.ECHO_VIOLET[3], 0.2 + pulse * 0.06, 2.6);
-  s.ellipseOutline(8, 16, 32, 32, P.ECHO_VIOLET[1]);
-  s.ellipseOutline(9, 17, 30, 30, P.ECHO_VIOLET[3], 0.8);
-  s.ellipseOutline(11, 19, 26, 26, P.ECHO_VIOLET[2], 0.55);
-  // four glyphs around the ring — the dungeon's whole vocabulary, on one door
-  const spots: Array<[Glyph, number, number]> = [[0, 24, 21], [1, 34, 32], [2, 24, 43], [3, 14, 32]];
-  spots.forEach(([g, gx, gy], i) => glyphPlate(s, g, gx, gy, 9, i === pulse));
+  halo(body, 24, 32, 20 + pulse * 2, P.ECHO_VIOLET[3], 0.2 + pulse * 0.06, 2.6);
+  body.ellipseOutline(8, 16, 32, 32, P.ECHO_VIOLET[1]);
+  body.ellipseOutline(9, 17, 30, 30, P.ECHO_VIOLET[3], 0.8);
+  body.ellipseOutline(11, 19, 26, 26, P.ECHO_VIOLET[2], 0.55);
+  // four armillary quadrants around the ring, one lighting at a time
+  const spots: Array<[number, number]> = [[24, 21], [34, 32], [24, 43], [14, 32]];
+  spots.forEach(([gx, gy], i) => {
+    armillary(body, gx + 1, gy + 1, 4, P.SHRINE_INK, 0.7);
+    armillary(body, gx, gy, 4, i === pulse ? P.ECHO_GLOW : P.SHRINE_MARBLE[3], i === pulse ? 1 : 0.75);
+  });
   // chains of violet light across the middle
   for (const cy of [28, 36]) {
     for (let x = 9; x < 39; x++) {
       const w = Math.sin((x + frame * 2) * 0.5) > 0 ? 0 : 1;
-      s.px(x, cy + w, P.ECHO_VIOLET[3], 0.85);
-      s.px(x, cy + w + 1, P.ECHO_VIOLET[1], 0.6);
+      body.px(x, cy + w, P.ECHO_VIOLET[3], 0.85);
+      body.px(x, cy + w + 1, P.ECHO_VIOLET[1], 0.6);
     }
   }
-  s.ellipse(21, 29, 6, 6, P.ECHO_VIOLET[2]);
-  s.ellipse(22, 30, 4, 4, P.ECHO_GLOW, 0.7 + pulse * 0.1);
-  return s;
+  body.ellipse(21, 29, 6, 6, P.ECHO_VIOLET[2]);
+  body.ellipse(22, 30, 4, 4, P.ECHO_GLOW, 0.7 + pulse * 0.1);
+  return body;
 }
 
 // ── SHRINE EXTERIOR PROPS ──────────────────────────────────────────────────
@@ -2091,7 +2153,10 @@ function standingStone(v: number): Surface {
   s.poly([[5 + lean, 1], [8 + lean, 1], [8, 32], [3, 32]], P.SHRINE_OUTER[3]);
   s.poly([[11 + lean, 2], [12 + lean, 2], [14, 32], [11, 32]], P.SHRINE_OUTER[1]);
   s.outline(P.OUTLINE);
-  glyphPlate(s, (v % 4) as Glyph, 8, 13, 9, false);
+  // Astronomical arcs, not runes. A standing stone on the approach that wore a
+  // memory glyph taught the player the symbol before the puzzle that uses it,
+  // and taught them wrong — that it was scenery.
+  armillaryPlate(s, 8, 13, 4 + (v % 2), P.SHRINE_OUTER[4]);
   for (let i = 0; i < 7; i++) s.px(r.int(3, 13), r.int(20, 31), P.WOODS_UNDER[r.pick([1, 2])], 0.55);
   crack(s, 6 + r.int(0, 4), 22, 8, 'v', r, P.OUTLINE, P.SHRINE_OUTER[4], 0.6);
   return s;
@@ -2112,7 +2177,7 @@ function extArch(): Surface {
   s.rect(3, 0, 50, 3, P.SHRINE_OUTER[3]);
   s.hline(3, 0, 50, P.SHRINE_OUTER[4]);
   for (let x = 6; x < 52; x += 8) s.vline(x, 0, 3, P.OUTLINE, 0.4);
-  glyphPlate(s, 2, 28, 5, 7, false);
+  armillaryPlate(s, 28, 5, 3, P.SHRINE_OUTER[4]);
   // the dark under the arch
   for (let y = 9; y < 34; y++) {
     s.rect(12, y, 32, 1, P.ECHO_DEEP[0], Math.min(1, 0.35 + (y - 9) * 0.05));

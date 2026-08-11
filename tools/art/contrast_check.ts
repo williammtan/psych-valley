@@ -28,6 +28,7 @@
  */
 import { ArtBuild } from './lib/registry.js';
 import { Surface } from './lib/pixel.js';
+import { SHRINE_INK, hex } from './lib/palette.js';
 import { registerShrine } from './assets/shrine.js';
 import { registerEnemies } from './assets/enemies.js';
 
@@ -40,25 +41,42 @@ function lum(r: number, g: number, b: number): number {
 
 interface Stats { mean: number; min: number; max: number; n: number }
 
+const INK = hex(SHRINE_INK);
+const isInk = (r: number, g: number, b: number) => r === INK[0] && g === INK[1] && b === INK[2];
+
 /**
- * Luminance statistics over the *opaque* pixels of a surface.
+ * Luminance statistics over a surface, or over a window into it.
  *
- * Partially transparent pixels are weighted by their alpha, because a 30%-alpha
- * contact shadow really does only darken the floor by 30% of the way — counting
- * it as a solid black pixel would let a prop pass the ANCHOR test on a shadow
- * far too faint to see.
+ * Two details matter and both were got wrong in the first draft of this file.
+ *
+ * ALPHA. A sprite pixel at alpha a is what the player sees composited over the
+ * floor, so it is measured as `colour*a + floorMean*(1-a)`. Counting a 30%
+ * contact shadow as a solid black pixel would let a prop pass the ANCHOR test
+ * on a shadow far too faint to see. Anything under 25% coverage is bloom rather
+ * than object and is not counted at all.
+ *
+ * INK. `skipInk` drops the pixels the contract *mandates* be near-black — the
+ * 1 px SHRINE_INK silhouette and the hard contact shadow. Without that, clauses
+ * (a) and (c) fight each other: adding the dark outline the contract requires
+ * drags down the mean the same contract requires to be high, and a prop can be
+ * failed for obeying the rule. So (a) is tested on the whole sprite (the ink
+ * must be there and must be darker than the floor) and (c) is tested on the
+ * body (what is left must be three times brighter than the floor).
  */
-function stats(s: Surface, alphaFloor = 0.5): Stats {
+function stats(
+  s: Surface,
+  opts: { base?: number; skipInk?: boolean; window?: (x: number, y: number, s: Surface) => boolean } = {},
+): Stats {
+  const base = opts.base ?? 45;
   let sum = 0, n = 0, min = 255, max = 0;
   for (let y = 0; y < s.h; y++) {
     for (let x = 0; x < s.w; x++) {
+      if (opts.window && !opts.window(x, y, s)) continue;
       const c = s.get(x, y);
       const a = c[3] / 255;
-      if (a < alphaFloor) continue;
-      // composite against the floor mean is not knowable here, so a partially
-      // transparent pixel is measured at its own colour, scaled by coverage
-      // toward mid-dark. Alpha >= alphaFloor keeps this honest.
-      const l = lum(c[0], c[1], c[2]) * a + 45 * (1 - a);
+      if (a < 0.25) continue;
+      if (opts.skipInk && isInk(c[0], c[1], c[2])) continue;
+      const l = lum(c[0], c[1], c[2]) * a + base * (1 - a);
       sum += l; n += 1;
       if (l < min) min = l;
       if (l > max) max = l;
@@ -79,6 +97,16 @@ function merge(all: Stats[]): Stats {
   return n ? { mean: sum / n, min, max, n } : { mean: 0, min: 0, max: 0, n: 0 };
 }
 
+/**
+ * The jamb-and-lintel band of a two-tile opening.
+ *
+ * A doorway is a hole, and a hole is supposed to be dark: measuring an open
+ * door's mean luminance measures the void behind it, not the door. What has to
+ * read on an opening is its FRAME, so for those sprites the ratio is taken over
+ * the frame band only. Everything else is measured whole.
+ */
+const frameBand = (x: number, y: number, s: Surface) => x < 7 || x >= s.w - 7 || y < 12;
+
 // ── the contract ───────────────────────────────────────────────────────────
 
 /** Minimum mean-luminance ratio of an interactive prop against its floor. */
@@ -90,7 +118,7 @@ const MIN_RATIO = 3.0;
  * because a puzzle object is just as often seen in its dead state as its live
  * one and the dead state is the one that used to disappear.
  */
-const INTERACTIVE: Array<{ label: string; room: string; names: string[] }> = [
+const INTERACTIVE: Array<{ label: string; room: string; names: string[]; opening?: true }> = [
   { label: 'sequence slab (dim)', room: 'memory', names: ['tile/shrine/rune_floor_dim_0', 'tile/shrine/rune_floor_dim_1', 'tile/shrine/rune_floor_dim_2', 'tile/shrine/rune_floor_dim_3'] },
   { label: 'sequence slab (lit)', room: 'memory', names: ['tile/shrine/rune_floor_0', 'tile/shrine/rune_floor_1', 'tile/shrine/rune_floor_2', 'tile/shrine/rune_floor_3'] },
   { label: 'rune pillar (dim)', room: 'memory', names: ['prop/shrine/rune_pillar_dim_0', 'prop/shrine/rune_pillar_dim_1', 'prop/shrine/rune_pillar_dim_2', 'prop/shrine/rune_pillar_dim_3'] },
@@ -109,11 +137,12 @@ const INTERACTIVE: Array<{ label: string; room: string; names: string[] }> = [
   { label: 'crystal', room: 'all', names: ['prop/shrine/crystal_0', 'prop/shrine/crystal_2'] },
   { label: 'brazier', room: 'all', names: ['prop/shrine/brazier_0', 'prop/shrine/brazier_2'] },
   { label: 'echo pool', room: 'memory', names: ['prop/shrine/echo_pool_0', 'prop/shrine/echo_pool_2'] },
-  { label: 'gate (closed)', room: 'all', names: ['prop/shrine/gate_closed'] },
-  { label: 'gate (open)', room: 'all', names: ['prop/shrine/gate_open'] },
-  { label: 'door (closed)', room: 'all', names: ['prop/shrine/door_closed'] },
-  { label: 'door (locked)', room: 'all', names: ['prop/shrine/door_locked'] },
-  { label: 'door (open)', room: 'all', names: ['prop/shrine/door_open'] },
+  { label: 'gate (closed)', room: 'all', names: ['prop/shrine/gate_closed'], opening: true },
+  { label: 'gate (open)', room: 'all', names: ['prop/shrine/gate_open'], opening: true },
+  { label: 'door (closed)', room: 'all', names: ['prop/shrine/door_closed'], opening: true },
+  { label: 'door (locked)', room: 'all', names: ['prop/shrine/door_locked'], opening: true },
+  { label: 'door (open)', room: 'all', names: ['prop/shrine/door_open'], opening: true },
+  { label: 'barred door (shut)', room: 'boss', names: ['prop/shrine/door_barred_0'], opening: true },
   { label: 'boss seal', room: 'boss', names: ['prop/shrine/boss_seal_0', 'prop/shrine/boss_seal_2'] },
 ];
 
@@ -146,13 +175,16 @@ const byName = new Map<string, Surface>();
 for (const t of b.tiles) byName.set(t.name, t.s);
 for (const s of b.sprites) byName.set(s.name, s.s);
 
-function group(names: string[]): { st: Stats; missing: string[] } {
+function group(
+  names: string[],
+  opts: Parameters<typeof stats>[1] = {},
+): { st: Stats; missing: string[] } {
   const missing: string[] = [];
   const all: Stats[] = [];
   for (const n of names) {
     const s = byName.get(n);
     if (!s) { missing.push(n); continue; }
-    all.push(stats(s));
+    all.push(stats(s, opts));
   }
   return { st: merge(all), missing };
 }
@@ -187,40 +219,46 @@ console.log(
 );
 console.log('  ' + '─'.repeat(76));
 
-interface Row { label: string; room: string; st: Stats; ratio: number; anchor: boolean; rim: boolean; ok: boolean; missing: string[] }
+interface Row { label: string; room: string; st: Stats; body: Stats; ratio: number; anchor: boolean; rim: boolean; ok: boolean; missing: string[] }
 
+const base = floor.mean;
 const rows: Row[] = [];
 for (const item of INTERACTIVE) {
-  const { st, missing } = group(item.names);
-  const ratio = floor.mean > 0 ? st.mean / floor.mean : 0;
+  // whole sprite: does it break out of the floor's envelope at both ends?
+  const { st, missing } = group(item.names, { base });
+  // body: is what is left three times brighter than the ground?
+  const body = group(item.names, {
+    base, skipInk: true, ...(item.opening ? { window: frameBand } : {}),
+  }).st;
+  const ratio = base > 0 ? body.mean / base : 0;
   const anchor = st.min < floor.min;
   const rim = st.max > floor.max;
   rows.push({
-    label: item.label, room: item.room, st, ratio, anchor, rim,
+    label: item.label, room: item.room, st, body, ratio, anchor, rim,
     ok: ratio >= MIN_RATIO && anchor && rim && missing.length === 0,
     missing,
   });
 }
 
 console.log(
-  `  ${pad('interactive prop', 22)}${pad('room', 13)}${rpad('mean L', 8)}` +
-  `${rpad('min', 7)}${rpad('max', 7)}${rpad('ratio', 8)}  anchor rim`,
+  `  ${pad('interactive prop', 22)}${pad('room', 12)}${rpad('body L', 8)}` +
+  `${rpad('min', 7)}${rpad('max', 7)}${rpad('ratio', 9)}  anchor rim`,
 );
 for (const r of rows) {
   console.log(
-    `  ${r.ok ? ' ' : '!'} ${pad(r.label, 20)}${pad(r.room, 13)}${rpad(f1(r.st.mean), 8)}` +
-    `${rpad(f1(r.st.min), 7)}${rpad(f1(r.st.max), 7)}${rpad(f1(r.ratio) + ':1', 8)}` +
+    `  ${r.ok ? ' ' : '!'} ${pad(r.label, 20)}${pad(r.room, 12)}${rpad(f1(r.body.mean), 8)}` +
+    `${rpad(f1(r.st.min), 7)}${rpad(f1(r.st.max), 7)}${rpad(f1(r.ratio) + ':1', 9)}` +
     `${rpad(r.anchor ? 'yes' : 'NO', 8)}${rpad(r.rim ? 'yes' : 'NO', 5)}`,
   );
 }
 
 console.log('  ' + '─'.repeat(76));
-console.log(`  ${pad('scenery (not gated)', 22)}${pad('', 13)}${rpad('mean L', 8)}${rpad('ratio', 22)}`);
+console.log(`  ${pad('scenery (not gated)', 22)}${pad('', 12)}${rpad('body L', 8)}${rpad('ratio', 23)}`);
 for (const item of SCENERY) {
-  const { st } = group(item.names);
+  const { st } = group(item.names, { base, skipInk: true });
   console.log(
-    `    ${pad(item.label, 20)}${pad('', 13)}${rpad(f1(st.mean), 8)}` +
-    `${rpad(f1(floor.mean > 0 ? st.mean / floor.mean : 0) + ':1', 22)}`,
+    `    ${pad(item.label, 20)}${pad('', 12)}${rpad(f1(st.mean), 8)}` +
+    `${rpad(f1(base > 0 ? st.mean / base : 0) + ':1', 23)}`,
   );
 }
 
@@ -228,7 +266,7 @@ const enemyRows: Array<[string, Stats]> = [];
 for (const e of ENEMIES) {
   const names = [...byName.keys()].filter((n) => n.startsWith(e.prefix));
   if (!names.length) continue;
-  enemyRows.push([e.label, group(names).st]);
+  enemyRows.push([e.label, group(names, { base }).st]);
 }
 if (enemyRows.length) {
   console.log('  ' + '─'.repeat(76));

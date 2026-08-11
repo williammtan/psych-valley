@@ -39,7 +39,7 @@ import { GridPainter } from '../GridPainter';
 import { registerMap } from '../registry';
 import type { LightDef, MapDef, PropPlacement, Material, ObjectSpec } from '../types';
 import {
-  ROOM_H, ROOM_W, SHRINE_LEGEND, SHRINE_OBJECTS, SHRINE_CYAN, SHRINE_VIOLET, shell, type Rect,
+  ROOM_H, ROOM_W, SHRINE_LEGEND, SHRINE_OBJECTS, SHRINE_CYAN, SHRINE_VIOLET, roomFill, shell, type Rect,
 } from './shrine_common';
 
 /** The playable floor, in tiles. */
@@ -266,6 +266,10 @@ function build(): MapDef {
     { x: 14.5, y: 8.2, radius: 70, color: SHRINE_VIOLET, intensity: 0.32, flicker: 0.3 },
     // The door you came in by stays lit, so the room always has a bottom edge.
     { x: 14.5, y: 13.4, radius: 56, color: SHRINE_VIOLET, intensity: 0.4, flicker: 0.1 },
+    // The dais's own diffuse glow. In a fight the floor is where the whole
+    // problem is drawn, so it gets the shrine's standard room fill rather than
+    // being left to whatever the four cold braziers happen to reach.
+    roomFill(14.5, 8.4, 235, 0.46),
   ];
 
   return {
@@ -277,7 +281,7 @@ function build(): MapDef {
     // Dark, but never so dark that a telegraph can hide in it. Phase two puts
     // marks on the unlit floor that the player has to SEE and then correctly
     // ignore, so "unlit" has to mean dim, not invisible.
-    darkness: 0.36,
+    darkness: 0.16,
     ground,
     legend: LEGEND,
     objects: o.rows(),

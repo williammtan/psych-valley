@@ -34,7 +34,7 @@ import { hasMap, registerMap } from '../registry';
 import type { LightDef, MapDef, PropPlacement, Zone } from '../types';
 import {
   ROOM_FLOOR, ROOM_H, ROOM_W, SHRINE_LEGEND, SHRINE_OBJECTS, SHRINE_VIOLET,
-  crystalLight, doorLight, doorNorth, doorSouth, northZoneY, southZoneY,
+  crystalLight, doorLight, doorNorth, doorSouth, northZoneY, roomFill, southZoneY,
 } from './shrine_common';
 
 const F = ROOM_FLOOR;
@@ -135,7 +135,7 @@ function build(): MapDef {
   lights.push({ x: 14.5, y: 4.4, radius: 78, color: SHRINE_VIOLET, intensity: 0.6, flicker: 0.16 });
   // A wash over the floor the four stand on. Their facing is the entire puzzle
   // state, and a facing you have to squint at is a puzzle state you cannot read.
-  lights.push({ x: 14.5, y: 9, radius: 150, color: 0x6c7bb8, intensity: 0.26, flicker: 0 });
+  lights.push(roomFill(14.5, 8.6, 250, 0.52));
   for (const f of R4.followers) {
     lights.push({ x: f.x, y: f.y - 1.2, radius: 42, color: 0x9fb0e0, intensity: 0.3, flicker: 0 });
   }
@@ -165,7 +165,7 @@ function build(): MapDef {
     subtitle: 'the hall of agreement',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.42,
+    darkness: 0.18,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),

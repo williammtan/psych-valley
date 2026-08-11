@@ -33,7 +33,7 @@ import { hasMap, registerMap } from '../registry';
 import type { LightDef, MapDef, PropPlacement, Zone } from '../types';
 import {
   ROOM_FLOOR, ROOM_H, ROOM_W, SHRINE_LEGEND, SHRINE_OBJECTS,
-  brazierLight, crystalLight, doorLight, doorNorth, doorSouth, northZoneY, southZoneY,
+  brazierLight, crystalLight, doorLight, doorNorth, doorSouth, northZoneY, roomFill, southZoneY,
 } from './shrine_common';
 
 const F = ROOM_FLOOR;
@@ -121,6 +121,7 @@ function build(): MapDef {
   }
   // And the wreck itself throws light across the middle of the floor.
   lights.push({ x: 14.7, y: 8.4, radius: 104, color: 0x8ce6e6, intensity: 0.34, flicker: 0.1 });
+  lights.push(roomFill(14.7, 8.6, 250, 0.5));
 
   lights.push(doorLight(R2.doorIn + 1, F.y - 0.6));
   lights.push(doorLight(R2.doorOut + 1, F.y + F.h - 0.4));
@@ -143,7 +144,7 @@ function build(): MapDef {
     subtitle: 'the collapsed array',
     music: 'shrine',
     tint: 0x0d1030,
-    darkness: 0.34,
+    darkness: 0.15,
     ground,
     legend: SHRINE_LEGEND,
     objects: o.rows(),
