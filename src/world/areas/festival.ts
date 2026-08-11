@@ -213,14 +213,22 @@ class LanternRig {
     return LanternRig.duration(id);
   }
 
-  /** The reference speaks: a call to attention, then the tone it is holding. */
+  /**
+   * The reference speaks.
+   *
+   * `lantern_tone_ref` is a *pointer*: on its own it always resolves to lantern
+   * A, so it must be aimed at the round's answer before it can be struck. The
+   * dispatcher's `name:variant` form does exactly that, and the resulting tone
+   * is bit-identical to that lantern's own — which is the entire perceptual
+   * task. Playing a bare `lantern_tone_ref` here would silently make the trial
+   * unsolvable by ear in every round whose answer is not the first lantern.
+   */
   strikeReference(w: WorldScene, correct: L = TRUTH): number {
-    Audio.sfx('lantern_tone_ref', { volume: 0.4 });
+    Audio.sfx(`lantern_tone_ref:${correct}`, { volume: 0.85 });
     const spr = this.sprite.ref;
     if (spr && w.anims.exists('reference_lantern_struck')) spr.play('reference_lantern_struck', true);
-    w.time.delayedCall(240, () => Audio.sfx(`lantern_tone_${correct}`, { volume: 0.85 }));
-    this.flash(w, 'ref', correct, 240);
-    return LanternRig.duration(correct) + 240;
+    this.flash(w, 'ref', correct);
+    return LanternRig.duration(correct);
   }
 
   destroy(): void {

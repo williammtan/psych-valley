@@ -87,8 +87,17 @@ const P2 = {
   FLARE_LEAD_MS: 620,
   /** Two, then four, then six (§46). */
   RAMP: [2, 4, 6],
-  /** Reward for a clean read: the only window it can be hurt in. */
+  /** Reward for a clean read: the only real window it can be hurt in. */
   STAGGER_MS: 2300,
+  /**
+   * Every wave leaves a much shorter opening whether or not it was read.
+   *
+   * Without this, a player who never works out the braziers can never damage
+   * the Echo at all and the fight is a wall rather than a slow grind — and
+   * plan.md §67 is explicit that failure has to stay cheap. One hit here versus
+   * four in a read window keeps the difference enormous without being absolute.
+   */
+  PITY_MS: 700,
   GAP_MS: 900,
   /** Live marks sit within this of a burning brazier... */
   LIVE_RADIUS: 54,
@@ -910,6 +919,7 @@ export class EchoBoss {
           this.scene.fx.burst(this.x, this.y - 30, 'fx/echo_burst');
           this.waveAt = now + P2.STAGGER_MS + P2.GAP_MS;
         } else {
+          this.staggerUntil = now + P2.PITY_MS;
           this.waveAt = now + P2.GAP_MS;
         }
         break;

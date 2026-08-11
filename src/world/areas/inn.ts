@@ -387,6 +387,9 @@ registerArea('inn', {
         return true;
 
       case 'inn.pip':
+        // Holding the bell, next to the cat, pressing the button: the player
+        // means to ring it at him. Anything else here would be a trap.
+        if (rt.bell && !questDone()) { ringBell(w); return true; }
         void lookAtPip(w);
         return true;
 
@@ -524,6 +527,9 @@ async function clue(w: WorldScene, ex: Exchange, flag: string, important: boolea
   if (!first) return;
   State.set(flag);
   State.bump('clues_found');
+  // The claw marks are on the floor the player has to stand on to ring the
+  // bell. Leaving them interactable means every ring reads the floor instead.
+  if (flag === FLAGS.clueScratches) w.interactions.remove('clue.scratches');
   Audio.sfx('recall', { volume: 0.45 });
   State.advanceQuest('q1_pip', 'find_pip');
   if (clueCount() >= 3) State.advanceQuest('q1_pip', 'investigate');
@@ -616,22 +622,24 @@ function ringBell(w: WorldScene): void {
     return;
   }
 
-  if (heard) {
-    // He still believes the bell means something. Showing that every time is
-    // what makes the fourth ring worth anything.
-    if (rt.pip.fear >= 40) rt.pip.spook();
-    else rt.pip.faceTowards(bx, by);
-  }
   rt.pending = { at: now, heard };
+  if (!heard) return;
 
+  // He still believes the bell means something. Showing that every time is
+  // what makes the fourth ring worth anything.
+  if (rt.pip.fear >= 40) rt.pip.spook();
+  else rt.pip.faceTowards(bx, by);
+
+  // The first ring *he hears* is the story beat. A ring from the far side of
+  // the building is not the experiment, it is the player checking the range.
   if (!State.has(FLAGS.bellStartled)) {
     State.set(FLAGS.bellStartled);
     State.advanceQuest('q1_pip', 'experiment');
-    void firstRing(w, heard);
+    void firstRing(w);
   }
 }
 
-async function firstRing(w: WorldScene, heard: boolean): Promise<void> {
+async function firstRing(w: WorldScene): Promise<void> {
   await maybeSera(w);
   await scene(w, TALK.q1.bellFirst, (name) => {
     if (name === 'pip_flee_deeper') R?.pip.spook();
@@ -639,7 +647,7 @@ async function firstRing(w: WorldScene, heard: boolean): Promise<void> {
   // The scene ate the silence, but nothing frightening happened during it, so
   // the ring counts. Failing the player for reading dialogue would be absurd.
   if (R) R.pending = null;
-  if (heard) await safeRing(w);
+  await safeRing(w);
 }
 
 /** A ring survived its two seconds. */

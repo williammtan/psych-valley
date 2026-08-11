@@ -70,12 +70,16 @@ await page.waitForFunction(() => !!(window as any).__psyche?.ready, undefined, {
 // a player choice — teleporting under it captures whatever the pan is looking
 // at. The 'town' checkpoint is the state straight after arrival, so the map
 // comes up in its ordinary, walk-around condition.
-await page.evaluate(() => (window as any).__psyche.jump('town'));
-await page.waitForFunction(
-  () => (window as any).__psyche?.state()?.cutscene === false,
-  undefined, { timeout: 20000 },
-).catch(() => {});
-await page.evaluate(() => (window as any).__psyche.hideHud(true));
+// Play the arrival out rather than cutting it off: it ends on a dialogue
+// choice, and an abandoned choice leaves the box on screen in every shot.
+for (let i = 0; i < 60; i++) {
+  const busy = await page.evaluate(() => (window as any).__psyche?.state()?.cutscene !== false);
+  if (!busy) break;
+  await page.evaluate(() => (window as any).__psyche?.press('interact'));
+  await page.waitForTimeout(320);
+}
+await page.evaluate(() => (window as any).__psyche?.jump('town'));
+await page.evaluate(() => (window as any).__psyche?.hideHud(true));
 await page.waitForTimeout(2600);   // let the location banner expire
 
 mkdirSync(OUT, { recursive: true });
@@ -83,9 +87,9 @@ for (const [name, x, y] of list) {
   // Two teleports with a wait between: the camera follows on an exponential
   // lerp and swiftshader runs well under 60fps, so a single call leaves the
   // view part-way through the jump.
-  await page.evaluate(([tx, ty]) => (window as any).__psyche.teleport(tx, ty), [x, y]);
+  await page.evaluate(([tx, ty]) => (window as any).__psyche?.teleport(tx, ty), [x, y]);
   await page.waitForTimeout(700);
-  await page.evaluate(([tx, ty]) => (window as any).__psyche.teleport(tx, ty), [x, y]);
+  await page.evaluate(([tx, ty]) => (window as any).__psyche?.teleport(tx, ty), [x, y]);
   await page.waitForTimeout(900);
   await page.screenshot({ path: join(OUT, `${name}.png`) });
   console.log(`  shots/lv/${name}.png  (${x},${y})`);

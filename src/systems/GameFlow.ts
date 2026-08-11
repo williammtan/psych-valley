@@ -58,7 +58,10 @@ export class GameFlow {
 
   autosave(): void {
     State.save();
-    emit('ui:toast', { text: 'Saved' });
+    // Deliberately silent. Autosave fires on story beats, which is exactly when
+    // the player is reading something that matters — a toast there competes
+    // with the moment it is meant to be preserving.
+    emit('saved:quiet', {});
   }
 
   private handleDown(): void {

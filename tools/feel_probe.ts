@@ -85,6 +85,7 @@ function installHarness(): void {
     return {
       f: F.frame,
       dt: F.lastDelta,
+      upd: F.lastUpd,
       x: +p.x.toFixed(3),
       y: +p.y.toFixed(3),
       sx: p.sprite.x,
@@ -111,11 +112,13 @@ function installHarness(): void {
 
   F.scene.events.on('preupdate', (_t: number, d: number) => {
     F.lastDelta = d;
+    F.updStart = performance.now();
     const jobs = F.sched[F.frame];
     if (jobs) for (const code of jobs) { try { new Function('F', 'w', code)(F, w); } catch (e) { console.error(e); } }
   });
 
   F.scene.events.on('postupdate', () => {
+    F.lastUpd = performance.now() - F.updStart;
     if (F.want > 0) {
       F.samples.push(F.sample());
       F.frame++;
@@ -282,6 +285,10 @@ async function load(page: Page, base: string): Promise<void> {
     }
   });
   await page.evaluate(installHarness);
+  // Every gate in the game is a flag, and an ungated map runs its arrival
+  // cutscene — which locks the player and disables input. Jump past all of it.
+  await page.evaluate(() => (window as any).__psyche.jump('woods'));
+  await page.waitForTimeout(800);
 }
 
 /**
@@ -834,16 +841,23 @@ async function load20(ctx: Ctx): Promise<Row[]> {
     for (let i = 10; i < 300; i += 24) F.at(i, "F.act('attack')");
     const s = (await F.run(300)).slice();
     F.move(0, 0);
-    const dts = s.slice(40).map((x: any) => x.dt).sort((a: number, b: number) => a - b);
+    const sorted = (k: string) => s.slice(40).map((x: any) => x[k]).sort((a: number, b: number) => a - b);
+    const dts = sorted('dt'), ups = sorted('upd');
     const alive = s[s.length - 1].en.length;
     F.clean();
-    return { p50: dts[Math.floor(dts.length * 0.5)], p95: dts[Math.floor(dts.length * 0.95)], max: dts[dts.length - 1], alive };
+    return {
+      p50: dts[Math.floor(dts.length * 0.5)], p95: dts[Math.floor(dts.length * 0.95)], max: dts[dts.length - 1],
+      u50: ups[Math.floor(ups.length * 0.5)], u95: ups[Math.floor(ups.length * 0.95)], umax: ups[ups.length - 1],
+      alive,
+    };
   }) as any;
   return [
     { metric: 'enemies spawned / still alive', value: `20 / ${r.alive}`, target: '—' },
-    { metric: 'frame time p50 (ms)', value: fmt(r.p50, 2), target: '<16.7' },
-    { metric: 'frame time p95 (ms)', value: fmt(r.p95, 2), target: '<16' },
-    { metric: 'frame time max (ms)', value: fmt(r.max, 2), target: '—' },
+    { metric: 'frame delta p95 (ms)', value: fmt(r.p95, 2), target: '<16.7 (vsync-capped)' },
+    { metric: 'frame delta max (ms)', value: fmt(r.max, 2), target: '—' },
+    { metric: 'scene update cost p50 (ms)', value: fmt(r.u50, 2), target: '—' },
+    { metric: 'scene update cost p95 (ms)', value: fmt(r.u95, 2), target: '<8' },
+    { metric: 'scene update cost max (ms)', value: fmt(r.umax, 2), target: '<16' },
   ];
 }
 

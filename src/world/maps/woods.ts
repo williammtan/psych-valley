@@ -189,6 +189,11 @@ function h01(x: number, y: number, salt: number): number {
 const LANTERNS: Array<[number, number]> = [
   [18, 9], [13, 16], [29, 16], [18, 33],
   [24, 63], [19, 68], [25, 81], [17, 91],
+  // The gauntlet is lit from both sides. Wisps are dark blue and the forest
+  // floor is dark green: without a pocket of warm light to fight inside, the
+  // enemy silhouettes stop being readable, which is the one thing the Stardew
+  // mine reference says darkness must never cost you.
+  [16, 100], [28, 100], [26, 93],
 ];
 
 /** Where the canopy must NOT close: clearings, lanterns, the shrine mouth. */
