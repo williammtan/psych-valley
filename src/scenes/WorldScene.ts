@@ -18,6 +18,7 @@ import { CueBus, RecallSystem } from '@/systems/Abilities';
 import { GameFlow } from '@/systems/GameFlow';
 import { Audio } from '@/audio/Audio';
 import { installDebugApi } from '@/debug/api';
+import { resetInputOwnership, worldInputBlocked } from '@/core/uiState';
 
 export class WorldScene extends Phaser.Scene {
   keys!: InputManager;
@@ -170,6 +171,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private tearDown(): void {
+    resetInputOwnership();
     this.npcs.forEach((n) => n.destroy());
     this.npcs = [];
     this.mote?.destroy();
@@ -224,6 +226,11 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.cutscene.active) {
       this.cutscene.update(dt);
+      this.player.update(dt, this.keys, grid);
+    } else if (worldInputBlocked(this.time.now)) {
+      // A dialogue box, the journal or an insight card owns the keyboard. The
+      // world still animates, but it must not read the same keypress the UI is
+      // reading — that double-read is what used to lock the game permanently.
       this.player.update(dt, this.keys, grid);
     } else {
       if (this.keys.justPressed('journal')) { emit('ui:toggleJournal', {}); }

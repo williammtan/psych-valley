@@ -15,6 +15,7 @@ import { makeText, wrapText, type TextHandle } from './text';
 import { Panel } from './Panel';
 import { Audio } from '@/audio/Audio';
 import { hasFrame } from '@/core/textures';
+import { captureInput, releaseInput } from '@/core/uiState';
 
 export class InsightCard {
   private root?: Phaser.GameObjects.Container;
@@ -34,6 +35,7 @@ export class InsightCard {
     const concept = CONCEPTS[id];
     if (!concept || this.open) { emit('insight:closed', {}); return; }
     this.open = true;
+    captureInput('insight');
     State.unlockInsight(id);
 
     const c = this.scene.add.container(0, 0).setDepth(DEPTH.HUD + 200);
@@ -98,6 +100,7 @@ export class InsightCard {
   close(): void {
     if (!this.open || !this.root) return;
     this.open = false;
+    releaseInput('insight', this.scene.time.now);
     const c = this.root;
     this.root = undefined;
     this.scene.tweens.add({

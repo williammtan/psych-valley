@@ -11,7 +11,8 @@
     "play": "tsx tools/play.ts",
     "workbench": "tsx tools/workbench.ts",
     "playthrough": "tsx tools/playthrough.ts",
-    "mapsmoke": "tsx tools/mapsmoke.ts"
+    "mapsmoke": "tsx tools/mapsmoke.ts",
+    "interactions": "tsx tools/interaction_probe.ts"
   },
   "author": "",
   "license": "ISC",

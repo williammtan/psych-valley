@@ -14,6 +14,7 @@ import { Panel } from './Panel';
 import { Audio } from '@/audio/Audio';
 import { PEOPLE } from '@/data/people';
 import { hasFrame } from '@/core/textures';
+import { captureInput, releaseInput } from '@/core/uiState';
 
 const BOX_H = 58;
 const BOX_MARGIN = 8;
@@ -87,6 +88,7 @@ export class DialogueBox {
   show(speaker: string, text: string, opts: { auto?: number; emphasis?: boolean } = {}): void {
     this.ensurePanel();
     this.clearChoices();
+    if (!this.open) captureInput('dialogue');
     this.open = true;
     this.choosing = false;
     this.root.setVisible(true);
@@ -173,6 +175,7 @@ export class DialogueBox {
 
   showChoices(prompt: string, choices: Choice[]): void {
     this.ensurePanel();
+    if (!this.open) captureInput('dialogue');
     this.open = true;
     this.root.setVisible(true);
     this.choices = choices;
@@ -232,6 +235,7 @@ export class DialogueBox {
   }
 
   hide(): void {
+    if (this.open) releaseInput('dialogue', this.scene.time.now);
     this.open = false;
     this.root.setVisible(false);
     this.root.y = 12;

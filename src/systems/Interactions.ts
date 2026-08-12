@@ -37,7 +37,7 @@ export interface Interactable {
   follow?: { x: number; y: number };
 }
 
-const BASE_REACH = 22;
+const BASE_REACH = 30;
 
 export class Interactions {
   private items: Interactable[] = [];
@@ -117,7 +117,7 @@ export class Interactions {
       if (dist > reach) return;
       // Facing alignment dominates; distance is the tiebreak.
       const dot = dist < 1 ? 1 : (dx * fx + dy * fy) / dist;
-      if (dot < -0.35) return;
+      if (dot < -0.2) return;
       const score = dot * 100 - dist;
       if (score > found.score) { found.score = score; found.best = i; }
     };

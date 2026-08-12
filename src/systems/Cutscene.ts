@@ -55,10 +55,17 @@ export class CutsceneContext {
     if (npc) { npc.talking = true; npc.faceTowards(this.w.player.x, this.w.player.y); }
     if (opts.emote && npc) this.w.fx.emote(npc.x, npc.y, opts.emote);
     return new Promise((resolve) => {
-      once('dialogue:closed', () => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
         if (npc) npc.talking = false;
         resolve();
-      });
+      };
+      once('dialogue:closed', finish);
+      // A line cannot outlive its box: if the dialogue is dismissed by anything
+      // other than advance() — a map change, another scene — this still returns.
+      this.w.time.delayedCall(60_000, finish);
       emit('dialogue:show', { speaker, text, ...opts });
     });
   }
@@ -67,7 +74,10 @@ export class CutsceneContext {
   choose(prompt: string, choices: Choice[]): Promise<number> {
     if (this.aborted) return Promise.resolve(0);
     return new Promise((resolve) => {
-      once('dialogue:chose', (p: { index: number }) => resolve(p.index));
+      let done = false;
+      const finish = (i: number) => { if (!done) { done = true; resolve(i); } };
+      once('dialogue:chose', (p: { index: number }) => finish(p.index));
+      this.w.time.delayedCall(60_000, () => finish(0));
       emit('dialogue:choices', { prompt, choices });
     });
   }
@@ -129,14 +139,41 @@ export class CutsceneContext {
     });
   }
 
+  /**
+   * Camera moves are skippable.
+   *
+   * A playtest measured 11 seconds of unskippable pan in the arrival sequence
+   * during which the interact button did nothing and the player had no
+   * feedback that anything was happening. Nobody should be made to watch a
+   * camera twice. Input is disabled during a cutscene, so this listens for the
+   * raw key rather than going through the InputManager.
+   */
   panTo(tx: number, ty: number, ms = 700): Promise<void> {
     if (this.aborted) return Promise.resolve();
     return new Promise((resolve) => {
       const cam = this.w.cameras.main;
       cam.stopFollow();
+      let done = false;
+      const kb = this.w.input.keyboard;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        kb?.off('keydown', onKey);
+        resolve();
+      };
+      const onKey = (e: KeyboardEvent) => {
+        const k = e.key.toLowerCase();
+        if (k === ' ' || k === 'enter' || k === 'e' || k === 'escape') {
+          cam.pan(tx * 16 + 8, ty * 16 + 8, 1, 'Linear', true);
+          finish();
+        }
+      };
+      kb?.on('keydown', onKey);
       cam.pan(tx * 16 + 8, ty * 16 + 8, ms, 'Sine.easeInOut', false, (_c, progress) => {
-        if (progress === 1) resolve();
+        if (progress === 1) finish();
       });
+      // Never outlive a reasonable pan, even if the camera event is lost.
+      this.w.time.delayedCall(ms + 4000, finish);
     });
   }
 
@@ -169,7 +206,10 @@ export class CutsceneContext {
   insight(id: string): Promise<void> {
     if (this.aborted) return Promise.resolve();
     return new Promise((resolve) => {
-      once('insight:closed', () => resolve());
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      once('insight:closed', finish);
+      this.w.time.delayedCall(60_000, finish);
       emit('insight:show', { id });
     });
   }
@@ -187,6 +227,9 @@ export class CutsceneContext {
   get scene(): WorldScene { return this.w; }
 }
 
+/** Longest any single scene may hold the player's control. */
+const CUTSCENE_TIMEOUT_MS = 45_000;
+
 export class Cutscene {
   active = false;
   private ctx: CutsceneContext;
@@ -195,6 +238,17 @@ export class Cutscene {
     this.ctx = new CutsceneContext(w);
   }
 
+  /**
+   * A cutscene takes the player's control away, so it must be incapable of
+   * keeping it. Any scene that stops making progress — a beat awaiting a cue
+   * nobody fires, a walk to a tile that geometry has made unreachable — would
+   * otherwise leave the player frozen with no way out but a page reload, which
+   * is exactly what a playtest found happening on the town's signposts.
+   *
+   * The whole scene is therefore raced against a watchdog. Every awaitable in
+   * CutsceneContext is bounded, so hitting this is a bug worth seeing in the
+   * console — but the player gets their game back either way.
+   */
   async run(fn: (c: CutsceneContext) => Promise<void>): Promise<void> {
     if (this.active) return;
     this.active = true;
@@ -202,11 +256,21 @@ export class Cutscene {
     this.w.player.lock();
     this.w.keys.enabled = false;
     emit('cutscene:start', {});
+    let watchdog: Phaser.Time.TimerEvent | undefined;
     try {
-      await fn(this.ctx);
+      await Promise.race([
+        fn(this.ctx),
+        new Promise<void>((resolve) => {
+          watchdog = this.w.time.delayedCall(CUTSCENE_TIMEOUT_MS, () => {
+            console.warn('[psyche] cutscene exceeded its watchdog and was force-ended; control returned');
+            resolve();
+          });
+        }),
+      ]);
     } catch (e) {
       console.error('cutscene failed', e);
     } finally {
+      watchdog?.remove(false);
       this.active = false;
       // Only hand control back if we are still in the map that took it; the new
       // map has its own idea of whether the player should be able to move.

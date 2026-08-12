@@ -14,6 +14,7 @@ import { makeText, wrapText, type TextHandle } from './text';
 import { Panel } from './Panel';
 import { Audio } from '@/audio/Audio';
 import { emit } from '@/core/events';
+import { captureInput, releaseInput } from '@/core/uiState';
 
 const TABS = ['Quests', 'Insights', 'People', 'Map'] as const;
 type Tab = typeof TABS[number];
@@ -47,6 +48,7 @@ export class Journal {
   show(): void {
     if (this.open) return;
     this.open = true;
+    captureInput('journal');
     Audio.sfx('journal_open', { volume: 0.5 });
     const c = this.scene.add.container(0, 0).setDepth(DEPTH.HUD + 150);
     this.root = c;
@@ -70,6 +72,7 @@ export class Journal {
   close(): void {
     if (!this.open) return;
     this.open = false;
+    releaseInput('journal', this.scene.time.now);
     Audio.sfx('journal_close', { volume: 0.4 });
     const c = this.root;
     this.root = undefined;
